@@ -430,8 +430,8 @@ Agradecimentos especiais a:
 
 ### ⭐ Se este projeto foi útil, considere dar uma estrela!
 
-[![GitHub stars](https://img.shields.io/github/stars/seu-usuario/refuncapp-web?style=social)](https://github.com/seu-usuario/refuncapp-web)
-[![GitHub followers](https://img.shields.io/github/followers/seu-usuario?style=social)](https://github.com/seu-usuario)
+[![GitHub stars](https://img.shields.io/github/stars/seu-usuario/refuncapp-web?style=social)](https://github.com/jaypes7/RefuncApp)
+[![GitHub followers](https://img.shields.io/github/followers/seu-usuario?style=social)](https://github.com/jaypes7)
 
 **Made with ❤️ usando Next.js + TypeScript + Tailwind CSS**
 
