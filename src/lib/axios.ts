@@ -276,7 +276,7 @@ export interface DashboardData {
 }
 
 export const dashboardApi = {
-  get: () => api.get<DashboardData>("/api/dashboard"),
+  get: () => api.get<DashboardData>("/dashboard"),
 };
 
 // ============================================================================
@@ -369,7 +369,7 @@ export const logsApi = {
           totalGeral: number;
         };
       }
-    >("/api/logs", { params }),
+    >("/logs", { params }),
 };
 
 // ============================================================================
@@ -410,5 +410,5 @@ export interface ExportResponse {
 
 export const exportApi = {
   exportar: (params?: ExportParams) =>
-    api.get<ExportResponse>("/api/export", { params }),
+    api.get<ExportResponse>("/export", { params }),
 };
