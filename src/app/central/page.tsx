@@ -63,39 +63,39 @@ const STATUS_CONFIG: Record<
   { dot: string; pill: string; label: string }
 > = {
   Ativo: {
-    dot: "bg-emerald-400",
-    pill: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
+    dot: "bg-emerald-500",
+    pill: "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
     label: "Ativo",
   },
   Pendente: {
-    dot: "bg-amber-400",
-    pill: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+    dot: "bg-amber-500",
+    pill: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
     label: "Pendente",
   },
   Inativo: {
     dot: "bg-slate-400",
-    pill: "bg-slate-500/10 text-slate-400 border border-slate-500/20",
+    pill: "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
     label: "Inativo",
   },
   Desligado: {
-    dot: "bg-red-400",
-    pill: "bg-red-500/10 text-red-400 border border-red-500/20",
+    dot: "bg-red-500",
+    pill: "bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
     label: "Desligado",
   },
 };
 
 const SETOR_CONFIG: Record<Setor, { color: string; bg: string }> = {
   RH: { color: "text-primary", bg: "bg-primary/10" },
-  Logística: { color: "text-amber-400", bg: "bg-amber-500/10" },
-  Segurança: { color: "text-emerald-400", bg: "bg-emerald-500/10" },
+  Logística: { color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
+  Segurança: { color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
 };
 
 const AVATAR_COLORS = [
-  "bg-primary/20 text-primary",
-  "bg-purple-500/20 text-purple-400",
-  "bg-amber-500/20 text-amber-400",
-  "bg-emerald-500/20 text-emerald-400",
-  "bg-rose-500/20 text-rose-400",
+  "bg-primary/10 text-primary",
+  "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
+  "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400",
+  "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400",
 ];
 
 function getInitials(name: string): string {
@@ -417,7 +417,7 @@ export default function CentralPage() {
     <ProtectedRoute>
       <div className="flex flex-col gap-6 py-2">
         {/* ── Page Header ── */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="glass-card flex flex-col gap-4 rounded-md px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
               <Users className="h-5 w-5 text-primary" />
@@ -437,7 +437,7 @@ export default function CentralPage() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 border-white/10 bg-white/5 hover:bg-white/10"
+              className="gap-1.5"
               onClick={handleExport}
               disabled={isExporting}
             >
@@ -455,7 +455,7 @@ export default function CentralPage() {
             </Button>
             <Button
               size="sm"
-              className="gap-1.5 font-semibold shadow-md shadow-primary/20"
+              className="gap-1.5 font-semibold"
               onClick={() => router.push("/central/novo")}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -469,7 +469,7 @@ export default function CentralPage() {
         ) : (
           <>
             {/* ── Filters ── */}
-            <div className="glass-card rounded-xl px-4 py-3">
+            <div className="glass-card rounded-md px-4 py-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 {/* Search */}
                 <div className="relative flex-1">
@@ -481,10 +481,10 @@ export default function CentralPage() {
                       setSearch(e.target.value);
                       setPage(1);
                     }}
-                    className="h-9 border-white/10 bg-white/5 pl-9 text-sm
-                           placeholder:text-muted-foreground/50
-                           focus-visible:border-primary/60
-                           focus-visible:ring-primary/20"
+                    className="h-9 pl-9 text-sm
+                           border-slate-300 bg-white placeholder:text-slate-400
+                           focus-visible:border-primary/60 focus-visible:ring-primary/20
+                           dark:border-input dark:bg-input/30 dark:placeholder:text-muted-foreground/60"
                   />
                 </div>
 
@@ -496,7 +496,7 @@ export default function CentralPage() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-9 w-full border-white/10 bg-white/5 text-sm hover:bg-white/10 sm:w-44">
+                  <SelectTrigger className="h-9 w-full text-sm sm:w-44 border-slate-300 bg-white dark:border-input dark:bg-input/30">
                     <SelectValue placeholder="Todos os Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -516,7 +516,7 @@ export default function CentralPage() {
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-9 w-full border-white/10 bg-white/5 text-sm hover:bg-white/10 sm:w-44">
+                  <SelectTrigger className="h-9 w-full text-sm sm:w-44 border-slate-300 bg-white dark:border-input dark:bg-input/30">
                     <SelectValue placeholder="Todos os Setores" />
                   </SelectTrigger>
                   <SelectContent>
@@ -530,11 +530,11 @@ export default function CentralPage() {
             </div>
 
             {/* ── Table ── */}
-            <div className="glass-card overflow-hidden rounded-xl w-full">
+            <div className="glass-card overflow-hidden rounded-md w-full">
               <div className="overflow-x-auto">
               <Table className="table-fixed w-full">
                 <TableHeader>
-                  <TableRow className="border-white/5 hover:bg-transparent">
+                  <TableRow className="hover:bg-transparent bg-muted/40">
                     <TableHead className="pl-5 w-[30%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Nome
                     </TableHead>
@@ -578,7 +578,7 @@ export default function CentralPage() {
                       return (
                         <TableRow
                           key={colab.CPF}
-                          className="border-white/5 transition-colors hover:bg-white/2.5"
+                          className="transition-colors hover:bg-muted/50"
                         >
                           {/* Nome + Avatar */}
                           <TableCell className="py-3 pl-5">
