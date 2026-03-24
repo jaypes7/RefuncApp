@@ -14,7 +14,7 @@ import axios from "axios";
 // ============================================================================
 
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  baseURL: "/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -133,18 +133,18 @@ export interface PaginatedResponse<T> {
 
 export const colaboradoresApi = {
   listar: (params?: ListarColaboradoresParams) =>
-    api.get<PaginatedResponse<Colaborador>>("/api/colaboradores", { params }),
+    api.get<PaginatedResponse<Colaborador>>("/colaboradores", { params }),
 
   buscar: (cpf: string) =>
-    api.get<{ data: Colaborador }>(`/api/colaboradores/${cpf}`),
+    api.get<{ data: Colaborador }>(`/colaboradores/${cpf}`),
 
   criar: (colaborador: Partial<Colaborador>) =>
-    api.post("/api/colaboradores", colaborador),
+    api.post("/colaboradores", colaborador),
 
   atualizar: (cpf: string, colaborador: Partial<Colaborador>) =>
-    api.put(`/api/colaboradores/${cpf}`, colaborador),
+    api.put(`/colaboradores/${cpf}`, colaborador),
 
-  remover: (cpf: string) => api.delete(`/api/colaboradores/${cpf}`),
+  remover: (cpf: string) => api.delete(`/colaboradores/${cpf}`),
 };
 
 // ============================================================================
@@ -162,14 +162,14 @@ export const authApi = {
     api.post<{
       success: boolean;
       user: User;
-    }>("/api/auth/login", { re }),
+    }>("/auth/login", { re }),
 
-  logout: () => api.post("/api/auth/logout"),
+  logout: () => api.post("/auth/logout"),
 
   me: () =>
     api.get<{
       user: User;
-    }>("/api/auth/me"),
+    }>("/auth/me"),
 };
 
 // ============================================================================
@@ -303,7 +303,7 @@ export interface ConfigData {
 }
 
 export const configApi = {
-  get: () => api.get<{ data: ConfigData }>("/api/config"),
+  get: () => api.get<{ data: ConfigData }>("/config"),
 
   update: (config: {
     dataInicio: string;
@@ -313,7 +313,7 @@ export const configApi = {
     gerenteContrato?: string;
     nomeCliente?: string;
     centroCusto?: string;
-  }) => api.post("/api/config", config),
+  }) => api.post("/config", config),
 };
 
 // ============================================================================
@@ -326,7 +326,7 @@ export interface Clinica {
 }
 
 export const clinicasApi = {
-  listar: () => api.get<{ data: Clinica[] }>("/api/clinicas"),
+  listar: () => api.get<{ data: Clinica[] }>("/clinicas"),
 };
 
 // ============================================================================
@@ -385,12 +385,12 @@ export interface UsuarioPermitido {
 }
 
 export const usuariosPermitidosApi = {
-  listar: () => api.get<{ usuarios: UsuarioPermitido[] }>("/api/usuarios-permitidos"),
+  listar: () => api.get<{ usuarios: UsuarioPermitido[] }>("/usuarios-permitidos"),
 
   criar: (data: { re: string; nome: string; perfil?: string }) =>
-    api.post("/api/usuarios-permitidos", data),
+    api.post("/usuarios-permitidos", data),
 
-  remover: (id: string) => api.delete(`/api/usuarios-permitidos/${id}`),
+  remover: (id: string) => api.delete(`/usuarios-permitidos/${id}`),
 };
 
 // ============================================================================
