@@ -48,7 +48,7 @@ export async function processImport(
   onProgress?.(0, rows.length);
 
   const response = await api.post<ImportReport>(
-    "/api/colaboradores/import",
+    "/colaboradores/import",
     { rows }
   );
 
