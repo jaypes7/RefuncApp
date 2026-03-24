@@ -1,7 +1,6 @@
 // src/components/sidebar.tsx
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,7 +15,11 @@ import {
   UserCog,
   Truck,
   Package,
+  Sun,
+  Moon,
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,70 +31,92 @@ const dashboardSubItems = [
   { name: "Suprimentos", href: "/dashboard/suprimentos", icon: Package },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { logout } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     pathname.startsWith("/dashboard"),
   );
 
+  // Evita hydration mismatch — ícone só renderiza no cliente
+  useEffect(() => setMounted(true), []);
+
   if (pathname === "/login") return null;
 
   const isDashboardActive = pathname.startsWith("/dashboard");
+  const isDark = theme === "dark";
+
+  const navItem = (isActive: boolean) =>
+    cn(
+      "flex items-center gap-2.5 text-xs font-semibold transition-colors duration-150 cursor-pointer",
+      !collapsed && "py-1.5 pr-3 pl-2.5 rounded-r-sm border-l-2",
+      !collapsed && isActive &&
+        "border-l-primary text-primary bg-primary/[0.06]",
+      !collapsed && !isActive &&
+        "border-l-transparent text-muted-foreground hover:text-foreground hover:bg-accent",
+      collapsed && "justify-center rounded-sm py-2",
+      collapsed && isActive && "bg-primary/[0.08] text-primary",
+      collapsed && !isActive &&
+        "text-muted-foreground hover:text-foreground hover:bg-accent",
+    );
 
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r border-border bg-card/50 backdrop-blur-xl transition-all duration-300",
-        collapsed ? "w-17" : "w-64",
+        "fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-[width] duration-300",
+        collapsed ? "w-14" : "w-56",
       )}
     >
-      <div className="flex h-full flex-col px-2 py-6">
+      <div className="flex h-full flex-col px-2 py-4">
+
         {/* ── Header ─────────────────────────────────────────────────── */}
         <div
           className={cn(
-            "mb-10 flex items-center",
-            collapsed ? "justify-center" : "px-2 justify-between",
+            "mb-5 flex items-center",
+            collapsed ? "justify-center" : "px-1 justify-between",
           )}
         >
           {!collapsed && (
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-primary">
+              <h2 className="text-[11px] font-bold tracking-widest uppercase text-primary">
                 RefuncApp
               </h2>
-              <p className="text-xs text-muted-foreground">v2.5.0</p>
+              <p className="text-[10px] text-muted-foreground/60 tracking-wide">
+                v2.5.0
+              </p>
             </div>
           )}
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCollapsed(!collapsed)}
-            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={onToggle}
+            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150"
           >
             {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3.5 w-3.5" />
             ) : (
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-3.5 w-3.5" />
             )}
           </Button>
         </div>
 
         {/* ── Navigation ─────────────────────────────────────────────── */}
-        <nav className="flex-1 space-y-1">
+        <nav className="flex-1 space-y-px">
+
           {/* Central */}
           <Link href="/central">
             <span
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground",
-                pathname === "/central"
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground",
-                collapsed && "justify-center px-0",
-              )}
+              className={navItem(pathname === "/central")}
               title={collapsed ? "Central" : undefined}
             >
-              <Users className="h-5 w-5 shrink-0" />
+              <Users className="h-4 w-4 shrink-0" />
               {!collapsed && <span>Central</span>}
             </span>
           </Link>
@@ -100,22 +125,16 @@ export function Sidebar() {
           <div>
             <button
               onClick={() => setDashboardOpen(!dashboardOpen)}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground cursor-pointer",
-                isDashboardActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground",
-                collapsed && "justify-center px-0",
-              )}
+              className={cn(navItem(isDashboardActive), "w-full")}
               title={collapsed ? "Dashboard" : undefined}
             >
-              <LayoutDashboard className="h-5 w-5 shrink-0" />
+              <LayoutDashboard className="h-4 w-4 shrink-0" />
               {!collapsed && (
                 <>
                   <span className="flex-1 text-left">Dashboard</span>
                   <ChevronDown
                     className={cn(
-                      "h-4 w-4 transition-transform duration-200",
+                      "h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-150",
                       dashboardOpen && "rotate-180",
                     )}
                   />
@@ -123,17 +142,17 @@ export function Sidebar() {
               )}
             </button>
 
-            {/* Sub-items */}
+            {/* Sub-items — expanded */}
             {dashboardOpen && !collapsed && (
-              <div className="ml-4 mt-1 space-y-0.5 border-l border-border/50 pl-3">
+              <div className="ml-3 mt-px space-y-px border-l border-border pl-2.5">
                 {dashboardSubItems.map((sub) => (
                   <Link key={sub.href} href={sub.href}>
                     <span
                       className={cn(
-                        "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all hover:bg-accent hover:text-accent-foreground",
+                        "flex items-center gap-2 rounded-sm px-2 py-1.5 text-[11px] font-medium transition-colors duration-150",
                         pathname === sub.href
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground",
+                          ? "text-primary bg-primary/[0.06]"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent",
                       )}
                     >
                       <sub.icon className="h-3.5 w-3.5 shrink-0" />
@@ -144,17 +163,17 @@ export function Sidebar() {
               </div>
             )}
 
-            {/* Collapsed: popover/tooltip list on click */}
+            {/* Sub-items — collapsed */}
             {dashboardOpen && collapsed && (
-              <div className="mt-1 space-y-0.5">
+              <div className="mt-px space-y-px">
                 {dashboardSubItems.map((sub) => (
                   <Link key={sub.href} href={sub.href}>
                     <span
                       className={cn(
-                        "flex items-center justify-center rounded-md py-1.5 transition-all hover:bg-accent hover:text-accent-foreground",
+                        "flex items-center justify-center rounded-sm py-1.5 transition-colors duration-150",
                         pathname === sub.href
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground",
+                          ? "bg-primary/[0.08] text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent",
                       )}
                       title={sub.name}
                     >
@@ -169,35 +188,61 @@ export function Sidebar() {
           {/* Configurações */}
           <Link href="/configuracoes">
             <span
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground",
-                pathname === "/configuracoes"
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground",
-                collapsed && "justify-center px-0",
-              )}
+              className={navItem(pathname === "/configuracoes")}
               title={collapsed ? "Configurações" : undefined}
             >
-              <Settings className="h-5 w-5 shrink-0" />
+              <Settings className="h-4 w-4 shrink-0" />
               {!collapsed && <span>Configurações</span>}
             </span>
           </Link>
         </nav>
 
         {/* ── Footer ─────────────────────────────────────────────────── */}
-        <div className="mt-auto border-t border-border pt-4">
+        <div className="mt-auto space-y-px border-t border-border pt-3">
+
+          {/* Toggle de tema */}
+          <Button
+            variant="ghost"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            className={cn(
+              "w-full gap-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150",
+              collapsed ? "justify-center px-0" : "justify-start",
+            )}
+            title={
+              collapsed
+                ? isDark ? "Modo Claro" : "Modo Escuro"
+                : undefined
+            }
+          >
+            {/* mounted guard evita flash de ícone errado no SSR */}
+            {mounted ? (
+              isDark ? (
+                <Sun className="h-4 w-4 shrink-0" />
+              ) : (
+                <Moon className="h-4 w-4 shrink-0" />
+              )
+            ) : (
+              <Moon className="h-4 w-4 shrink-0" />
+            )}
+            {!collapsed && (
+              <span>{mounted && isDark ? "Modo Claro" : "Modo Escuro"}</span>
+            )}
+          </Button>
+
+          {/* Logout */}
           <Button
             variant="ghost"
             onClick={logout}
             className={cn(
-              "w-full gap-3 text-muted-foreground hover:text-destructive",
+              "w-full gap-2.5 text-xs font-semibold text-muted-foreground hover:text-destructive hover:bg-destructive/[0.06] transition-colors duration-150",
               collapsed ? "justify-center px-0" : "justify-start",
             )}
             title={collapsed ? "Sair do Sistema" : undefined}
           >
-            <LogOut className="h-5 w-5 shrink-0" />
+            <LogOut className="h-4 w-4 shrink-0" />
             {!collapsed && <span>Sair do Sistema</span>}
           </Button>
+
         </div>
       </div>
     </aside>
