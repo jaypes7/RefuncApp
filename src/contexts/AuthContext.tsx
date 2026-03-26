@@ -37,14 +37,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log("[AuthContext] Verificando sessão...");
         const { data } = await authApi.me();
         if (data.user) {
-          console.log("[AuthContext] Sessão encontrada:", data.user);
           setUser(data.user);
         }
       } catch {
-        console.log("[AuthContext] Sem sessão ativa");
         // Não faz nada, usuário não está logado
       } finally {
         setIsLoading(false);
@@ -55,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
-   * Login - valida RE contra a API/backend (Google Sheets)
+   * Login - valida RE contra a API/backend
    */
   const login = useCallback(
     async (re: string) => {
@@ -63,13 +60,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
 
       try {
-        console.log("[AuthContext] Iniciando login para RE:", re);
         const { data } = await authApi.login(re);
-        console.log("[AuthContext] Resposta da API:", data);
 
         if (data.success && data.user) {
           setUser(data.user);
-          console.log("[AuthContext] Usuário definido, redirecionando...");
           router.push("/central");
         } else {
           throw new Error("Resposta inválida do servidor");

@@ -79,7 +79,7 @@ function parseExcelDate(val: unknown): string {
   if (val === null || val === undefined || val === "") return "";
   const str = String(val).trim();
   if (str === "") return "";
-  // Serial numérico do Excel/Google Sheets
+  // Serial numérico do Excel
   if (/^\d+$/.test(str)) {
     return new Date((parseInt(str, 10) - 25569) * 86400 * 1000)
       .toISOString()
@@ -865,7 +865,7 @@ export default function EditarColaboradorPage() {
                     Os campos de <strong>EPIs</strong>,{" "}
                     <strong>Uniforme</strong> e <strong>Equipamentos</strong>{" "}
                     serão integrados quando as colunas correspondentes forem
-                    adicionadas ao modelo de dados no Google Sheets.
+                    adicionadas ao modelo de dados.
                   </p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-2 mt-1">

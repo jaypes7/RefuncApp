@@ -3,94 +3,86 @@
  * API: /api/config/clinicas
  * ============================================================================
  *
- * Planilha: Aba "Clinicas"
- * Layout: A1=ID | B1=NOME
- *
- * GET: Lista clínicas
- * POST: Cria clínica
- * DELETE: Remove clínica
+ * CRUD de clínicas na tabela `configuracoes_clinicas`.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSheetData, appendRow, deleteRow, SHEETS } from "@/lib/sheets";
+import { ZodError } from "zod";
 import { requireAuth } from "@/lib/auth";
-import { registrarLog } from "@/lib/logs";
+import { createServerClient } from "@/lib/supabase";
+import { ClinicaSchema } from "@/lib/schemas";
 
-// GET /api/config/clinicas
+// GET /api/config/clinicas — lista todas as clínicas cadastradas
 export async function GET() {
   try {
     await requireAuth();
-    const rows = await getSheetData(SHEETS.CLINICAS);
+    const db = createServerClient();
+    const { data, error } = await db
+      .from("configuracoes_clinicas")
+      .select("id, nome, endereco, cidade, ativo")
+      .order("nome", { ascending: true });
 
-    // Linha 0 = header, dados a partir da linha 1
-    const clinicas = rows.slice(1)
-      .map((row, index) => ({
-        id: index + 1, // rowIndex 1-based (excluindo header) para delete
-        nome: row[1] || row[0] || "", // Col B = NOME; fallback Col A para retrocompatibilidade
-      }))
-      .filter((c) => c.nome);
-
-    return NextResponse.json(clinicas);
+    if (error) throw error;
+    return NextResponse.json(data ?? []);
   } catch (error) {
-    console.error("Erro ao carregar clínicas:", error);
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    console.error("[/api/config/clinicas GET]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
 
-// POST /api/config/clinicas
+// POST /api/config/clinicas — cria ou atualiza uma clínica (upsert por nome)
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    await requireAuth();
     const body = await request.json();
-    const { nome } = body;
+    const payload = ClinicaSchema.parse(body);
 
-    if (!nome?.trim()) {
-      return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
-    }
+    const db = createServerClient();
+    const { data, error } = await db
+      .from("configuracoes_clinicas")
+      .upsert(payload, { onConflict: "nome" })
+      .select("id, nome, endereco, cidade, ativo")
+      .single();
 
-    // Gera ID incremental baseado na quantidade de linhas existentes
-    const rows = await getSheetData(SHEETS.CLINICAS);
-    const nextId = rows.length; // linha 0 = header, então rows.length já é o próximo
-
-    // Col A = ID, Col B = NOME
-    await appendRow(SHEETS.CLINICAS, [String(nextId), nome.trim()]);
-
-    await registrarLog(user.re, "ADICIONAR", `Clínica criada: ${nome}`);
-
-    return NextResponse.json({ success: true, message: "Clínica salva" });
+    if (error) throw error;
+    return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    console.error("Erro ao salvar clínica:", error);
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
+    }
+    console.error("[/api/config/clinicas POST]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
 
-// DELETE /api/config/clinicas
+// DELETE /api/config/clinicas?id=<uuid> — remove uma clínica pelo ID
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await requireAuth();
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-
+    await requireAuth();
+    const id = request.nextUrl.searchParams.get("id");
     if (!id) {
-      return NextResponse.json({ error: "ID é obrigatório" }, { status: 400 });
+      return NextResponse.json({ error: "Parâmetro 'id' é obrigatório" }, { status: 400 });
     }
 
-    const rowIndex = parseInt(id) + 1; // +1 porque header está na linha 1
-    await deleteRow(SHEETS.CLINICAS, rowIndex, 2); // 2 colunas: ID, NOME
-    await registrarLog(user.re, "REMOVER", `Clínica removida ID: ${id}`);
+    const db = createServerClient();
+    const { error } = await db
+      .from("configuracoes_clinicas")
+      .delete()
+      .eq("id", id);
 
-    return NextResponse.json({ success: true, message: "Clínica removida" });
+    if (error) throw error;
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Erro ao remover clínica:", error);
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    console.error("[/api/config/clinicas DELETE]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

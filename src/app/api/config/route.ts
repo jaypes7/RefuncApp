@@ -3,56 +3,21 @@
  * API: /api/config
  * ============================================================================
  *
- * GET: Retorna configurações do projeto
- * POST: Atualiza configurações
+ * GET:  Retorna configurações do projeto (Supabase)
+ * POST: Atualiza configurações (Supabase)
  *
- * Estrutura da planilha (HORIZONTAL):
- * Linha 1: DATA_INICIO_PROJETO | DATA_FIM_PROJETO | DIAS_TOTAIS_PROJETO | ...
- * Linha 2: 2024-01-15          | 2024-12-31       | 365                 | ...
+ * Tabelas Supabase:
+ *   • configuracoes  — único registro (id = 1) com dados do projeto
+ *   • etapas         — múltiplas linhas: id, nome, dias, ordem, concluida
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { getSheetData, updateRow, SHEETS } from "@/lib/sheets";
-import { ConfigUpdateSchema, EtapaConfig } from "@/lib/schemas";
+import { createServerClient } from "@/lib/supabase";
+import { ConfigUpdateSchema, type EtapaConfig } from "@/lib/schemas";
 import { requireAuth } from "@/lib/auth";
 import { logConfig } from "@/lib/logs";
 import { calculateWorkingDays } from "@/lib/date-utils";
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-/**
- * Converte qualquer representação de data (serial Excel, DD/MM/YYYY, ISO)
- * para o formato YYYY-MM-DD. Retorna null se não for possível.
- */
-function parseDate(value: string | number | undefined | null): string | null {
-  if (value === undefined || value === null || value === "") return null;
-  const str = String(value).trim();
-  if (str === "") return null;
-
-  // Já no formato correto
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-
-  // Serial numérico do Excel (ex: 46148)
-  if (/^\d+$/.test(str)) {
-    const serial = parseInt(str, 10);
-    const d = new Date(Date.UTC(1899, 11, 30));
-    d.setUTCDate(d.getUTCDate() + serial);
-    return d.toISOString().split("T")[0];
-  }
-
-  // Padrão brasileiro DD/MM/YYYY
-  const brMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (brMatch) {
-    const [, dd, mm, yyyy] = brMatch;
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  // ISO com timestamp — extrai apenas a data
-  return str.split("T")[0] || null;
-}
 
 // ============================================================================
 // TIPOS
@@ -69,78 +34,8 @@ interface ConfigResponse {
   GERENTE_CONTRATO: string | null;
   NOME_CLIENTE: string | null;
   CENTRO_CUSTO: string | null;
-}
-
-// ============================================================================
-// FUNÇÕES AUXILIARES
-// ============================================================================
-
-// Lista de todas as chaves esperadas na ordem correta
-const CONFIG_KEYS = [
-  "DATA_INICIO_PROJETO",
-  "DATA_FIM_PROJETO",
-  "DIAS_TOTAIS_PROJETO",
-  "ETAPAS_PROJETO",
-  "DURACAO_ETAPAS",
-  "META_ADMISSOES",
-  "ETAPA_ATUAL",
-  "GERENTE_OPERACOES",
-  "GERENTE_CONTRATO",
-  "NOME_CLIENTE",
-  "CENTRO_CUSTO",
-];
-
-/**
- * Busca configurações da planilha (estrutura horizontal)
- * Linha 1 = Headers (chaves), Linha 2 = Valores
- */
-async function getConfigData(): Promise<ConfigResponse> {
-  const configRows = await getSheetData(SHEETS.CONFIG);
-
-  const config: Record<string, string> = {};
-
-  if (configRows.length >= 2) {
-    // Linha 1 = headers (chaves)
-    const headers = configRows[0];
-    // Linha 2 = valores
-    const values = configRows[1];
-
-    // Mapeia cada header para seu valor correspondente
-    headers.forEach((header, index) => {
-      if (header && values[index]) {
-        config[header] = values[index];
-      }
-    });
-  }
-
-  // Parse das etapas
-  let etapas: EtapaConfig[] = [];
-  if (config.ETAPAS_PROJETO && config.DURACAO_ETAPAS) {
-    try {
-      const nomes = JSON.parse(config.ETAPAS_PROJETO);
-      const duracoes = JSON.parse(config.DURACAO_ETAPAS);
-      etapas = nomes.map((nome: string, index: number) => ({
-        id: index + 1,
-        nome,
-        duracaoDias: duracoes[index] || 1,
-      }));
-    } catch {
-      etapas = [];
-    }
-  }
-
-  return {
-    DIAS_TOTAIS_PROJETO: parseInt(config.DIAS_TOTAIS_PROJETO || "0", 10),
-    DATA_INICIO_PROJETO: parseDate(config.DATA_INICIO_PROJETO),
-    DATA_FIM_PROJETO: parseDate(config.DATA_FIM_PROJETO),
-    ETAPA_ATUAL: parseInt(config.ETAPA_ATUAL || "1", 10),
-    META_ADMISSOES: parseInt(config.META_ADMISSOES || "0", 10),
-    ETAPAS_PROJETO: etapas,
-    GERENTE_OPERACOES: config.GERENTE_OPERACOES || null,
-    GERENTE_CONTRATO: config.GERENTE_CONTRATO || null,
-    NOME_CLIENTE: config.NOME_CLIENTE || null,
-    CENTRO_CUSTO: config.CENTRO_CUSTO || null,
-  };
+  COLABORADORES_PREVISTOS: number;
+  ORCADO_SUPRIMENTOS: number;
 }
 
 // ============================================================================
@@ -149,16 +44,53 @@ async function getConfigData(): Promise<ConfigResponse> {
 
 export async function GET() {
   try {
-    // Verifica autenticação
     await requireAuth();
 
-    const config = await getConfigData();
+    const supabase = createServerClient();
 
-    return NextResponse.json({
-      data: config,
-    });
+    // Busca configurações e etapas em paralelo
+    const [
+      { data: configRow, error: configError },
+      { data: etapasRows, error: etapasError },
+    ] = await Promise.all([
+      supabase.from("configuracoes").select("*").single(),
+      supabase.from("etapas").select("*").order("ordem", { ascending: true }),
+    ]);
+
+    // PGRST116 = row not found — aceita, usa defaults
+    if (configError && configError.code !== "PGRST116") {
+      throw new Error(`Erro ao buscar configurações: ${configError.message}`);
+    }
+    if (etapasError) {
+      throw new Error(`Erro ao buscar etapas: ${etapasError.message}`);
+    }
+
+    const etapas: EtapaConfig[] = (etapasRows ?? []).map((e, idx) => ({
+      id: e.id ?? idx + 1,
+      nome: e.nome ?? `Etapa ${idx + 1}`,
+      duracaoDias: e.dias ?? 7,
+      concluida: e.concluida ?? false,
+      percentualConcluido: e.percentual_concluido ?? 0,
+    }));
+
+    const config: ConfigResponse = {
+      DIAS_TOTAIS_PROJETO: configRow?.dias_totais_projeto ?? 0,
+      DATA_INICIO_PROJETO: configRow?.data_inicio_projeto ?? null,
+      DATA_FIM_PROJETO: configRow?.data_fim_projeto ?? null,
+      ETAPA_ATUAL: configRow?.etapa_atual ?? 1,
+      META_ADMISSOES: configRow?.meta_admissoes ?? 0,
+      ETAPAS_PROJETO: etapas,
+      GERENTE_OPERACOES: configRow?.gerente_operacoes ?? null,
+      GERENTE_CONTRATO: configRow?.gerente_contrato ?? null,
+      NOME_CLIENTE: configRow?.nome_cliente ?? null,
+      CENTRO_CUSTO: configRow?.centro_custo ?? null,
+      COLABORADORES_PREVISTOS: configRow?.colaboradores_previstos ?? 0,
+      ORCADO_SUPRIMENTOS: configRow?.orcado_suprimentos ?? 0,
+    };
+
+    return NextResponse.json({ data: config });
   } catch (error) {
-    console.error("Erro ao carregar configurações:", error);
+    console.error("[GET /config]", error);
 
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -177,10 +109,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verifica autenticação
     const user = await requireAuth();
+    const supabase = createServerClient();
 
-    // Parse e validação do body
     const body = await request.json();
     const {
       dataInicio,
@@ -190,50 +121,80 @@ export async function POST(request: NextRequest) {
       gerenteContrato,
       nomeCliente,
       centroCusto,
+      colaboradores_previstos,
+      orcado_suprimentos,
+      feriados_projeto,
     } = ConfigUpdateSchema.parse(body);
 
-    // Garante que as datas estejam no formato YYYY-MM-DD (como string)
-    const formatarData = (data: string): string => {
-      // Se já está no formato correto, retorna
+    // Garante YYYY-MM-DD
+    const fmt = (data: string): string => {
       if (/^\d{4}-\d{2}-\d{2}$/.test(data)) return data;
-      // Tenta converter
       const d = new Date(data);
-      if (isNaN(d.getTime())) return data;
-      return d.toISOString().split("T")[0];
+      return isNaN(d.getTime()) ? data : d.toISOString().split("T")[0];
     };
 
-    const dataInicioFmt = formatarData(dataInicio);
-    const dataFimFmt = formatarData(dataFim);
+    const dataInicioFmt = fmt(dataInicio);
+    const dataFimFmt = fmt(dataFim);
 
-    // Calcula dias ÚTEIS (excluindo sábados e domingos) — mesma função do frontend
-    const diasTotais = calculateWorkingDays(dataInicioFmt, dataFimFmt);
+    // Dias úteis — exclui fins de semana e feriados do projeto
+    const diasTotais = calculateWorkingDays(
+      dataInicioFmt,
+      dataFimFmt,
+      feriados_projeto,
+    );
 
-    // Prepara valores
-    const nomesEtapas = JSON.stringify(etapas.map((e) => e.nome));
-    const duracoesEtapas = JSON.stringify(etapas.map((e) => e.duracaoDias));
+    // ── Upsert configuracoes (id = 1 é o registro único do projeto) ──────────
+    const { error: configError } = await supabase
+      .from("configuracoes")
+      .upsert(
+        {
+          id: 1,
+          data_inicio_projeto: dataInicioFmt,
+          data_fim_projeto: dataFimFmt,
+          dias_totais_projeto: diasTotais,
+          meta_admissoes: 100,
+          etapa_atual: 1,
+          gerente_operacoes: gerenteOperacoes ?? null,
+          gerente_contrato: gerenteContrato ?? null,
+          nome_cliente: nomeCliente ?? null,
+          centro_custo: centroCusto ?? null,
+          colaboradores_previstos: colaboradores_previstos ?? null,
+          orcado_suprimentos: orcado_suprimentos ?? null,
+          feriados_projeto: feriados_projeto
+            ? feriados_projeto.map((d) =>
+                d instanceof Date ? d.toISOString().split("T")[0] : String(d),
+              )
+            : null,
+        },
+        { onConflict: "id" },
+      );
 
-    // Prepara os valores na ordem correta das chaves
-    const values = [
-      dataInicioFmt, // DATA_INICIO_PROJETO (como string)
-      dataFimFmt, // DATA_FIM_PROJETO (como string)
-      String(diasTotais), // DIAS_TOTAIS_PROJETO (diferença em dias)
-      nomesEtapas, // ETAPAS_PROJETO
-      duracoesEtapas, // DURACAO_ETAPAS
-      "100", // META_ADMISSOES (default)
-      "1", // ETAPA_ATUAL (default)
-      gerenteOperacoes || "", // GERENTE_OPERACOES
-      gerenteContrato || "", // GERENTE_CONTRATO
-      nomeCliente || "", // NOME_CLIENTE
-      centroCusto || "", // CENTRO_CUSTO
-    ];
+    if (configError) {
+      throw new Error(`Erro ao salvar configurações: ${configError.message}`);
+    }
 
-    // Atualiza ou cria as linhas
-    // Linha 1: Headers
-    await updateRow(SHEETS.CONFIG, 1, CONFIG_KEYS);
-    // Linha 2: Valores
-    await updateRow(SHEETS.CONFIG, 2, values);
+    // ── Etapas: substitui toda a lista ───────────────────────────────────────
+    if (etapas.length > 0) {
+      // Remove todas as etapas atuais
+      await supabase.from("etapas").delete().gte("id", 0);
 
-    // Registra log
+      const etapasPayload = etapas.map((e, idx) => ({
+        id: e.id,
+        nome: e.nome,
+        dias: e.duracaoDias,
+        ordem: idx + 1,
+        concluida: false,
+      }));
+
+      const { error: etapasError } = await supabase
+        .from("etapas")
+        .insert(etapasPayload);
+
+      if (etapasError) {
+        throw new Error(`Erro ao salvar etapas: ${etapasError.message}`);
+      }
+    }
+
     await logConfig(
       user.re,
       "Projeto",
@@ -244,15 +205,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Configurações atualizadas com sucesso",
-      data: {
-        dataInicio,
-        dataFim,
-        diasTotais,
-        etapas,
-      },
+      data: { dataInicio, dataFim, diasTotais, etapas },
     });
   } catch (error) {
-    console.error("Erro ao atualizar configurações:", error);
+    console.error("[POST /config]", error);
 
     if (error instanceof ZodError) {
       return NextResponse.json(

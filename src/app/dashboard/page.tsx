@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,16 +13,14 @@ import {
   ChartLegendContent,
 } from "@/components/ui/chart";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   PieChart,
   Pie,
   Cell,
   Area,
   AreaChart,
+  XAxis,
+  YAxis,
+  CartesianGrid,
 } from "recharts";
 import {
   Users,
@@ -32,48 +30,38 @@ import {
   AlertTriangle,
   RefreshCw,
   Construction,
+  Briefcase,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { dashboardApi, type DashboardData } from "@/lib/axios";
+import { dashboardPrincipalApi, configApi, type DashboardPrincipalData } from "@/lib/axios";
 
 // ============================================================================
 // CONFIGURAÇÃO DOS GRÁFICOS
 // ============================================================================
 
-const chartConfigASO = {
-  apto: {
-    label: "Apto",
-    color: "#22c55e", // verde
-  },
-  inapto: {
-    label: "Inapto",
-    color: "#ef4444", // vermelho
-  },
-  pendente: {
-    label: "Pendente",
-    color: "#f59e0b", // amarelo
-  },
-};
-
 const chartConfigStatus = {
   ativo: {
     label: "Ativo",
-    color: "#5bc0ec", // azul marca
+    color: "#5bc0ec",
   },
   inativo: {
     label: "Inativo",
-    color: "#64748b", // cinza
+    color: "#64748b",
   },
   pendente: {
     label: "Pendente",
-    color: "#f59e0b", // amarelo
+    color: "#f59e0b",
+  },
+  desligado: {
+    label: "Desligado",
+    color: "#ef4444",
   },
 };
 
 const chartConfigCurvaS = {
   previsto: {
-    label: "Meta (Sigmoide)",
+    label: "Meta",
     color: "#94a3b8",
   },
   realizado: {
@@ -150,89 +138,73 @@ function DashboardSkeleton() {
 // ============================================================================
 
 export default function DashboardPage() {
-  console.log("[Dashboard] Componente montado");
-
   // Busca dados da API
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["dashboard"],
+    queryKey: ["dashboard-principal"],
     queryFn: async () => {
-      console.log("[Dashboard] Fazendo requisição para /api/dashboard...");
-      try {
-        const response = await dashboardApi.get();
-        console.log("[Dashboard] Resposta recebida:", response.data);
-        return response.data;
-      } catch (err) {
-        console.error("[Dashboard] Erro na requisição:", err);
-        throw err;
-      }
+      const response = await dashboardPrincipalApi.get();
+      return response.data;
     },
     retry: 2,
-    staleTime: 30000, // 30 segundos
+    staleTime: 60_000,
   });
 
-  // Log para debug
-  useEffect(() => {
-    console.log("[Dashboard] Estado da query:", { isLoading, isError, data });
-    if (data) {
-      console.log("[Dashboard] Dados recebidos:", data);
-      console.log("[Dashboard] Gráficos:", data?.graficos);
-      console.log("[Dashboard] Curva S:", data?.graficos?.curvaS);
-    }
-    if (isError && error) {
-      console.error("[Dashboard] Erro ao carregar dados:", error);
-    }
-  }, [data, isLoading, isError, error]);
+  // Busca configurações do projeto para o card de cabeçalho
+  const { data: configData } = useQuery({
+    queryKey: ["config"],
+    queryFn: async () => {
+      const response = await configApi.get();
+      return response.data.data;
+    },
+    staleTime: 60000,
+  });
 
-  const dashboardData: DashboardData | undefined = data;
+  const dashboardData: DashboardPrincipalData | undefined = data;
 
   // Gera dados da Curva S dinamicamente
   const curveData = useMemo(() => {
-    console.log(
-      "[Dashboard] Gerando curveData:",
-      dashboardData?.graficos?.curvaS,
-    );
     if (!dashboardData?.graficos?.curvaS) return [];
 
     const { labels, planejado, realizado } = dashboardData.graficos.curvaS;
-    const data = labels.map((mes, index) => ({
+    const d = labels.map((mes, index) => ({
       mes,
-      previsto: planejado[index] || 0,
-      realizado: realizado?.[index] || 0,
+      previsto: planejado[index] ?? undefined,
+      realizado: realizado?.[index] ?? undefined,
     }));
-    console.log("[Dashboard] curveData gerado:", data);
-    return data;
+
+    // Forward-fill previsto: garante que a linha de meta se estende até o fim
+    let lastPrevisto: number | undefined;
+    for (const point of d) {
+      if (point.previsto != null) {
+        lastPrevisto = point.previsto;
+      } else if (lastPrevisto != null) {
+        point.previsto = lastPrevisto;
+      }
+    }
+
+    return d;
   }, [dashboardData]);
 
-  // Dados para gráfico de barras (ASO)
-  const dadosASO = useMemo(() => {
-    if (!dashboardData?.metricas) return [];
+  // Indicador: leitura direta dos últimos pontos não-nulos do gráfico
+  const indicadorCurvaS = useMemo(() => {
+    if (!curveData.length) return null;
+    const previsto = [...curveData].reverse().find((d) => d.previsto != null)?.previsto ?? null;
+    const realizado = [...curveData].reverse().find((d) => d.realizado != null)?.realizado ?? null;
+    if (previsto == null) return null;
+    return { previsto, realizado: realizado ?? 0 };
+  }, [curveData]);
 
-    const total = dashboardData.metricas.totalCadastrados || 1;
-    const aptoCount = Math.round(
-      (dashboardData.metricas.percentualASO / 100) * total,
-    );
-    const inaptoCount = Math.round(
-      ((100 - dashboardData.metricas.percentualASO) / 100) * total * 0.2,
-    );
-    const pendenteCount = total - aptoCount - inaptoCount;
-
-    return [
-      { name: "Apto", value: Math.max(0, aptoCount), fill: "#22c55e" },
-      { name: "Inapto", value: Math.max(0, inaptoCount), fill: "#ef4444" },
-      { name: "Pendente", value: Math.max(0, pendenteCount), fill: "#f59e0b" },
-    ];
-  }, [dashboardData]);
-
-  // Dados para gráfico de rosca (Status)
+  // Dados para gráfico de rosca (Status) — inclui Desligado
   const dadosStatus = useMemo(() => {
     if (!dashboardData?.graficos?.statusCount) return [];
 
-    const { Ativo, Inativo, Pendente } = dashboardData.graficos.statusCount;
+    const { Ativo, Inativo, Pendente, Desligado } = dashboardData.graficos.statusCount;
 
     return [
       { name: "Ativo", value: Ativo || 0, color: "#5bc0ec" },
       { name: "Inativo", value: Inativo || 0, color: "#64748b" },
       { name: "Pendente", value: Pendente || 0, color: "#f59e0b" },
+      { name: "Desligado", value: Desligado || 0, color: "#ef4444" },
     ];
   }, [dashboardData]);
 
@@ -258,7 +230,7 @@ export default function DashboardPage() {
         total: 0,
         mobPercentual: 0,
         asoPercentual: 0,
-        pendenciasRh: 0,
+        pendenciasSetoriais: 0,
       };
     }
 
@@ -266,7 +238,7 @@ export default function DashboardPage() {
       total: dashboardData.metricas.totalCadastrados,
       mobPercentual: dashboardData.metricas.percentualMOB,
       asoPercentual: dashboardData.metricas.percentualASO,
-      pendenciasRh:
+      pendenciasSetoriais:
         dashboardData.metricas.totalCadastrados -
         dashboardData.metricas.totalAdmitidos,
     };
@@ -321,33 +293,123 @@ export default function DashboardPage() {
     <ProtectedRoute>
       <div className="min-h-screen w-full p-4 md:p-8">
         <div className="mx-auto max-w-7xl 2xl:max-w-[1800px]">
+
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-6">
             <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">Dashboard</h1>
             <p className="text-muted-foreground 2xl:text-lg">
               Visão geral dos colaboradores e métricas
             </p>
           </div>
 
-          {/* Cards de KPIs */}
-          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Total de Colaboradores */}
-            <Card className="glass-card">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Total de Colaboradores
+          {/* ── Card de Cabeçalho do Projeto ── */}
+          {configData && (
+            <Card className="glass-card mb-6">
+              <CardHeader className="pb-3 flex flex-row items-center gap-2">
+                <Briefcase className="h-4 w-4 text-primary" />
+                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Informações do Projeto
                 </CardTitle>
-                <Users className="h-4 w-4 text-primary" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-foreground">
-                  {kpis.total}
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+                  {configData.NOME_CLIENTE && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cliente</p>
+                      <p className="text-sm font-semibold truncate" title={configData.NOME_CLIENTE}>{configData.NOME_CLIENTE}</p>
+                    </div>
+                  )}
+                  {configData.CENTRO_CUSTO && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Centro de Custo</p>
+                      <p className="text-sm font-semibold truncate" title={configData.CENTRO_CUSTO}>{configData.CENTRO_CUSTO}</p>
+                    </div>
+                  )}
+                  {configData.GERENTE_OPERACOES && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Ger. Operações</p>
+                      <p className="text-sm font-semibold truncate" title={configData.GERENTE_OPERACOES}>{configData.GERENTE_OPERACOES}</p>
+                    </div>
+                  )}
+                  {configData.GERENTE_CONTRATO && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Ger. Contrato</p>
+                      <p className="text-sm font-semibold truncate" title={configData.GERENTE_CONTRATO}>{configData.GERENTE_CONTRATO}</p>
+                    </div>
+                  )}
+                  {configData.DATA_INICIO_PROJETO && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Início</p>
+                      <p className="text-sm font-semibold">
+                        {new Date(configData.DATA_INICIO_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                      </p>
+                    </div>
+                  )}
+                  {configData.DATA_FIM_PROJETO && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Término</p>
+                      <p className="text-sm font-semibold">
+                        {new Date(configData.DATA_FIM_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                      </p>
+                    </div>
+                  )}
+                  {configData.META_ADMISSOES > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Meta Admissões</p>
+                      <p className="text-sm font-semibold">{configData.META_ADMISSOES}</p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Cadastrados no sistema
-                </p>
               </CardContent>
             </Card>
+          )}
+
+          {/* ── Cards de KPIs ── */}
+          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Previsto vs Real */}
+            {(() => {
+              const previsto = dashboardData?.metricas?.colaboradoresPrevistos ?? 0;
+              const pct = previsto > 0
+                ? Math.min(100, Math.round((kpis.total / previsto) * 100))
+                : 0;
+              return (
+                <Card className="glass-card">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
+                      Previsto vs Real
+                    </CardTitle>
+                    <Users className="h-4 w-4 text-primary" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl 2xl:text-3xl font-bold text-foreground">
+                      {kpis.total}
+                      {previsto > 0 && (
+                        <span className="ml-1 text-sm font-normal text-muted-foreground">
+                          / {previsto}
+                        </span>
+                      )}
+                    </div>
+                    {previsto > 0 ? (
+                      <>
+                        <div className="mt-2 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {pct}% do previsto atingido
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Cadastrados no sistema
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Mobilização (MOB) */}
             <Card className="glass-card">
@@ -381,17 +443,17 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Pendências RH */}
+            {/* Pendências setoriais */}
             <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Pendências RH
+                  Pendências setoriais
                 </CardTitle>
                 <AlertCircle className="h-4 w-4 text-destructive" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl 2xl:text-3xl font-bold text-destructive">
-                  {kpis.pendenciasRh}
+                  {kpis.pendenciasSetoriais}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Não enviados ao RH
@@ -400,144 +462,88 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Gráficos */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Gráfico de Barras - ASO */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle>Distribuição ASO</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfigASO} className="h-[300px] 2xl:h-[420px] w-full">
-                  <BarChart data={dadosASO} margin={{ top: 20, right: 60, left: 20, bottom: 20 }}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.1)"
-                    />
-                    <XAxis
-                      dataKey="name"
-                      stroke="rgba(255,255,255,0.5)"
-                      fontSize={13}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      stroke="rgba(255,255,255,0.5)"
-                      fontSize={13}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value) => `${value}`}
-                    />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]} fill="#5bc0ec" />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-
-            {/* Gráfico de Rosca - Status */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle>Status Contratual</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfigStatus} className="h-[300px] 2xl:h-[420px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={dadosStatus}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius="30%"
-                      outerRadius="70%"
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {dadosStatus.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Distribuição por Função CLT */}
-          {dadosFuncoes.length > 0 && (
-            <div className="mt-6">
-              <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle>Distribuição por Função CLT</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ChartContainer config={chartConfigFuncoes} className="h-[350px] 2xl:h-[480px] w-full">
-                    <PieChart>
-                      <Pie
-                        data={dadosFuncoes}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius="80%"
-                        paddingAngle={2}
-                        dataKey="value"
-                        nameKey="name"
-                        label={({ name, percent }) =>
-                          percent > 0.04 ? `${name} (${(percent * 100).toFixed(0)}%)` : ""
-                        }
-                        labelLine={false}
-                      >
-                        {dadosFuncoes.map((entry, i) => (
-                          <Cell key={`fn-${i}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <ChartTooltip
-                        content={<ChartTooltipContent nameKey="name" />}
-                      />
-                      <ChartLegend content={<ChartLegendContent />} />
-                    </PieChart>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Curva S + Pendências — lado a lado */}
-          {dashboardData?.projeto?.dataInicio && curveData.length > 0 && (
-            <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-              {/* Curva S — 2/3 da largura */}
+          {/* ── Curva de mobilização + Plano de ação ── */}
+          {/* Gated em configData (fonte canônica de datas) para não depender
+              de dashboardData.projeto.dataInicio, que só existe quando a
+              meta de admissões > 0. O gráfico é exibido apenas quando há
+              dados de curva; o "Plano de ação" aparece sempre que o projeto
+              estiver configurado. */}
+          {configData?.DATA_INICIO_PROJETO && (
+            <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+              {/* Curva de mobilização — 2/3 da largura */}
               <Card className="glass-card lg:col-span-2">
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
                   <div>
-                    <CardTitle>Curva de Projeto — Curva S</CardTitle>
+                    <CardTitle>Curva de mobilização</CardTitle>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Meta planejada (sigmoide) vs. admitidos reais acumulados
+                      Meta planejada vs. admitidos reais acumulados
                     </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">
-                      Início:{" "}
-                      {new Date(
-                        dashboardData.projeto.dataInicio! + "T00:00:00Z",
-                      ).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Dia {dashboardData.projeto.diasCorridos} do projeto
-                    </p>
-                    {dashboardData.projeto.status?.atrasado && (
-                      <p className="text-xs font-medium text-destructive">
-                        ▼ {dashboardData.projeto.status.diasAtraso}d de atraso
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                      <p className="text-xs text-muted-foreground">
+                        Início:{" "}
+                        {new Date(
+                          configData.DATA_INICIO_PROJETO + "T00:00:00Z",
+                        ).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                       </p>
-                    )}
-                    {dashboardData.projeto.status &&
-                      !dashboardData.projeto.status.atrasado && (
-                        <p className="text-xs font-medium text-emerald-400">
-                          ▲ No prazo
+                      {configData.DATA_FIM_PROJETO && (
+                        <p className="text-xs text-muted-foreground">
+                          Término:{" "}
+                          {new Date(
+                            configData.DATA_FIM_PROJETO + "T00:00:00Z",
+                          ).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                         </p>
                       )}
+                      <p className="text-xs text-muted-foreground">
+                        Dia {dashboardData?.projeto?.diasCorridos ?? 0} do projeto
+                      </p>
+                      {dashboardData?.projeto?.status?.atrasado && (
+                        <p className="text-xs font-medium text-destructive">
+                          ▼ {dashboardData.projeto.status.diasAtraso}d de atraso
+                        </p>
+                      )}
+                      {dashboardData?.projeto?.status &&
+                        !dashboardData.projeto.status.atrasado && (
+                          <p className="text-xs font-medium text-emerald-400">
+                            ▲ No prazo
+                          </p>
+                        )}
+                    </div>
                   </div>
+                  {/* Indicador: leitura dos pontos do gráfico na data de hoje */}
+                  {indicadorCurvaS && (
+                    <div className="shrink-0 flex flex-col items-end gap-0.5 text-right">
+                      <span className="text-xs text-muted-foreground">
+                        Previsão para hoje:{" "}
+                        <span className="font-semibold text-foreground">
+                          {indicadorCurvaS.previsto}%
+                        </span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Realizado:{" "}
+                        <span
+                          className="font-semibold"
+                          style={{
+                            color:
+                              indicadorCurvaS.realizado >= indicadorCurvaS.previsto
+                                ? "#22c55e"
+                                : "#ef4444",
+                          }}
+                        >
+                          {indicadorCurvaS.realizado}%
+                        </span>
+                      </span>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
+                  {curveData.length === 0 ? (
+                    <div className="flex h-[350px] flex-col items-center justify-center gap-2 text-muted-foreground">
+                      <AlertTriangle className="h-10 w-10 opacity-30" />
+                      <p className="text-sm">
+                        Configure a meta de admissões para gerar a curva
+                      </p>
+                    </div>
+                  ) : (
                   <ChartContainer config={chartConfigCurvaS} className="h-[350px] 2xl:h-[480px] w-full">
                     <AreaChart
                       data={curveData}
@@ -622,27 +628,45 @@ export default function DashboardPage() {
                       />
                     </AreaChart>
                   </ChartContainer>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Déficit de Mobilização (Etapas) — 1/3 da largura */}
+              {/* Plano de ação — 1/3 da largura */}
               <Card className="glass-card lg:col-span-1">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Déficit de Mobilização
+                    Plano de ação
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {(!dashboardData.pendencias ||
-                    dashboardData.pendencias.length === 0) ? (
-                    <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
-                      <ShieldCheck className="h-10 w-10 text-emerald-400/50" />
-                      <p className="text-sm">Todas as metas de etapa atingidas</p>
-                    </div>
-                  ) : (
+                  {(() => {
+                    const temEtapas = (dashboardData?.etapasCount ?? 0) > 0;
+                    const temPendencias = (dashboardData?.pendencias?.length ?? 0) > 0;
+
+                    if (!temEtapas) {
+                      return (
+                        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
+                          <AlertTriangle className="h-10 w-10 opacity-20" />
+                          <p className="text-sm">Nenhuma etapa cadastrada</p>
+                          <p className="text-xs opacity-60">Configure em Configurações › Cronograma</p>
+                        </div>
+                      );
+                    }
+
+                    if (!temPendencias) {
+                      return (
+                        <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                          <ShieldCheck className="h-10 w-10 text-emerald-400/50" />
+                          <p className="text-sm">Todas as metas de etapa atingidas</p>
+                        </div>
+                      );
+                    }
+
+                    return (
                     <div className="space-y-2 max-h-[26rem] 2xl:max-h-[34rem] overflow-y-auto pr-1">
-                      {dashboardData.pendencias.map((p, i) => {
+                      {dashboardData?.pendencias.map((p, i) => {
                         const isRed = p.cor === "red";
                         const badgeColors = isRed
                           ? { bg: "#f43f5e22", fg: p.diasAtraso > 15 ? "#b91c1c" : "#f43f5e", border: "#f43f5e44" }
@@ -701,11 +725,100 @@ export default function DashboardPage() {
                         );
                       })}
                     </div>
-                  )}
+                  );
+                  })()}
                 </CardContent>
               </Card>
             </div>
           )}
+
+          {/* ── Status Contratual (com números absolutos) ── */}
+          <div className="mb-6">
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle>Status Contratual</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={chartConfigStatus} className="h-[260px] 2xl:h-[340px] w-full">
+                  <PieChart>
+                    <Pie
+                      data={dadosStatus}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="30%"
+                      outerRadius="65%"
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {dadosStatus.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                  </PieChart>
+                </ChartContainer>
+                {/* Números absolutos por status */}
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {dadosStatus.map((s) => (
+                    <div
+                      key={s.name}
+                      className="flex flex-col items-center rounded-lg border border-white/5 bg-white/5 px-3 py-3"
+                    >
+                      <span
+                        className="text-2xl 2xl:text-3xl font-bold"
+                        style={{ color: s.color }}
+                      >
+                        {s.value}
+                      </span>
+                      <span className="mt-0.5 text-xs text-muted-foreground">
+                        {s.name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Distribuição por Função CLT ── */}
+          {dadosFuncoes.length > 0 && (
+            <div className="mb-6">
+              <Card className="glass-card">
+                <CardHeader>
+                  <CardTitle>Distribuição por Função CLT</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer config={chartConfigFuncoes} className="h-[350px] 2xl:h-[480px] w-full">
+                    <PieChart>
+                      <Pie
+                        data={dadosFuncoes}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius="80%"
+                        paddingAngle={2}
+                        dataKey="value"
+                        nameKey="name"
+                        label={({ name, percent }) =>
+                          percent > 0.04 ? `${name} (${(percent * 100).toFixed(0)}%)` : ""
+                        }
+                        labelLine={false}
+                      >
+                        {dadosFuncoes.map((entry, i) => (
+                          <Cell key={`fn-${i}`} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip
+                        content={<ChartTooltipContent nameKey="name" />}
+                      />
+                      <ChartLegend content={<ChartLegendContent />} />
+                    </PieChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
         </div>
       </div>
     </ProtectedRoute>

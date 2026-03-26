@@ -29,6 +29,9 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import {
   Hotel,
@@ -39,7 +42,9 @@ import {
   RefreshCw,
   ArrowLeft,
 } from "lucide-react";
-import { dashboardApi } from "@/lib/axios";
+import { dashboardLogisticaApi } from "@/lib/axios";
+import { SheetUpload } from "@/components/sheet-upload";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ============================================================================
 // CONFIG DO CHART
@@ -49,6 +54,14 @@ const chartConfig = {
   vagasPreenchidas: { label: "Ocupadas",    color: "#5bc0ec" },
   vagasDisponiveis: { label: "Disponíveis", color: "#334155" },
 };
+
+const chartConfigTurnos = {
+  total: { label: "Colaboradores", color: "#5bc0ec" },
+};
+
+const TURNO_COLORS = [
+  "#5bc0ec", "#22c55e", "#f59e0b", "#a78bfa", "#f43f5e", "#34d399",
+];
 
 // ============================================================================
 // HELPERS
@@ -137,32 +150,28 @@ function LogisticaSkeleton() {
 // ============================================================================
 
 export default function DashboardLogisticaPage() {
-  const router = useRouter();
+  const router      = useRouter();
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["dashboard"],
+    queryKey: ["dashboard-logistica"],
     queryFn: async () => {
-      const res = await dashboardApi.get();
+      const res = await dashboardLogisticaApi.get();
       return res.data;
     },
-    staleTime: 30_000,
+    staleTime: 120_000,
   });
 
   const hoteis = useMemo(
-    () => data?.agregacoes?.vagasHoteis ?? [],
+    () => data?.vagasHoteis ?? [],
     [data],
   );
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────
-
-  const kpis = useMemo(() => {
-    if (hoteis.length === 0) return null;
-    const totalVagas       = hoteis.reduce((s, h) => s + (h.vagasTotais || 0), 0);
-    const totalPreenchidas = hoteis.reduce((s, h) => s + (h.vagasPreenchidas || 0), 0);
-    const totalDisponiveis = Math.max(0, totalVagas - totalPreenchidas);
-    const ocupacaoTotal    = totalVagas > 0 ? Math.round((totalPreenchidas / totalVagas) * 100) : 0;
-    return { totalVagas, totalPreenchidas, totalDisponiveis, ocupacaoTotal };
-  }, [hoteis]);
+  // ── KPIs — calculados pela API com base em SUM(hoteis.vagas_totais) ─────────
+  // Não recalcular aqui: o denominador correto é SUM(hoteis.vagas_totais),
+  // e o numerador é COUNT(logistica_controle onde hotel preenchido).
+  // Hotéis sem cadastro na tabela hoteis não entram no denominador.
+  const kpis = useMemo(() => data?.kpis ?? null, [data]);
 
   // ── Dados do gráfico ──────────────────────────────────────────────────────
 
@@ -180,6 +189,18 @@ export default function DashboardLogisticaPage() {
         };
       }),
     [hoteis],
+  );
+
+  // ── Turnos de trabalho ────────────────────────────────────────────────────
+
+  const dadosTurnos = useMemo(
+    () =>
+      (data?.turnoTrabalho ?? []).map((t, i) => ({
+        turno: t.turno,
+        total: t.total,
+        fill: TURNO_COLORS[i % TURNO_COLORS.length],
+      })),
+    [data],
   );
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -222,23 +243,33 @@ export default function DashboardLogisticaPage() {
         <div className="mx-auto max-w-7xl 2xl:max-w-[1800px] space-y-8">
 
           {/* Header */}
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/dashboard")}
-              className="h-9 w-9 border border-border bg-card/60 hover:bg-card"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">
-                Dashboard Logística
-              </h1>
-              <p className="text-muted-foreground 2xl:text-lg">
-                Ocupação e disponibilidade dos hotéis
-              </p>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push("/dashboard")}
+                className="h-9 w-9 border border-border bg-card/60 hover:bg-card"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">
+                  Dashboard Logística
+                </h1>
+                <p className="text-muted-foreground 2xl:text-lg">
+                  Ocupação e disponibilidade dos hotéis
+                </p>
+              </div>
             </div>
+            <SheetUpload
+              endpoint="/api/logistica/controle"
+              label="Importar controle logístico"
+              headerDetectionKeys={["CPF", "RE", "NOME"]}
+              onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-logistica"] })}
+              variant="outline"
+              size="sm"
+            />
           </div>
 
           {/* KPI Cards */}
@@ -415,6 +446,57 @@ export default function DashboardLogisticaPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Turnos de Trabalho */}
+          {dadosTurnos.length > 0 && (
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle>Turnos de Trabalho</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={chartConfigTurnos} className="h-[300px] 2xl:h-[380px] w-full">
+                  <PieChart>
+                    <Pie
+                      data={dadosTurnos}
+                      dataKey="total"
+                      nameKey="turno"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={110}
+                      label={({ turno, percent }) =>
+                        `${turno} (${(percent * 100).toFixed(0)}%)`
+                      }
+                      labelLine={false}
+                    >
+                      {dadosTurnos.map((entry, i) => (
+                        <Cell key={`turno-${i}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                  </PieChart>
+                </ChartContainer>
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {dadosTurnos.map((t) => (
+                    <div
+                      key={t.turno}
+                      className="flex flex-col items-center rounded-lg border border-white/5 bg-white/5 px-3 py-3"
+                    >
+                      <span
+                        className="text-2xl 2xl:text-3xl font-bold"
+                        style={{ color: t.fill }}
+                      >
+                        {t.total}
+                      </span>
+                      <span className="mt-0.5 text-xs text-muted-foreground text-center">
+                        {t.turno}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         </div>
       </div>

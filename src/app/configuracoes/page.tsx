@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { calculateWorkingDays } from "@/lib/date-utils";
+import { Switch } from "@/components/ui/switch";
+import { calculateWorkingDays, calculateWorkingDaysDetailed, addWorkingDays, formatDateISO } from "@/lib/date-utils";
 import { validateScheduleTotal } from "@/constants/cronograma-data";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -31,6 +32,9 @@ import {
   Building,
   Settings,
   UserPlus,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -43,13 +47,17 @@ type ConfigProjeto = {
   centro_custo: string;
   data_inicio: string;
   data_fim: string;
+  colaboradores_previstos: string;
+  orcado_suprimentos: string;
 };
 
 type EtapaCronograma = {
   id: number;
   nome: string;
-  porcentagem_acumulada: string;
+  /** Percentual de avanço físico (0–100) informado manualmente pelo supervisor */
+  percentual_concluido: number;
   dias: number;
+  concluida?: boolean;
 };
 
 type ConfigCronograma = {
@@ -58,8 +66,8 @@ type ConfigCronograma = {
 };
 
 type ConfigClinica = { id?: number; nome: string };
-type ConfigHotel = { id?: number; nome: string; vagas_totais: number };
-type ConfigAcesso = { id?: number; re: string; nome: string; role: string };
+type ConfigHotel = { id?: string; nome: string; qt_vagas: number; vagas_ocupadas: number; vagas_disponiveis: number };
+type ConfigAcesso = { id?: string; re: string; nome: string; perfil: string };
 
 type LogEntry = {
   id: string;
@@ -76,11 +84,13 @@ type ApiConfigResponse = {
   DATA_FIM_PROJETO: string | null;
   ETAPA_ATUAL: number;
   META_ADMISSOES: number;
-  ETAPAS_PROJETO: Array<{ id: number; nome: string; duracaoDias: number }>;
+  ETAPAS_PROJETO: Array<{ id: number; nome: string; duracaoDias: number; concluida?: boolean; percentualConcluido?: number }>;
   GERENTE_OPERACOES: string | null;
   GERENTE_CONTRATO: string | null;
   NOME_CLIENTE: string | null;
   CENTRO_CUSTO: string | null;
+  COLABORADORES_PREVISTOS: number;
+  ORCADO_SUPRIMENTOS: number;
 };
 
 // ─── Etapas unificadas (10 etapas — fase 1) ────────────────────────────────
@@ -88,31 +98,16 @@ type ApiConfigResponse = {
 //   • "Treinamento Yara" + "Treinamento MSV"  →  "Treinamentos Normativos"
 //   • "Crachá" + "Credencial"                 →  "Liberação de Credencial"
 const ETAPAS_DEFAULT: EtapaCronograma[] = [
-  { id: 1, nome: "Seleção", porcentagem_acumulada: "0% - 10%", dias: 3 },
-  { id: 2, nome: "Exames", porcentagem_acumulada: "10% - 20%", dias: 4 },
-  { id: 3, nome: "ASO", porcentagem_acumulada: "20% - 28%", dias: 2 },
-  { id: 4, nome: "e-Social", porcentagem_acumulada: "28% - 38%", dias: 4 },
-  { id: 5, nome: "Contrato", porcentagem_acumulada: "38% - 48%", dias: 3 },
-  {
-    id: 6,
-    nome: "Treinamentos Normativos",
-    porcentagem_acumulada: "48% - 65%",
-    dias: 8,
-  },
-  { id: 7, nome: "Portal", porcentagem_acumulada: "65% - 73%", dias: 3 },
-  {
-    id: 8,
-    nome: "Liberação de Credencial",
-    porcentagem_acumulada: "73% - 83%",
-    dias: 4,
-  },
-  { id: 9, nome: "EPIs", porcentagem_acumulada: "83% - 92%", dias: 3 },
-  {
-    id: 10,
-    nome: "Início de Campo",
-    porcentagem_acumulada: "92% - 100%",
-    dias: 3,
-  },
+  { id: 1,  nome: "Seleção de Mão de Obra",    dias: 3,  percentual_concluido: 0 },
+  { id: 2,  nome: "Realização de Exames",       dias: 4,  percentual_concluido: 0 },
+  { id: 3,  nome: "Liberação de ASO",           dias: 2,  percentual_concluido: 0 },
+  { id: 4,  nome: "e-Social",                   dias: 4,  percentual_concluido: 0 },
+  { id: 5,  nome: "Assinatura de contrato",     dias: 3,  percentual_concluido: 0 },
+  { id: 6,  nome: "Treinamentos Normativos",    dias: 8,  percentual_concluido: 0 },
+  { id: 7,  nome: "Portal do Colaborador",      dias: 3,  percentual_concluido: 0 },
+  { id: 8,  nome: "Liberação de Credencial",    dias: 4,  percentual_concluido: 0 },
+  { id: 9,  nome: "Liberação de EPIs",          dias: 3,  percentual_concluido: 0 },
+  { id: 10, nome: "Início de Campo",            dias: 3,  percentual_concluido: 0 },
 ];
 
 const ROLES = [
@@ -151,6 +146,8 @@ export default function ConfiguracoesPage() {
     centro_custo: "",
     data_inicio: "",
     data_fim: "",
+    colaboradores_previstos: "",
+    orcado_suprimentos: "",
   });
 
   // Cronograma
@@ -188,6 +185,10 @@ export default function ConfiguracoesPage() {
   // Hotéis - inputs para adicionar novo
   const [hotelNome, setHotelNome] = useState("");
   const [hotelVagas, setHotelVagas] = useState("");
+
+  // Hotéis - edição inline de qt_vagas
+  const [editingHotelId, setEditingHotelId] = useState<string | null>(null);
+  const [editingQtVagas, setEditingQtVagas] = useState("");
 
   // --- Data Fetching ---
   // Tipado com ApiConfigResponse para refletir as chaves uppercase da API
@@ -257,6 +258,14 @@ export default function ConfiguracoesPage() {
         centro_custo: projetoData.CENTRO_CUSTO || "",
         data_inicio: projetoData.DATA_INICIO_PROJETO || "",
         data_fim: projetoData.DATA_FIM_PROJETO || "",
+        colaboradores_previstos:
+          projetoData.COLABORADORES_PREVISTOS > 0
+            ? String(projetoData.COLABORADORES_PREVISTOS)
+            : "",
+        orcado_suprimentos:
+          projetoData.ORCADO_SUPRIMENTOS > 0
+            ? String(projetoData.ORCADO_SUPRIMENTOS)
+            : "",
       });
       if (projetoData.ETAPAS_PROJETO?.length) {
         const novasEtapas = ETAPAS_DEFAULT.map((etapaDefault) => {
@@ -264,8 +273,13 @@ export default function ConfiguracoesPage() {
             (e) => e.nome === etapaDefault.nome,
           );
           return salva
-            ? { ...etapaDefault, dias: salva.duracaoDias }
-            : etapaDefault;
+            ? {
+                ...etapaDefault,
+                dias: salva.duracaoDias,
+                concluida: salva.concluida ?? false,
+                percentual_concluido: salva.percentualConcluido ?? 0,
+              }
+            : { ...etapaDefault, concluida: false };
         });
         const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
         setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
@@ -277,7 +291,7 @@ export default function ConfiguracoesPage() {
   const projetoMutation = useMutation({
     mutationFn: async (data: ConfigProjeto) => {
       // Envia apenas dados do projeto — etapas NÃO são incluídas
-      const payload = {
+      const payload: Record<string, unknown> = {
         gerenteOperacoes: data.gerente_operacoes,
         gerenteContrato: data.gerente_contrato,
         nomeCliente: data.nome_cliente,
@@ -285,6 +299,12 @@ export default function ConfiguracoesPage() {
         dataInicio: data.data_inicio,
         dataFim: data.data_fim,
       };
+      if (data.colaboradores_previstos) {
+        payload.colaboradores_previstos = Number(data.colaboradores_previstos);
+      }
+      if (data.orcado_suprimentos) {
+        payload.orcado_suprimentos = Number(data.orcado_suprimentos);
+      }
 
       const res = await fetch("/api/config/projeto-dados", {
         method: "POST",
@@ -309,6 +329,8 @@ export default function ConfiguracoesPage() {
           id: e.id,
           nome: e.nome,
           duracaoDias: e.dias,
+          concluida: e.concluida ?? false,
+          percentualConcluido: e.percentual_concluido ?? 0,
         })),
       };
 
@@ -361,13 +383,16 @@ export default function ConfiguracoesPage() {
   });
 
   const hotelMutation = useMutation({
-    mutationFn: async (data: { nome: string; vagas: number }) => {
+    mutationFn: async (payload: { nome: string; qt_vagas: number }) => {
       const res = await fetch("/api/config/hoteis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: data.nome, vagas_totais: data.vagas }),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Falha ao salvar hotel");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar hotel");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -376,22 +401,46 @@ export default function ConfiguracoesPage() {
       setHotelVagas("");
       toast.success("Hotel salvo com sucesso!");
     },
-    onError: () => toast.error("Erro ao salvar hotel"),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const deleteHotelMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (id: string) => {
       const res = await fetch(`/api/config/hoteis?id=${id}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Falha ao excluir hotel");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao excluir hotel");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "hoteis"] });
       toast.success("Hotel excluído com sucesso!");
     },
-    onError: () => toast.error("Erro ao excluir hotel"),
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const updateHotelMutation = useMutation({
+    mutationFn: async (payload: { id: string; qt_vagas: number }) => {
+      const res = await fetch("/api/config/hoteis", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: payload.id, qt_vagas: Number(payload.qt_vagas) }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao atualizar hotel");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config", "hoteis"] });
+      setEditingHotelId(null);
+      toast.success("Hotel atualizado com sucesso!");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const addAcessoMutation = useMutation({
@@ -415,11 +464,14 @@ export default function ConfiguracoesPage() {
   });
 
   const deleteAcessoMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (id: string) => {
       const res = await fetch(`/api/config/acessos?id=${id}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Falha ao remover acesso");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao remover acesso");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -437,6 +489,58 @@ export default function ConfiguracoesPage() {
     const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
     setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
   };
+
+  const updateEtapaConcluida = (id: number, concluida: boolean) => {
+    const novasEtapas = cronograma.etapas.map((e) =>
+      e.id === id ? { ...e, concluida } : e,
+    );
+    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
+    const novoEstado: ConfigCronograma = { etapas: novasEtapas, dias_totais: totalDias };
+    setCronograma(novoEstado);
+    // Persiste imediatamente no banco ao alterar o switch
+    cronogramaMutation.mutate(novoEstado);
+  };
+
+  const updateEtapaPercentual = (id: number, pct: number) => {
+    const valor = Math.max(0, Math.min(100, pct || 0));
+    const novasEtapas = cronograma.etapas.map((e) =>
+      e.id === id ? { ...e, percentual_concluido: valor } : e,
+    );
+    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
+    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
+  };
+
+  // ── Pesos acumulados calculados dinamicamente pelos dias de cada etapa ──────
+  // Usado para exibir o intervalo percentual real (ex: "12% → 28% do cronograma")
+  // em vez dos valores hardcoded que existiam antes.
+  const etapasPesos = useMemo(() => {
+    const totalDias = cronograma.dias_totais || 1;
+    let acum = 0;
+    return cronograma.etapas.map((e) => {
+      const inicio = Math.round((acum / totalDias) * 100);
+      acum += e.dias;
+      const fim = Math.round((acum / totalDias) * 100);
+      return { id: e.id, inicio, fim };
+    });
+  }, [cronograma.etapas, cronograma.dias_totais]);
+
+  // ── Datas e métricas reais de cada etapa ─────────────────────────────────
+  // Calcula startDate / endDate de cada etapa em cadeia a partir de
+  // data_inicio do projeto, respeitando fins de semana e feriados nacionais.
+  // Retorna null quando a data de início do projeto não estiver configurada.
+  const etapasDatas = useMemo(() => {
+    if (!projeto.data_inicio) return null;
+    let cursor = projeto.data_inicio;
+    return cronograma.etapas.map((e) => {
+      const startDate = cursor;
+      // O último dia útil desta etapa: início + (dias - 1) dias úteis
+      const endDate = formatDateISO(addWorkingDays(startDate, Math.max(0, e.dias - 1)));
+      const { calendarDays, workingDays } = calculateWorkingDaysDetailed(startDate, endDate);
+      // Próxima etapa começa no dia útil seguinte
+      cursor = formatDateISO(addWorkingDays(endDate, 1));
+      return { id: e.id, startDate, endDate, calendarDays, workingDays };
+    });
+  }, [projeto.data_inicio, cronograma.etapas]);
 
   return (
     <ProtectedRoute>
@@ -600,6 +704,43 @@ export default function ConfiguracoesPage() {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Colaboradores Previstos
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={projeto.colaboradores_previstos}
+                      onChange={(e) =>
+                        setProjeto({
+                          ...projeto,
+                          colaboradores_previstos: e.target.value,
+                        })
+                      }
+                      className="glass-input"
+                      placeholder="Ex: 200"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Orçamento de Suprimentos (R$)
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={projeto.orcado_suprimentos}
+                      onChange={(e) =>
+                        setProjeto({
+                          ...projeto,
+                          orcado_suprimentos: e.target.value,
+                        })
+                      }
+                      className="glass-input"
+                      placeholder="Ex: 50000"
+                    />
+                  </div>
+
                   {/* ── Indicador de Dias Úteis ── */}
                   {diasUteisTotal !== null && (
                     <div className="md:col-span-2 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
@@ -726,18 +867,52 @@ export default function ConfiguracoesPage() {
                   {cronograma.etapas.map((etapa) => (
                     <div
                       key={etapa.id}
-                      className="flex items-center gap-4 p-3 bg-card/50 rounded-lg border border-border/50"
+                      className={`flex items-center gap-4 p-3 rounded-lg border transition-colors ${
+                        etapa.concluida
+                          ? "bg-emerald-500/10 border-emerald-500/30"
+                          : "bg-card/50 border-border/50"
+                      }`}
                     >
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
+                          etapa.concluida
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : "bg-primary/10 text-primary"
+                        }`}
+                      >
                         {etapa.id}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{etapa.nome}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {etapa.porcentagem_acumulada}
+                        <div className="font-medium truncate flex items-center gap-2">
+                          <span className="truncate">{etapa.nome}</span>
+                          {etapa.concluida && (
+                            <Badge
+                              variant="outline"
+                              className="shrink-0 h-4 px-1.5 text-[10px] border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
+                            >
+                              Concluído
+                            </Badge>
+                          )}
                         </div>
+                        {/* Percentual dinâmico calculado a partir dos dias digitados */}
+                        <div className="text-xs text-muted-foreground">
+                          {(() => {
+                            const p = etapasPesos.find((x) => x.id === etapa.id);
+                            return p ? `${p.inicio}% – ${p.fim}% do cronograma` : "";
+                          })()}
+                        </div>
+                        {/* Dias corridos vs. dias úteis por etapa */}
+                        {etapasDatas && (() => {
+                          const d = etapasDatas.find((x) => x.id === etapa.id);
+                          return d ? (
+                            <div className="text-xs text-muted-foreground/70 mt-0.5 tabular-nums">
+                              Corridos: {d.calendarDays}&nbsp;|&nbsp;Úteis: {d.workingDays}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        {/* Duração em dias úteis */}
                         <Input
                           type="number"
                           min={1}
@@ -749,10 +924,44 @@ export default function ConfiguracoesPage() {
                             )
                           }
                           className="w-20 glass-input text-center"
+                          title="Duração em dias úteis"
                         />
-                        <span className="text-sm text-muted-foreground w-10">
+                        <span className="text-sm text-muted-foreground w-10 shrink-0">
                           dias
                         </span>
+                        {/* Avanço físico (percentual_concluido) */}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={etapa.percentual_concluido}
+                            onChange={(e) =>
+                              updateEtapaPercentual(
+                                etapa.id,
+                                parseInt(e.target.value),
+                              )
+                            }
+                            className="w-16 glass-input text-center"
+                            title="Avanço físico desta etapa (0–100%)"
+                          />
+                          <span className="text-[10px] text-muted-foreground">
+                            % físico
+                          </span>
+                        </div>
+                        {/* Switch de conclusão */}
+                        <div className="flex flex-col items-center gap-0.5 ml-1">
+                          <Switch
+                            checked={etapa.concluida ?? false}
+                            onCheckedChange={(checked: boolean) =>
+                              updateEtapaConcluida(etapa.id, checked)
+                            }
+                            disabled={cronogramaMutation.isPending}
+                          />
+                          <span className="text-[10px] text-muted-foreground">
+                            Concluída
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -886,8 +1095,8 @@ export default function ConfiguracoesPage() {
                                   </span>
                                   <span className="text-xs text-muted-foreground">
                                     RE: {acesso.re} •{" "}
-                                    {ROLES.find((r) => r.value === acesso.role)
-                                      ?.label || acesso.role}
+                                    {ROLES.find((r) => r.value === acesso.perfil)
+                                      ?.label || acesso.perfil}
                                   </span>
                                 </div>
                               </div>
@@ -1053,7 +1262,7 @@ export default function ConfiguracoesPage() {
                       onClick={() =>
                         hotelMutation.mutate({
                           nome: hotelNome,
-                          vagas: parseInt(hotelVagas) || 0,
+                          qt_vagas: Number(hotelVagas) || 0,
                         })
                       }
                       disabled={!hotelNome?.trim() || hotelMutation.isPending}
@@ -1083,31 +1292,117 @@ export default function ConfiguracoesPage() {
                               key={hotel.id}
                               className="flex items-center justify-between p-3 bg-card/50 rounded-lg border border-border/50"
                             >
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="w-8 h-8 shrink-0 rounded-full bg-primary/10 flex items-center justify-center">
                                   <Bed className="w-4 h-4 text-primary" />
                                 </div>
-                                <div>
-                                  <span className="font-medium block">
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-medium block truncate">
                                     {hotel.nome}
                                   </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {hotel.vagas_totais} vagas
-                                  </span>
+                                  <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                    {/* Total de Vagas — inline edit or static */}
+                                    {editingHotelId === hotel.id ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs text-muted-foreground">Total:</span>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          value={editingQtVagas}
+                                          onChange={(e) => setEditingQtVagas(e.target.value)}
+                                          className="h-6 w-20 px-1.5 text-xs glass-input"
+                                          autoFocus
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" && hotel.id)
+                                              updateHotelMutation.mutate({ id: hotel.id, qt_vagas: Number(editingQtVagas) || 0 });
+                                            if (e.key === "Escape") setEditingHotelId(null);
+                                          }}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        Total: <span className="font-medium text-foreground">{hotel.qt_vagas}</span>
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                      Ocupadas: <span className="font-medium text-amber-400">{hotel.vagas_ocupadas}</span>
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      Disponíveis: <span className="font-medium text-emerald-400">{hotel.vagas_disponiveis}</span>
+                                    </span>
+                                  </div>
+                                  {hotel.qt_vagas > 0 && (
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <div className="flex-1 h-1.5 rounded-full bg-border overflow-hidden max-w-[120px]">
+                                        <div
+                                          className="h-full rounded-full bg-amber-400"
+                                          style={{
+                                            width: `${Math.min(100, Math.round((hotel.vagas_ocupadas / hotel.qt_vagas) * 100))}%`,
+                                          }}
+                                        />
+                                      </div>
+                                      <span className="text-xs text-muted-foreground tabular-nums">
+                                        {Math.round((hotel.vagas_ocupadas / hotel.qt_vagas) * 100)}%
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  hotel.id &&
-                                  deleteHotelMutation.mutate(hotel.id)
-                                }
-                                disabled={deleteHotelMutation.isPending}
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
+                                {editingHotelId === hotel.id ? (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        hotel.id &&
+                                        updateHotelMutation.mutate({ id: hotel.id, qt_vagas: Number(editingQtVagas) || 0 })
+                                      }
+                                      disabled={updateHotelMutation.isPending}
+                                      className="text-emerald-400 hover:text-emerald-400 hover:bg-emerald-400/10 h-7 w-7 p-0"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setEditingHotelId(null)}
+                                      disabled={updateHotelMutation.isPending}
+                                      className="h-7 w-7 p-0"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setEditingHotelId(hotel.id ?? null);
+                                        setEditingQtVagas(String(hotel.qt_vagas));
+                                      }}
+                                      disabled={deleteHotelMutation.isPending}
+                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        hotel.id &&
+                                        deleteHotelMutation.mutate(hotel.id)
+                                      }
+                                      disabled={deleteHotelMutation.isPending}
+                                      className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>

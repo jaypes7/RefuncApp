@@ -44,7 +44,7 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   endereco: ["ENDEREÇO", "ENDERECO", "ENDEREÇO RESIDENCIAL", "LOGRADOURO"],
   status_adm: ["STATUS", "STATUS ADM", "STATUS ADMISSIONAL", "SITUAÇÃO", "SITUACAO"],
   clinica: ["CLINICA", "CLÍNICA", "CLÍNICA DE EXAME", "CLINICA DE EXAME", "CLINICA EXAME"],
-  data_exame: ["DATA EXAME", "DATA DO EXAME", "DT EXAME", "EXAME DATA"],
+  data_exame: ["DATA EXAME", "DATA DO EXAME", "DT EXAME", "EXAME DATA", "EXAME"],
   aso_status: ["ASO", "STATUS ASO", "ASO STATUS", "APTIDÃO", "APTIDAO", "RESULTADO ASO"],
   data_admissao: ["DATA ADMISSÃO", "DATA ADMISSAO", "DATA DE ADMISSÃO", "DT ADMISSAO", "DT ADMISSÃO", "ADMISSÃO"],
   contrato_tipo: ["CONTRATO", "TIPO CONTRATO", "TIPO DE CONTRATO"],
@@ -55,7 +55,8 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   hotel: ["HOTEL", "HOTEL HOSPEDADO", "HOSPEDAGEM", "NOME DO HOTEL"],
   quarto: ["QUARTO", "QUARTO/APTO", "APTO", "APARTAMENTO", "N QUARTO", "Nº DO QUARTO"],
   tipo_apto: ["TIPO APTO", "TIPO DE ACOMODAÇÃO", "TIPO ACOMODACAO", "ACOMODAÇÃO"],
-  checkin_data: ["CHECK-IN", "CHECKIN", "DATA CHECK-IN", "DATA CHECKIN"],
+  checkin_data: ["CHECK-IN", "CHECK IN", "CHECKIN", "DATA CHECK-IN", "DATA CHECKIN"],
+  data_viagem: ["DATA DE VIAGEM", "DATA VIAGEM", "DT VIAGEM"],
   turno_semana: ["TURNO", "TURNO SEMANA", "TURNO (2ª A 6ª)", "JORNADA"],
   rota_transporte: ["ROTA", "ROTA TRANSPORTE", "ROTA DE TRANSPORTE", "PERCURSO"],
   tipo_transporte: ["TIPO TRANSPORTE", "TIPO DE VEÍCULO", "TIPO VEICULO", "VEICULO", "VEÍCULO"],
@@ -72,7 +73,7 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   data_desligamento: ["DATA DEMISSÃO", "DATA DEMISSAO", "DEMISSÃO", "DEMISSAO", "DT DESLIGAMENTO", "DATA DESLIGAMENTO"],
   ind: ["IND", "INDICADOR"],
   pessoa: ["PESSOA", "TIPO PESSOA"],
-  req: ["REQ", "REQUISIÇÃO", "REQUISICAO"],
+  req: ["REQ", "REQ.", "REQUISIÇÃO", "REQUISICAO"],
   vinculado: ["VINCULADO", "VÍNCULO"],
   carta_oferta: ["CARTA OFERTA", "CARTA DE OFERTA"],
   colab_pend: ["COLAB. PEND.", "COLAB PEND", "COLABORADOR PENDENTE"],
@@ -89,6 +90,7 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   vr: ["VR"],
   termino: ["TERMINO", "TÉRMINO", "TÉRMINO CONTRATO"],
   prorrogacao: ["PRORROGACAO", "PRORROGAÇÃO"],
+  check_in: ["CHECK IN", "CHECK-IN", "DATA CHECK IN", "DATA CHECK-IN"],
 };
 
 // ── Mapeamento schemaId → chave da API (coluna na planilha) ─────────────────
@@ -115,10 +117,15 @@ export const SCHEMA_TO_API: Record<string, string | null> = {
   ponto_batida: "PONTO",
   cracha: "CRACHA",
   enviado_rh: "ENVIADO_RH",
-  hotel: null,
+  
+  // 👇 AS COLUNAS NOVAS AGORA TÊM DESTINO (Não são mais null) 👇
+  hotel: "hotel",
+  checkin_data: "check_in",
+  check_in: "check_in",
+  data_viagem: "data_viagem",
+  
   quarto: null,
   tipo_apto: null,
-  checkin_data: null,
   turno_semana: null,
   rota_transporte: null,
   tipo_transporte: null,
@@ -163,27 +170,48 @@ function toStr(value: unknown): string {
 }
 
 export function sanitizeCPF(value: unknown): string {
-  return toStr(value).replace(/\D/g, "");
+  const limpo = toStr(value).replace(/\D/g, "");
+  if (!limpo) return "";
+  return limpo.padStart(11, "0"); // Garante sempre 11 dígitos!
 }
 
 export function sanitizeDate(value: unknown): string | null {
   if (!value && value !== 0) return null;
-  if (typeof value === "number") {
-    const date = new Date((value - 25569) * 86400 * 1000);
-    if (isNaN(date.getTime())) return null;
-    return date.toISOString().split("T")[0];
-  }
-  const str = toStr(value);
+
+  const str = String(value).trim();
   if (!str) return null;
+
+  const numVal = Number(value);
+  if (!isNaN(numVal)) {
+    // 👇 A SOLUÇÃO REAL: Baixamos o limite para 10000 (Ano 1927)
+    // Isso garante que datas de nascimento antigas também sejam convertidas!
+    if (numVal > 10000 && numVal < 80000) {
+      const date = new Date((numVal - 25569) * 86400 * 1000);
+      if (!isNaN(date.getTime())) return date.toISOString().split("T")[0];
+    }
+  }
+
+  // Tratamento padrão para textos (DD/MM/YYYY)
   const brMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (brMatch) {
     const [, d, m, y] = brMatch;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
+
+  // Tratamento padrão ISO (YYYY-MM-DD)
   const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (isoMatch) return str;
+
+  // Fallback seguro do JavaScript
   const parsed = Date.parse(str);
-  if (!isNaN(parsed)) return new Date(parsed).toISOString().split("T")[0];
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    const year = d.getFullYear();
+    if (year >= 1900 && year <= 2100) {
+      return d.toISOString().split("T")[0];
+    }
+  }
+
   return null;
 }
 
@@ -257,9 +285,29 @@ export function buildHeaderMap(headers: string[]): Map<string, string> {
   for (const rawHeader of headers) {
     const normalized = rawHeader.trim().toUpperCase().replace(/\s+/g, " ");
     for (const [schemaId, aliases] of Object.entries(HEADER_ALIASES)) {
+      // Guarda de segurança para 'hotel': headers com palavras financeiras
+      // (CUSTO, VALOR, C.C.) nunca devem mapear para este campo.
+      // O alias "HOSPEDAGEM" só aceita match exato para evitar
+      // capturar "C. CUSTOS HOSPEDAGEM" via substring.
+      if (schemaId === "hotel") {
+        if (/\bCUSTO|VALOR|C\.C\.|C\. C\.\b/.test(normalized)) continue;
+        const found = aliases.some((alias) => {
+          const a = alias.toUpperCase().replace(/\s+/g, " ");
+          return normalized === a; // match exato obrigatório para hotel
+        });
+        if (found) {
+          map.set(rawHeader, schemaId);
+          break;
+        }
+        continue;
+      }
+
       const found = aliases.some((alias) => {
         const a = alias.toUpperCase().replace(/\s+/g, " ");
-        return normalized === a || normalized.startsWith(a) || normalized.includes(a);
+        // Aliases curtos (≤3 chars, ex: "RE", "UF", "OP", "ASO") exigem match exato.
+        // Aliases longos permitem substring match para cabeçalhos variados.
+        if (a.length <= 3) return normalized === a;
+        return normalized === a || normalized.includes(a);
       });
       if (found) {
         map.set(rawHeader, schemaId);
@@ -274,24 +322,33 @@ export function buildHeaderMap(headers: string[]): Map<string, string> {
 
 export function rowToColaborador(row: RawRow, headerMap: Map<string, string>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
+  
   for (const [rawHeader, schemaId] of headerMap.entries()) {
     const rawValue = row[rawHeader];
     const apiKey = SCHEMA_TO_API[schemaId];
+    
     if (!apiKey) continue;
 
     if (schemaId === "cpf") {
       const cpf = sanitizeCPF(rawValue);
       if (cpf) result[apiKey] = cpf;
-    } else if (["dt_nasc", "data_exame", "data_admissao", "checkin_data", "data_desligamento", "termino", "prorrogacao"].includes(schemaId)) {
+      
+    // 👇 ADICIONADO: check_in e data_viagem agora são formatados como Data (YYYY-MM-DD)
+    } else if (["dt_nasc", "data_exame", "data_admissao", "checkin_data", "check_in", "data_viagem", "data_desligamento", "termino", "prorrogacao"].includes(schemaId)) {
       result[apiKey] = sanitizeDate(rawValue);
+      
     } else if (schemaId === "idade") {
       const n = Number(rawValue);
       if (!isNaN(n) && n >= 16 && n <= 99) result[apiKey] = Math.round(n);
-    } else if (["nome", "funcao"].includes(schemaId)) {
+      
+    // 👇 ADICIONADO: hotel agora é tratado como texto e convertido para maiúsculo
+    } else if (["nome", "funcao", "hotel"].includes(schemaId)) {
       result[apiKey] = sanitizeText(rawValue, { upper: true });
+      
     } else {
       result[apiKey] = mapStrictEnums(schemaId, sanitizeText(rawValue));
     }
   }
+  
   return result;
 }

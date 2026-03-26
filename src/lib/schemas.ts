@@ -63,7 +63,7 @@ const preprocessDate = (val: unknown): unknown => {
   if (typeof val === "string") {
     const str = val.trim();
     if (str === "") return undefined;
-    // Serial numérico do Excel/Google Sheets
+    // Serial numérico do Excel
     if (/^\d+$/.test(str)) {
       return new Date((parseInt(str, 10) - 25569) * 86400 * 1000)
         .toISOString()
@@ -101,7 +101,7 @@ export const CPFSchema = z
   });
 
 /**
- * Schema para datas no formato ISO (YYYY-MM-DD).
+ * Schema para datas opcionais no formato ISO (YYYY-MM-DD).
  * Aceita seriais do Excel, DD/MM/YYYY e strings ISO — converte tudo para YYYY-MM-DD.
  */
 export const DateSchema = z.preprocess(
@@ -110,6 +110,15 @@ export const DateSchema = z.preprocess(
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD")
     .optional(),
+);
+
+/**
+ * Schema para datas obrigatórias no formato ISO (YYYY-MM-DD).
+ * Igual ao DateSchema mas sem `.optional()` — usado em campos que não podem ser nulos.
+ */
+export const DateRequiredSchema = z.preprocess(
+  preprocessDate,
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
 );
 
 /**
@@ -126,8 +135,17 @@ export const TelefoneSchema = z
 // ============================================================================
 
 /**
- * Schema completo do Colaborador (38 colunas)
- * ORDEM SAGRADA - NÃO ALTERAR
+ * Schema completo do Colaborador (38 colunas da planilha + campos extras do DB).
+ *
+ * ─ COMPORTAMENTO DE CAMPOS NÃO MAPEADOS ────────────────────────────────────
+ * z.object() usa a estratégia "strip" por padrão: qualquer chave presente nos
+ * dados de entrada que NÃO esteja declarada neste schema é SILENCIOSAMENTE
+ * DESCARTADA antes de chegar à base de dados. Isso é intencional — planilhas
+ * importadas costumam ter colunas extras que não precisam ser persistidas.
+ * Para verificar: `ColaboradorSchema._def.unknownKeys === "strip"` → true.
+ *
+ * ORDEM DAS 38 COLUNAS SAGRADA - NÃO REORDENAR
+ * Campos adicionais do banco ficam no bloco "Campos extras (DB)" abaixo.
  */
 export const ColaboradorSchema = z.object({
   // Colunas 1-5
@@ -183,6 +201,10 @@ export const ColaboradorSchema = z.object({
   MUNICIPIO: z.preprocess(emptyStringToUndefined, z.string().optional()),
   UF: z.preprocess(emptyStringToUndefined, UFEnum.optional()),
   TELEFONE: TelefoneSchema,
+
+  // ── Campos extras (DB) — não presentes na planilha de importação ──────────
+  // Ignorados durante o parse de planilhas (strip); persistidos via Supabase.
+  turno_trabalho: z.preprocess(emptyStringToUndefined, z.string().optional()),
 });
 
 /**
@@ -221,32 +243,52 @@ export const ConfigSchema = z.object({
   META_ADMISSOES: z.coerce.number().positive().optional(),
   ETAPAS_PROJETO: z.string().optional(), // JSON string com array de etapas
   DURACAO_ETAPAS: z.string().optional(), // JSON string com array de durações
+
+  // ── Campos novos (Supabase) ───────────────────────────────────────────────
+  /** Headcount previsto em contrato — usado para calcular déficit de mobilização */
+  colaboradores_previstos: z.coerce.number().positive().optional(),
+  /** Valor orçado para suprimentos (R$) */
+  orcado_suprimentos: z.coerce.number().nonnegative().optional(),
+  /** Lista de feriados específicos do projeto (ex.: paralisações programadas) */
+  feriados_projeto: z.array(z.coerce.date()).optional(),
 });
 
 export const EtapaConfigSchema = z.object({
-  id: z.number().min(1).max(12),
+  id: z.number().min(1).max(20),
   nome: z.string().min(1),
   duracaoDias: z.number().positive(),
+  /** Indica se a etapa já foi concluída (persiste no banco) */
+  concluida: z.boolean().optional(),
+  /** Percentual de avanço físico informado manualmente pelo supervisor (0–100) */
+  percentualConcluido: z.number().min(0).max(100).optional(),
 });
 
 export const ConfigUpdateSchema = z.object({
-  dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dataInicio: DateRequiredSchema,
+  dataFim:    DateRequiredSchema,
   etapas: z.array(EtapaConfigSchema).min(1).max(20),
   gerenteOperacoes: z.string().optional(),
   gerenteContrato: z.string().optional(),
   nomeCliente: z.string().optional(),
   centroCusto: z.coerce.string().optional(),
+  // ── Campos novos (Supabase) ─────────────────────────────────────────────
+  colaboradores_previstos: z.coerce.number().positive().optional(),
+  orcado_suprimentos: z.coerce.number().nonnegative().optional(),
+  feriados_projeto: z.array(z.coerce.date()).optional(),
 });
 
 // Schema para salvar apenas dados do projeto (sem etapas)
 export const ConfigProjetoSchema = z.object({
-  dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dataInicio: DateRequiredSchema,
+  dataFim:    DateRequiredSchema,
   gerenteOperacoes: z.string().optional(),
   gerenteContrato: z.string().optional(),
   nomeCliente: z.string().optional(),
   centroCusto: z.coerce.string().optional(), // Aceita number ou string
+  // ── Campos novos (Supabase) ─────────────────────────────────────────────
+  colaboradores_previstos: z.coerce.number().positive().optional(),
+  orcado_suprimentos: z.coerce.number().nonnegative().optional(),
+  feriados_projeto: z.array(z.coerce.date()).optional(),
 });
 
 // Schema para salvar apenas as etapas do cronograma (sem dados do projeto)
@@ -288,7 +330,7 @@ const preprocessNumber = (val: unknown): number => {
 // ============================================================================
 
 /**
- * Schema de uma linha da aba Hoteis.
+ * Schema de uma linha da aba Hoteis (importação de planilha — UPPERCASE).
  * Layout: A=ID | B=NOME | C=QT_VAGAS | D=VAGAS_OCUPADAS
  */
 export const HotelSchema = z.object({
@@ -300,10 +342,45 @@ export const HotelSchema = z.object({
 
 export type HotelRow = z.infer<typeof HotelSchema>;
 
+/**
+ * Schema de um hotel persistido na tabela `configuracoes_hoteis` (Supabase).
+ * Usado pelas rotas /api/config/hoteis para validar criação e atualização.
+ */
+export const HotelDBSchema = z.object({
+  id:       z.string().uuid().optional(),
+  nome:     z.string(),
+  qt_vagas: z.number().int().nonnegative(),
+  ativo:    z.boolean().default(true),
+});
+
+export type HotelDB = z.infer<typeof HotelDBSchema>;
+
+// ============================================================================
+// SCHEMA DE CLÍNICAS
+// ============================================================================
+
+/**
+ * Schema de uma clínica persistida na tabela `configuracoes_clinicas` (Supabase).
+ * Usado pelas rotas /api/config/clinicas para validar criação e atualização.
+ */
+export const ClinicaSchema = z.object({
+  id:       z.string().uuid().optional(),
+  nome:     z.string().min(1, "Nome é obrigatório"),
+  endereco: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  cidade:   z.preprocess(emptyStringToUndefined, z.string().optional()),
+  uf:       z.preprocess(emptyStringToUndefined, UFEnum.optional()),
+  ativo:    z.boolean().default(true),
+});
+
+export type Clinica = z.infer<typeof ClinicaSchema>;
+
 export const StatusSuprimentosEnum = z.enum([
   "Aprovada",
   "Cancelada",
   "Em Aprovação",
+  "Pendente",
+  "Em cotação",
+  "Entregue",
 ]);
 
 export const EntregueObraEnum = z.enum(["Sim", "Não"]);
@@ -311,13 +388,19 @@ export const EntregueObraEnum = z.enum(["Sim", "Não"]);
 /**
  * Schema de uma linha da aba SUPRIMENTOS.
  * Layout real da planilha: A=TOTAL_REQ_PREVISTAS | B=VALORES | C=ORDEM_COMPRA | D=STATUS | E=ENTREGUE_OBRA
+ *
+ * TOTAL_REQ_PREVISTAS: coluna opcional na planilha (vem da config do projeto).
+ *   .catch(0) + preprocessNumber(undefined)=0 garantem que a ausência da coluna
+ *   nunca reprova a linha.
+ * STATUS: aceita qualquer string (z.string()) para não barrar valores novos
+ *   do Excel antes de chegar ao normalizeStatus da API.
  */
 export const SuprimentosRowSchema = z.object({
   ORDEM_COMPRA: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  // .catch(0) garante que um valor inválido nunca derruba a linha toda
   TOTAL_REQ_PREVISTAS: z.preprocess(preprocessNumber, z.number().catch(0)),
   VALORES: z.preprocess(preprocessNumber, z.number().catch(0)),
-  STATUS: z.preprocess(emptyStringToUndefined, StatusSuprimentosEnum.optional()),
+  // String livre — a normalização canônica acontece na API (normalizeStatus)
+  STATUS: z.preprocess(emptyStringToUndefined, z.string().optional()),
   ENTREGUE_OBRA: z.preprocess(
     emptyStringToUndefined,
     EntregueObraEnum.optional(),
@@ -335,6 +418,171 @@ export const ColaboradoresQuerySchema = z.object({
 });
 
 // ============================================================================
+// SCHEMA DE USUÁRIOS PERMITIDOS
+// ============================================================================
+
+export const PerfilEnum = z.enum(["admin", "user", "guest"]);
+
+/**
+ * Schema de registro de usuário autorizado.
+ *
+ * Representa a tabela `usuarios_permitidos` no Supabase.
+ * O campo `id` é gerado pelo banco (UUID v4) e opcional na criação.
+ */
+export const UsuariosPermitidosSchema = z.object({
+  /** UUID gerado pelo Supabase — ausente no payload de criação */
+  id: z.string().uuid().optional(),
+  /** Registro do Empregado — chave de login, somente dígitos */
+  re: z.string().regex(/^\d+$/, "RE deve conter apenas números").min(1, "RE é obrigatório"),
+  /** Nome completo do usuário */
+  nome: z.string().min(1, "Nome é obrigatório"),
+  /** Nível de acesso no sistema */
+  perfil: PerfilEnum.default("user"),
+  /** Timestamp ISO da autorização (preenchido automaticamente pelo banco) */
+  autorizado_em: z.string().datetime().optional(),
+});
+
+/** Schema para o payload de criação (sem id e autorizado_em) */
+export const UsuariosPermitidosCreateSchema = UsuariosPermitidosSchema.omit({
+  id: true,
+  autorizado_em: true,
+});
+
+// ============================================================================
+// SCHEMA DE SUPRIMENTOS (BANCO DE DADOS)
+// ============================================================================
+
+/**
+ * Schema de um registro de ordem de compra persistido no Supabase.
+ * Usa snake_case para alinhar com a convenção do banco.
+ *
+ * Difere do `SuprimentosRowSchema` (que usa UPPERCASE para leitura de planilha):
+ *  - `SuprimentosRowSchema`  → parse de linhas brutas da planilha importada
+ *  - `SuprimentosSchema`     → registro tipado para escrita/leitura no banco
+ */
+export const SuprimentosSchema = z.object({
+  id: z.string().uuid().optional(),
+  item: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  requisicao: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  prioridade: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  descricao: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  fornecedores: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  cotacoes: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  requisitante: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  data_criacao: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  status: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  ordem_compra: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  valores: z.preprocess(preprocessNumber, z.number().nonnegative().catch(0)),
+  informado_por: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  status_ordem: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  entregue_obra: z.boolean().default(false),
+  projeto_id: z.string().optional(),
+  created_at: z.string().datetime().optional(),
+});
+
+// ============================================================================
+// SCHEMAS DE DOMÍNIOS ISOLADOS
+// ============================================================================
+
+/**
+ * Schema do domínio RH.
+ * Representa os campos HR da tabela `colaboradores` no Supabase.
+ * Chave de conflito no upsert: `cpf`.
+ */
+export const RhSchema = z.object({
+  id: z.string().uuid().optional(),
+  cpf: CPFSchema,
+  nome: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
+  re: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  status: z.preprocess(emptyStringToUndefined, StatusEnum.optional()),
+  funcao_clt: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  contrato: z.preprocess(emptyStringToUndefined, ContratoEnum.optional()),
+  data_admissao: DateSchema,
+  dt_nascimento: DateSchema,
+  idade: z.coerce.number().min(16).max(99).optional().nullable(),
+  uf: z.preprocess(emptyStringToUndefined, UFEnum.optional()),
+  municipio: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  telefone: TelefoneSchema,
+  enviado_rh: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
+  docs: z.preprocess(emptyStringToUndefined, DocsEnum.optional()),
+  pre_admissao: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
+  vr: z.preprocess(emptyStringToUndefined, VREnum.optional()),
+  termino: DateSchema,
+  prorrogacao: DateSchema,
+  demissao: DateSchema,
+  created_at: z.string().datetime().optional(),
+});
+
+/**
+ * Schema do domínio Logística.
+ * Tabela: `logistica_controle`. Chave de conflito: `cpf` (fallback: `re`).
+ */
+export const LogisticaSchema = z.object({
+  id: z.string().uuid().optional(),
+  cpf: z.preprocess(emptyStringToUndefined, CPFSchema.optional()),
+  re: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  nome: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
+  funcao_clt: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  // Colunas que já existem no DB
+  mob: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  portal: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  ponto: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  cracha: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  turno_semana: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  turno_trabalho: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  turno_sabado: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  turno_domingo: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  hotel: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  /** DB column: `quarto` — recebe "Nº APTO." da planilha */
+  quarto: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  data_checkin: DateSchema,
+  tipo_transporte: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  rota_transporte: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  // Colunas novas (migration_sync_headers.sql)
+  status: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  situacao: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  fase: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  sexo: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  data_admissao: DateSchema,
+  coordenador: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  supervisor: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  encarregado: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  tipo_apto: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  local_trabalho: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  setor_trabalho: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  demissao: DateSchema,
+  data_nascimento: DateSchema,
+  telefone: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  uf: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  created_at: z.string().datetime().optional(),
+});
+
+/**
+ * Schema do domínio Segurança (FITs).
+ * Tabela: `seguranca_fits`. Chave de conflito: `re`.
+ */
+export const SegurancaSchema = z.object({
+  id: z.string().uuid().optional(),
+  re: z.string().min(1, "RE é obrigatório"),
+  cpf: z.preprocess(emptyStringToUndefined, CPFSchema.optional()),
+  nome: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
+  funcao_clt: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  mob: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
+  data_admissao: DateSchema,
+  municipio: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  uf: z.preprocess(emptyStringToUndefined, UFEnum.optional()),
+  num_fit: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  aso: z.preprocess(emptyStringToUndefined, AsoEnum.optional()),
+  rpv: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  status_portal: z.preprocess(
+    emptyStringToUndefined,
+    z.enum(["Aprovado", "Pendente", "Aprovado - DEMITIDO"]).optional(),
+  ),
+  data_cracha_retirado: DateSchema,
+  created_at: z.string().datetime().optional(),
+});
+
+// ============================================================================
 // TIPOS TYPESCRIPT
 // ============================================================================
 
@@ -348,3 +596,10 @@ export type ConfigUpdate = z.infer<typeof ConfigUpdateSchema>;
 export type ConfigProjeto = z.infer<typeof ConfigProjetoSchema>;
 export type ConfigEtapas = z.infer<typeof ConfigEtapasSchema>;
 export type ColaboradoresQuery = z.infer<typeof ColaboradoresQuerySchema>;
+export type UsuarioPermitido = z.infer<typeof UsuariosPermitidosSchema>;
+export type UsuarioPermitidoCreate = z.infer<typeof UsuariosPermitidosCreateSchema>;
+export type Suprimento = z.infer<typeof SuprimentosSchema>;
+export type PerfilUsuario = z.infer<typeof PerfilEnum>;
+export type RhRecord = z.infer<typeof RhSchema>;
+export type LogisticaRecord = z.infer<typeof LogisticaSchema>;
+export type SegurancaRecord = z.infer<typeof SegurancaSchema>;

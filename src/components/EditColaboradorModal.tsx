@@ -45,7 +45,7 @@ function formatDataSegura(value: string | number | null | undefined): string | u
   const str = String(value).trim();
   if (str === "") return undefined;
 
-  // Serial numérico do Excel/Google Sheets (somente dígitos)
+  // Serial numérico do Excel (somente dígitos)
   if (/^\d+$/.test(str)) {
     const d = new Date((Number(str) - 25569) * 86400 * 1000);
     const y = d.getUTCFullYear();
