@@ -13,6 +13,7 @@
  */
 
 import { EtapaConfig } from "./schemas";
+import { calculateWorkingDays, formatDateISO } from "./date-utils";
 
 // ============================================================================
 // TIPOS PÚBLICOS
@@ -187,17 +188,19 @@ export function verificarAtraso(
     return { atrasado: false, diasAtraso: 0, percentualAtraso: 0 };
   }
 
-  const inicio     = parseUTC(dataInicio);
-  const fim        = parseUTC(dataFim);
-  const diasTotais = Math.round(
-    (fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  // Usa dias úteis (excluindo fins de semana e feriados nacionais) para
+  // calcular o atraso real de mobilização — mais preciso que dias corridos.
+  const diasTotais = calculateWorkingDays(dataInicio, dataFim);
   if (diasTotais <= 0) return { atrasado: false, diasAtraso: 0, percentualAtraso: 0 };
 
-  const hoje      = new Date();
-  const diasCorridos = Math.round(
-    (hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  const hoje     = new Date();
+  const todayStr = formatDateISO(hoje);
+
+  // Se hoje ainda não chegou ao início do projeto, não há atraso computável
+  const diasCorridos = hoje < parseUTC(dataInicio)
+    ? 0
+    : calculateWorkingDays(dataInicio, todayStr);
+
   const tHoje = Math.max(0, Math.min(1, diasCorridos / diasTotais));
 
   const metaHoje     = sigmoid(tHoje) * metaAdmissoes;

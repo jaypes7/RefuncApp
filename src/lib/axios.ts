@@ -28,10 +28,6 @@ export const api = axios.create({
 // Interceptor de requisição
 api.interceptors.request.use(
   (config) => {
-    // Log em desenvolvimento
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
-    }
     return config;
   },
   (error) => {
@@ -47,14 +43,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Só redireciona se não estiver já na página de login
       if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
-        console.log("[API] 401 recebido, redirecionando para login");
         window.location.href = "/login";
       }
-    }
-
-    // Tratamento de erro 429 - Rate limit
-    if (error.response?.status === 429) {
-      console.warn("[API] Rate limit atingido. Aguarde um momento.");
     }
 
     return Promise.reject(error);
@@ -185,6 +175,8 @@ export interface DashboardData {
     percentualMOB: number;
     percentualASO: number;
     percentualPortal: number;
+    /** Meta de colaboradores configurada no projeto */
+    colaboradoresPrevistos: number;
   };
   progresso: {
     real: number;
@@ -261,6 +253,8 @@ export interface DashboardData {
       entregues: number;
       /** Percentual de entrega (0-100) */
       percentualEntregue: number;
+      /** Valor orçado para suprimentos (config do projeto) */
+      orcado: number;
       /** Contagem por STATUS para o PieChart */
       distribuicaoStatus: Array<{ status: string; total: number }>;
       /** Linhas brutas para a tabela (ordem original da planilha) */
@@ -272,11 +266,77 @@ export interface DashboardData {
         entregueObra: string;
       }>;
     };
+    /** Distribuição por turno de trabalho */
+    turnoTrabalho: Array<{ turno: string; total: number }>;
+    /** Contratos com TERMINO definido, agrupados por função */
+    terminoPorFuncao: Array<{ funcao: string; total: number }>;
   };
 }
 
 export const dashboardApi = {
   get: () => api.get<DashboardData>("/dashboard"),
+};
+
+// ============================================================================
+// TIPOS ESPECÍFICOS POR DOMÍNIO
+// ============================================================================
+
+/** Shape retornada por GET /api/dashboard/principal */
+export type DashboardPrincipalData = {
+  metricas: DashboardData["metricas"];
+  projeto: DashboardData["projeto"];
+  pendencias: DashboardData["pendencias"];
+  graficos: Omit<DashboardData["graficos"], "curvaS"> & {
+    curvaS: {
+      labels: string[];
+      planejado: (number | null)[];
+      realizado?: (number | null)[];
+    } | null;
+  };
+  etapasCount: number;
+  agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes">;
+};
+
+/** Shape retornada por GET /api/dashboard/rh */
+export type DashboardRhData = {
+  metricas: { totalCadastrados: number; totalAdmitidos: number; percentualASO: number };
+  agregacoes: {
+    distribuicaoIdades: DashboardData["agregacoes"]["distribuicaoIdades"];
+    distribuicaoFuncoes: DashboardData["agregacoes"]["distribuicaoFuncoes"];
+    terminoDetalhado: Array<{ nome: string; funcao_clt: string | null; termino: string }>;
+  };
+};
+
+/** Shape retornada por GET /api/dashboard/logistica */
+export type DashboardLogisticaData = {
+  kpis: { totalVagas: number; totalPreenchidas: number; totalDisponiveis: number; ocupacaoTotal: number };
+  vagasHoteis: DashboardData["agregacoes"]["vagasHoteis"];
+  turnoTrabalho: DashboardData["agregacoes"]["turnoTrabalho"];
+};
+
+/** Shape retornada por GET /api/dashboard/suprimentos */
+export type DashboardSuprimentosData = {
+  suprimentos: Omit<DashboardData["agregacoes"]["suprimentos"], "ordens">;
+};
+
+// ============================================================================
+// HELPERS DE API POR DOMÍNIO
+// ============================================================================
+
+export const dashboardPrincipalApi = {
+  get: () => api.get<DashboardPrincipalData>("/dashboard/principal"),
+};
+
+export const dashboardRhApi = {
+  get: () => api.get<DashboardRhData>("/dashboard/rh"),
+};
+
+export const dashboardLogisticaApi = {
+  get: () => api.get<DashboardLogisticaData>("/dashboard/logistica"),
+};
+
+export const dashboardSuprimentosApi = {
+  get: () => api.get<DashboardSuprimentosData>("/dashboard/suprimentos"),
 };
 
 // ============================================================================
@@ -287,6 +347,8 @@ export interface EtapaConfig {
   id: number;
   nome: string;
   duracaoDias: number;
+  /** Persiste no banco — marcada pelo usuário na aba Cronograma */
+  concluida?: boolean;
 }
 
 export interface ConfigData {
@@ -300,6 +362,10 @@ export interface ConfigData {
   GERENTE_CONTRATO: string | null;
   NOME_CLIENTE: string | null;
   CENTRO_CUSTO: string | null;
+  /** Meta de colaboradores configurada no projeto */
+  COLABORADORES_PREVISTOS: number;
+  /** Orçamento total de suprimentos (R$) */
+  ORCADO_SUPRIMENTOS: number;
 }
 
 export const configApi = {

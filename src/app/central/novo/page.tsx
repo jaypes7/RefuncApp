@@ -454,44 +454,35 @@ export default function OnboardingPage() {
     }
   };
 
-  const onSubmitStep1 = (data: Step1Data) => {
-    console.log("Dados do Passo 1:", data);
+  const onSubmitStep1 = (_data: Step1Data) => {
     handleNext();
   };
 
-  const onSubmitStep2 = (data: Step2Data) => {
-    console.log("Dados do Passo 2:", data);
+  const onSubmitStep2 = (_data: Step2Data) => {
     handleNext();
   };
 
-  const onSubmitStep3 = (data: Step3Data) => {
-    console.log("Dados do Passo 3:", data);
+  const onSubmitStep3 = (_data: Step3Data) => {
     handleNext();
   };
 
-  const onSubmitStep4 = (data: Step4Data) => {
-    console.log("Dados do Passo 4:", data);
+  const onSubmitStep4 = (_data: Step4Data) => {
     handleNext();
   };
 
-  const onSubmitStep5 = (data: Step5Data) => {
-    console.log("Dados do Passo 5:", data);
+  const onSubmitStep5 = (_data: Step5Data) => {
     handleNext();
   };
 
-  const onSubmitStep6 = (data: Step6Data) => {
-    console.log("Dados do Passo 6:", data);
+  const onSubmitStep6 = (_data: Step6Data) => {
     handleNext();
   };
 
-  const onSubmitStep7 = (data: Step7Data) => {
-    console.log("Dados do Passo 7:", data);
+  const onSubmitStep7 = (_data: Step7Data) => {
     handleNext();
   };
 
   const onSubmitFinal = (data: FullFormData) => {
-    console.log("=== ENVIANDO PARA API ===");
-    console.log("Dados completos:", data);
     createMutation.mutate(data);
   };
 

@@ -3,11 +3,18 @@
  * SISTEMA DE LOGS - Registro de Auditoria
  * ============================================================================
  *
- * Funções para registrar todas as operações de escrita no sistema.
- * Toda ação (POST, PUT, DELETE) deve ser logada na aba "Logs".
+ * Persiste todas as operações de escrita na tabela `logs_auditoria` do Supabase.
+ *
+ * Estrutura esperada da tabela:
+ *   id             uuid PRIMARY KEY DEFAULT gen_random_uuid()
+ *   created_at     timestamptz DEFAULT now()
+ *   usuario        text NOT NULL          -- RE do usuário
+ *   acao           text NOT NULL          -- tipo da ação (LOGIN, EDITAR, …)
+ *   detalhes       text                   -- descrição livre
+ *   cpf_colaborador text                  -- CPF afetado (opcional)
  */
 
-import { appendRow, SHEETS } from "./sheets";
+import { createServerClient } from "@/lib/supabase";
 
 // ============================================================================
 // TIPOS
@@ -24,8 +31,8 @@ export type AcaoLog =
   | "CONFIG";
 
 export interface LogEntry {
-  timestamp: string; // ISO string
-  usuario: string; // RE do usuário
+  timestamp: string;
+  usuario: string;
   acao: AcaoLog;
   detalhes: string;
   cpfColaborador?: string;
@@ -36,7 +43,7 @@ export interface LogEntry {
 // ============================================================================
 
 /**
- * Registra uma ação na aba de Logs
+ * Registra uma ação de auditoria.
  *
  * @param usuario - RE do usuário que executou a ação
  * @param acao - Tipo da ação
@@ -47,144 +54,129 @@ export async function registrarLog(
   usuario: string,
   acao: AcaoLog,
   detalhes: string,
-  cpfColaborador?: string
+  cpfColaborador?: string,
 ): Promise<void> {
-  // Usa fuso horário de São Paulo (UTC-3) para garantir horário correto nos logs
   const now = new Date();
-  const timestamp = now.toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" }).replace(" ", "T") + "-03:00";
+  const timestamp =
+    now
+      .toLocaleString("sv-SE", { timeZone: "America/Sao_Paulo" })
+      .replace(" ", "T") + "-03:00";
 
   try {
-    await appendRow(SHEETS.LOGS, [
-      timestamp,
+    const db = createServerClient();
+    const { error } = await db.from("logs_auditoria").insert({
+      created_at:      timestamp,
       usuario,
       acao,
       detalhes,
-      cpfColaborador || "",
-    ]);
-  } catch (error) {
-    // Não deve quebrar a operação principal se o log falhar
-    console.error("Erro ao registrar log:", error);
+      ...(cpfColaborador ? { cpf_colaborador: cpfColaborador } : {}),
+    });
+    if (error) {
+      console.error("[logs] Falha ao persistir log:", error.message, { usuario, acao });
+    }
+  } catch (err) {
+    // Nunca deixar o log quebrar o fluxo principal
+    console.error("[logs] Exceção ao persistir log:", err);
   }
 }
 
-/**
- * Registra log de login bem-sucedido
- */
+// ============================================================================
+// ATALHOS SEMÂNTICOS
+// ============================================================================
+
 export async function logLogin(usuario: string): Promise<void> {
   await registrarLog(usuario, "LOGIN", "Usuário realizou login no sistema");
 }
 
-/**
- * Registra log de logout
- */
 export async function logLogout(usuario: string): Promise<void> {
   await registrarLog(usuario, "LOGOUT", "Usuário realizou logout");
 }
 
-/**
- * Registra criação de colaborador
- */
 export async function logAdicionar(
   usuario: string,
   cpf: string,
-  nome: string
+  nome: string,
 ): Promise<void> {
   await registrarLog(
     usuario,
     "ADICIONAR",
     `Colaborador cadastrado: ${nome}`,
-    cpf
+    cpf,
   );
 }
 
-/**
- * Registra edição de colaborador
- */
 export async function logEditar(
   usuario: string,
   cpf: string,
   nome: string,
-  camposAlterados: string[]
+  camposAlterados: string[],
 ): Promise<void> {
   await registrarLog(
     usuario,
     "EDITAR",
     `Colaborador ${nome} - Campos alterados: ${camposAlterados.join(", ")}`,
-    cpf
+    cpf,
   );
 }
 
-/**
- * Registra remoção de colaborador
- */
 export async function logRemover(
   usuario: string,
   cpf: string,
-  nome: string
+  nome: string,
 ): Promise<void> {
   await registrarLog(
     usuario,
     "REMOVER",
     `Colaborador removido: ${nome}`,
-    cpf
+    cpf,
   );
 }
 
-/**
- * Registra importação em massa
- */
 export async function logImportar(
   usuario: string,
-  quantidade: number
+  quantidade: number,
 ): Promise<void> {
   await registrarLog(
     usuario,
     "IMPORTAR",
-    `Importação de ${quantidade} colaboradores`
+    `Importação de ${quantidade} colaboradores`,
   );
 }
 
-/**
- * Registra importação com resumo de upsert (novo)
- */
 export async function logImport(
   usuario: string,
   resumo: string,
-  total: string
+  total: string,
 ): Promise<void> {
   await registrarLog(
     usuario,
     "IMPORTAR",
-    `Importação concluída: ${resumo} (total: ${total})`
+    `Importação concluída: ${resumo} (total: ${total})`,
   );
 }
 
-/**
- * Registra exportação
- */
-export async function logExportar(usuario: string, tipo: string): Promise<void> {
+export async function logExportar(
+  usuario: string,
+  tipo: string,
+): Promise<void> {
   await registrarLog(usuario, "EXPORTAR", `Exportação ${tipo} realizada`);
 }
 
-/**
- * Registra exportação com detalhes
- */
-export async function logExport(usuario: string, detalhes: string): Promise<void> {
+export async function logExport(
+  usuario: string,
+  detalhes: string,
+): Promise<void> {
   await registrarLog(usuario, "EXPORTAR", `Exportação realizada: ${detalhes}`);
 }
 
-/**
- * Registra alteração de configuração
- */
 export async function logConfig(
   usuario: string,
   configuracao: string,
   valorAnterior?: string,
-  valorNovo?: string
+  valorNovo?: string,
 ): Promise<void> {
   const detalhes = valorAnterior
     ? `Configuração ${configuracao} alterada de "${valorAnterior}" para "${valorNovo}"`
     : `Configuração ${configuracao} atualizada`;
-
   await registrarLog(usuario, "CONFIG", detalhes);
 }

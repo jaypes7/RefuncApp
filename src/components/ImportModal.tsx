@@ -22,10 +22,6 @@ import {
 import { processImport, type RawRow } from "@/services/import-service";
 
 // ============================================================================
-// CONSTANTES
-// ============================================================================
-
-// ============================================================================
 // TIPOS
 // ============================================================================
 
@@ -42,9 +38,20 @@ interface PreviewRow {
   DATA_ADMISSAO: string;
 }
 
-// ============================================================================
-// FUNÇÕES AUXILIARES
-// ============================================================================
+// Interfaces do Relatório (adicionadas localmente para garantir a tipagem)
+interface ImportError {
+  linha: number;
+  campo?: string;
+  motivo: string;
+}
+
+interface ImportReport {
+  inseridos: number;
+  atualizados: number;
+  ignorados: number;
+  erros: ImportError[];
+  total: number;
+}
 
 // ============================================================================
 // COMPONENTE
@@ -59,8 +66,12 @@ export function ImportModal({
   const [isLoading, setIsLoading] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewRow[] | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
   /** Linhas brutas em memória — evita re-ler o arquivo no handleImport */
   const [bufferedRows, setBufferedRows] = useState<RawRow[] | null>(null);
+
+  /** 🟢 NOVO: Guarda o resultado final para mostrar na tela */
+  const [importResult, setImportResult] = useState<ImportReport | null>(null);
 
   /**
    * Processa o arquivo XLSX selecionado
@@ -73,6 +84,7 @@ export function ImportModal({
       setFile(selectedFile);
       setValidationErrors([]);
       setPreviewData(null);
+      setImportResult(null); // Limpa resultados anteriores
 
       const reader = new FileReader();
 
@@ -81,7 +93,6 @@ export function ImportModal({
           const data = new Uint8Array(evt.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: "array" });
 
-          // 1. Busca inteligente da aba (REFUNC > CONTROLE > primeira aba)
           const targetSheetName =
             workbook.SheetNames.find(
               (name) =>
@@ -91,37 +102,35 @@ export function ImportModal({
 
           const worksheet = workbook.Sheets[targetSheetName];
           if (!worksheet) {
-            setValidationErrors(["Aba n\u00e3o encontrada no arquivo."]);
+            setValidationErrors(["Aba não encontrada no arquivo."]);
             return;
           }
 
-          // 2. Converte para JSON com defval="" (nenhum campo vem undefined)
           const rows = XLSX.utils.sheet_to_json(worksheet, {
             defval: "",
           }) as RawRow[];
 
           if (rows.length === 0) {
             setValidationErrors([
-              "A planilha est\u00e1 vazia ou n\u00e3o possui dados ap\u00f3s o cabe\u00e7alho.",
+              "A planilha está vazia ou não possui dados após o cabeçalho.",
             ]);
             return;
           }
 
-          // 3. Preview das 5 primeiras linhas processadas (sem enviar \u00e0 API)
           const preview = rows.slice(0, 5).map((row) => ({
             CPF: String(row["CPF"] ?? row["C.P.F."] ?? "").replace(/\D/g, ""),
             NOME: String(row["NOME"] ?? row["NOME COMPLETO"] ?? ""),
             STATUS: String(row["STATUS"] ?? ""),
             DATA_ADMISSAO: String(
-              row["DATA ADMISS\u00c3O"] ?? row["DATA ADMISSAO"] ?? "",
+              row["DATA ADMISSÃO"] ?? row["DATA ADMISSAO"] ?? "",
             ),
           }));
+
           setPreviewData(preview);
           toast.success(
             `Planilha "${targetSheetName}" carregada! ${rows.length} registros encontrados.`,
           );
 
-          // Guarda as rows no state para o handleImport usar sem re-processar
           setBufferedRows(rows);
         } catch (err) {
           console.error("Erro ao ler arquivo:", err);
@@ -144,61 +153,29 @@ export function ImportModal({
     setIsLoading(true);
 
     try {
-      const report = await processImport(bufferedRows, () => {
-        // Progresso opcional — pode conectar a uma barra no futuro
-      });
+      const report = await processImport(bufferedRows, () => { });
 
-      // Feedback detalhado via toasts
-      if (report.erros.length === 0) {
-        toast.success(
-          `Importa\u00e7\u00e3o conclu\u00edda! ${report.inseridos} inseridos, ${report.atualizados} atualizados.`,
-          { duration: 6000 },
-        );
-      } else {
-        toast.warning(
-          `Concluído com advertências: ${report.inseridos} inseridos, ${
-            report.atualizados
-          } atualizados, ${report.erros.length} erro(s).`,
-          { duration: 8000 },
-        );
-        // Loga erros detalhados no console para debug
-        console.group("[ImportModal] Erros de importação:");
-        report.erros.forEach((e) =>
-          console.warn(`Linha ${e.linha}: ${e.motivo}`),
-        );
-        console.groupEnd();
+      // 🟢 Seta o resultado para a tela mudar
+      setImportResult(report);
 
-        // 🟢 SCRIPT DE EXTRAÇÃO DE ERROS PARA DEBUG
-        try {
-          const blob = new Blob([JSON.stringify(report.erros, null, 2)], {
-            type: "application/json",
-          });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `erros_importacao_debug_${new Date().getTime()}.json`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        } catch (downloadError) {
-          console.error("Falha ao gerar o arquivo de download:", downloadError);
-        }
-      }
-
-      // Limpa estado e fecha modal
+      // 🟢 LIMPA o arquivo e o preview para a condição {!importResult} deixar de ser verdadeira
       setFile(null);
       setPreviewData(null);
       setBufferedRows(null);
-      onOpenChange(false);
+
+      if (report.erros.length === 0) {
+        toast.success(`Importação concluída!`);
+      } else {
+        toast.warning(`Concluído com ${report.erros.length} erro(s).`);
+      }
+
       onSuccess?.();
+      // ❌ REMOVIDO: onOpenChange(false) - Não fechamos mais o modal aqui!
+
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido.";
-      toast.error(`Erro na importa\u00e7\u00e3o: ${msg}`);
-    } finally {
-      setIsLoading(false);
+      // ... erro
     }
-  }, [file, validationErrors, bufferedRows, onOpenChange, onSuccess]);
+  }, [file, validationErrors, bufferedRows, onSuccess]);
 
   /**
    * Fecha o modal e limpa o estado
@@ -208,6 +185,7 @@ export function ImportModal({
     setPreviewData(null);
     setValidationErrors([]);
     setBufferedRows(null);
+    setImportResult(null);
     onOpenChange(false);
   }, [onOpenChange]);
 
@@ -217,128 +195,157 @@ export function ImportModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            Importar Planilha XLSX
+            {importResult ? "Relatório de Importação" : "Importar Planilha XLSX"}
           </DialogTitle>
           <DialogDescription>
-            Importe dados de colaboradores a partir de uma planilha Excel. O
-            sistema fará upsert (atualiza existentes, insere novos) baseado no
-            CPF.
+            {importResult
+              ? "Confira abaixo os resultados e eventuais erros da sua importação."
+              : "Importe dados de colaboradores a partir de uma planilha Excel. O sistema fará upsert (atualiza existentes, insere novos) baseado no CPF."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4 overflow-y-auto flex-1 min-h-0">
-          {/* Upload Area */}
-          <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition-colors">
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileChange}
-              className="hidden"
-              id="file-upload"
-              disabled={isLoading}
-            />
-            <label
-              htmlFor="file-upload"
-              className="flex flex-col items-center gap-3 cursor-pointer"
-            >
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Upload className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  {file ? file.name : "Clique para selecionar o arquivo XLSX"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  A planilha deve conter 38 colunas na ordem especificada
-                </p>
-              </div>
-            </label>
-          </div>
 
-          {/* Erros de Validação */}
-          {validationErrors.length > 0 && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-medium text-destructive">
-                    Erros de validação encontrados:
+          {/* 🔀 CHAVEAMENTO DE TELAS: Se não tem resultado, mostra Upload. Se tem, mostra Relatório. */}
+          {!importResult ? (
+            <>
+              {/* 1. ÁREA DE UPLOAD */}
+              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition-colors">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="file-upload"
+                  disabled={isLoading}
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="flex flex-col items-center gap-3 cursor-pointer"
+                >
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Upload className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">
+                      {file ? file.name : "Clique para selecionar o arquivo XLSX/CSV"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      O sistema identificará os cabeçalhos automaticamente.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* 2. ERROS DE VALIDAÇÃO PRÉ-ENVIO */}
+              {validationErrors.length > 0 && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                  <div className="flex items-start gap-2 text-destructive">
+                    <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-medium">Erros no arquivo:</h4>
+                      <ul className="mt-1 text-xs opacity-80 list-disc list-inside">
+                        {validationErrors.map((error, i) => <li key={i}>{error}</li>)}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. PREVIEW DAS LINHAS */}
+              {previewData && previewData.length > 0 && (
+                <div className="bg-muted/30 border rounded-lg p-4">
+                  <h4 className="text-xs font-semibold mb-2 uppercase tracking-wider text-muted-foreground">
+                    Preview dos dados encontrados:
                   </h4>
-                  <ul className="mt-2 text-xs text-destructive/80 space-y-1 max-h-40 overflow-y-auto">
-                    {validationErrors.map((error, index) => (
-                      <li key={index}>{error}</li>
-                    ))}
-                  </ul>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[10px] text-left">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="p-1">CPF</th>
+                          <th className="p-1">NOME</th>
+                          <th className="p-1 text-right">STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.map((row, i) => (
+                          <tr key={i} className="border-b border-border/50 opacity-70">
+                            <td className="p-1 font-mono">{row.CPF}</td>
+                            <td className="p-1 truncate max-w-[120px]">{row.NOME}</td>
+                            <td className="p-1 text-right">{row.STATUS}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. BOTÕES DE AÇÃO (TELA 1) */}
+              <div className="flex justify-end gap-3 pt-4 border-t mt-auto">
+                <Button variant="outline" onClick={handleClose} disabled={isLoading}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleImport} disabled={!file || isLoading || validationErrors.length > 0}>
+                  {isLoading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</>
+                  ) : (
+                    "Iniciar Importação"
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : (
+            /* ============================================================ */
+            /* TELA 2: RELATÓRIO DE RESULTADOS (Substitui a anterior)        */
+            /* ============================================================ */
+            <div className="flex flex-col gap-6 animate-in fade-in zoom-in duration-300">
+
+              {/* Cards de Resumo */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
+                  <p className="text-[10px] uppercase text-green-600 font-bold">Novos</p>
+                  <p className="text-2xl font-black text-green-700">{importResult.inseridos}</p>
+                </div>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                  <p className="text-[10px] uppercase text-blue-600 font-bold">Atualizados</p>
+                  <p className="text-2xl font-black text-blue-700">{importResult.atualizados}</p>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Preview de Dados */}
-          {previewData && previewData.length > 0 && (
-            <div className="bg-muted/30 border rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="h-4 w-4 text-emerald-500" />
-                <h4 className="text-sm font-medium">
-                  Preview (primeiros 5 registros):
-                </h4>
-              </div>
-              <div className="overflow-x-auto max-h-[40vh] overflow-y-auto">
-                <table className="w-full text-xs table-fixed">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-2">CPF</th>
-                      <th className="text-left py-2 px-2">NOME</th>
-                      <th className="text-left py-2 px-2">STATUS</th>
-                      <th className="text-left py-2 px-2">DATA_ADMISSAO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewData.map((row, index) => (
-                      <tr key={index} className="border-b border-border/50">
-                        <td className="py-2 px-2 font-mono">
-                          {row.CPF || "-"}
-                        </td>
-                        <td className="py-2 px-2 truncate max-w-[200px]" title={row.NOME || "-"}>{row.NOME || "-"}</td>
-                        <td className="py-2 px-2">{row.STATUS || "-"}</td>
-                        <td className="py-2 px-2">
-                          {row.DATA_ADMISSAO || "-"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Ações */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              disabled={isLoading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleImport}
-              disabled={!file || validationErrors.length > 0 || isLoading}
-              className="gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Importando...
-                </>
+              {/* Lista de Erros Detalhada */}
+              {importResult.erros.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  <h4 className="text-sm font-bold text-red-600 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Falhas encontradas ({importResult.erros.length}):
+                  </h4>
+                  <div className="bg-red-50 border border-red-100 rounded-lg overflow-hidden">
+                    <div className="max-h-48 overflow-y-auto p-2 space-y-2">
+                      {importResult.erros.map((erro, i) => (
+                        <div key={i} className="text-xs text-red-900 border-b border-red-200/50 pb-2 last:border-0">
+                          <span className="font-bold bg-red-200 px-1 rounded mr-2">Linha {erro.linha}</span>
+                          {erro.motivo}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <>
-                  <Upload className="h-4 w-4" />
-                  Importar Dados
-                </>
+                <div className="py-8 text-center bg-green-50 border border-green-100 rounded-lg">
+                  <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-green-800">Tudo limpo! Importação 100% concluída.</p>
+                </div>
               )}
-            </Button>
-          </div>
+
+              {/* Botão de Fechar (TELA 2) */}
+              <div className="pt-4 border-t">
+                <Button className="w-full" onClick={handleClose}>
+                  Concluir e Voltar
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

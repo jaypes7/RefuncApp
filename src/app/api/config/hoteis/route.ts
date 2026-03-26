@@ -3,104 +3,178 @@
  * API: /api/config/hoteis
  * ============================================================================
  *
- * Planilha: Aba "Hoteis"
- * Layout: A1=ID | B1=NOME | C1=QT_VAGAS
- *
- * GET: Lista hotéis
- * POST: Cria hotel
- * DELETE: Remove hotel
+ * CRUD de hotéis na tabela `configuracoes_hoteis`.
+ * Cada hotel armazena nome e capacidade total de vagas.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSheetData, appendRow, deleteRow, SHEETS } from "@/lib/sheets";
 import { requireAuth } from "@/lib/auth";
-import { registrarLog } from "@/lib/logs";
+import { createServerClient } from "@/lib/supabase";
 
-// GET /api/config/hoteis
+// GET /api/config/hoteis — lista hotéis com ocupação calculada dinamicamente
 export async function GET() {
   try {
     await requireAuth();
-    const rows = await getSheetData(SHEETS.HOTEIS);
+    const db = createServerClient();
 
-    // Linha 0 = header, dados a partir da linha 1
-    const hoteis = rows.slice(1)
-      .map((row, index) => ({
-        id: index + 1,
-        nome: row[1] || row[0] || "",            // Col B = NOME
-        vagas_totais: parseInt(row[2] || "0", 10), // Col C = QT_VAGAS
-      }))
-      .filter((h) => h.nome);
-
-    return NextResponse.json(hoteis);
-  } catch (error) {
-    console.error("Erro ao carregar hotéis:", error);
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-    }
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
-  }
-}
-
-// POST /api/config/hoteis
-export async function POST(request: NextRequest) {
-  try {
-    const user = await requireAuth();
-    const body = await request.json();
-    const { nome, vagas_totais } = body;
-
-    if (!nome?.trim()) {
-      return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
-    }
-
-    // Gera ID incremental baseado na quantidade de linhas existentes
-    const rows = await getSheetData(SHEETS.HOTEIS);
-    const nextId = rows.length; // header na linha 0 → rows.length é o próximo ID
-
-    // Garante que vagas_totais é numérico, não boolean
-    const vagasNum = typeof vagas_totais === "number"
-      ? vagas_totais
-      : parseInt(String(vagas_totais || "0"), 10);
-
-    // Col A = ID | Col B = NOME | Col C = QT_VAGAS
-    await appendRow(SHEETS.HOTEIS, [
-      String(nextId),
-      nome.trim(),
-      String(isNaN(vagasNum) ? 0 : vagasNum),
+    const [
+      { data: hoteis, error: hoteisError },
+      { data: logistica, error: logisticaError },
+    ] = await Promise.all([
+      db.from("configuracoes_hoteis").select("id, nome, qt_vagas").order("nome", { ascending: true }),
+      db.from("logistica_controle").select("hotel").not("hotel", "is", null),
     ]);
 
-    await registrarLog(user.re, "ADICIONAR", `Hotel criado: ${nome} (${vagasNum} vagas)`);
+    if (hoteisError) {
+      console.error("[/api/config/hoteis GET] hoteis error:", hoteisError.message);
+      return NextResponse.json({ error: hoteisError.message }, { status: 500 });
+    }
+    if (logisticaError) {
+      console.error("[/api/config/hoteis GET] logistica error:", logisticaError.message);
+      return NextResponse.json({ error: logisticaError.message }, { status: 500 });
+    }
 
-    return NextResponse.json({ success: true, message: "Hotel salvo" });
+    // Count assignments per hotel name from logistica_controle
+    const ocupacaoMap = new Map<string, number>();
+    for (const row of logistica ?? []) {
+      const nome = (row.hotel as string | null)?.trim();
+      if (nome) ocupacaoMap.set(nome, (ocupacaoMap.get(nome) ?? 0) + 1);
+    }
+
+    const result = (hoteis ?? []).map((h) => {
+      const vagas_ocupadas = ocupacaoMap.get(h.nome?.trim() ?? "") ?? 0;
+      return {
+        id: h.id,
+        nome: h.nome,
+        qt_vagas: h.qt_vagas ?? 0,
+        vagas_ocupadas,
+        vagas_disponiveis: (h.qt_vagas ?? 0) - vagas_ocupadas,
+      };
+    });
+
+    return NextResponse.json(result);
   } catch (error) {
-    console.error("Erro ao salvar hotel:", error);
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    console.error("[/api/config/hoteis GET]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
 
-// DELETE /api/config/hoteis
-export async function DELETE(request: NextRequest) {
+// POST /api/config/hoteis — insere um novo hotel
+export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuth();
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    await requireAuth();
 
-    if (!id) {
-      return NextResponse.json({ error: "ID é obrigatório" }, { status: 400 });
+    const body = await request.json().catch(() => null);
+    if (!body) {
+      return NextResponse.json({ error: "Body inválido" }, { status: 400 });
     }
 
-    const rowIndex = parseInt(id) + 1; // +1 porque header na linha 1
-    await deleteRow(SHEETS.HOTEIS, rowIndex, 3); // 3 colunas: ID, NOME, QT_VAGAS
-    await registrarLog(user.re, "REMOVER", `Hotel removido ID: ${id}`);
+    const nome = typeof body.nome === "string" ? body.nome.trim() : "";
+    const qt_vagas = Number(body.qt_vagas);
 
-    return NextResponse.json({ success: true, message: "Hotel removido" });
+    if (!nome) {
+      return NextResponse.json({ error: "Campo 'nome' é obrigatório" }, { status: 400 });
+    }
+    if (!Number.isFinite(qt_vagas) || qt_vagas < 0) {
+      return NextResponse.json({ error: "Campo 'qt_vagas' deve ser um número >= 0" }, { status: 400 });
+    }
+
+    const db = createServerClient();
+    const { data, error } = await db
+      .from("configuracoes_hoteis")
+      .insert({ nome, qt_vagas })
+      .select("id, nome, qt_vagas")
+      .single();
+
+    if (error) {
+      console.error("[/api/config/hoteis POST] Supabase error:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json(
+      { ...data, vagas_ocupadas: 0, vagas_disponiveis: data?.qt_vagas ?? 0 },
+      { status: 201 },
+    );
   } catch (error) {
-    console.error("Erro ao remover hotel:", error);
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    console.error("[/api/config/hoteis POST]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
+}
+
+// PATCH /api/config/hoteis — atualiza qt_vagas de um hotel existente
+export async function PATCH(request: NextRequest) {
+  try {
+    await requireAuth();
+
+    const body = await request.json().catch(() => null);
+    if (!body) {
+      return NextResponse.json({ error: "Body inválido" }, { status: 400 });
+    }
+
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    const qt_vagas = Number(body.qt_vagas);
+
+    if (!id) {
+      return NextResponse.json({ error: "Campo 'id' é obrigatório" }, { status: 400 });
+    }
+    if (!Number.isFinite(qt_vagas) || qt_vagas < 0) {
+      return NextResponse.json({ error: "Campo 'qt_vagas' deve ser um número >= 0" }, { status: 400 });
+    }
+
+    const db = createServerClient();
+    const { data, error } = await db
+      .from("configuracoes_hoteis")
+      .update({ qt_vagas })
+      .eq("id", id)
+      .select("id, nome, qt_vagas")
+      .single();
+
+    if (error) {
+      console.error("[/api/config/hoteis PATCH] Supabase error:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    console.error("[/api/config/hoteis PATCH]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
+}
+
+// DELETE /api/config/hoteis?id=<uuid> — remove um hotel pelo ID
+export async function DELETE(request: NextRequest) {
+  try {
+    await requireAuth();
+    const id = request.nextUrl.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "Parâmetro 'id' é obrigatório" }, { status: 400 });
+    }
+
+    const db = createServerClient();
+    const { error } = await db
+      .from("configuracoes_hoteis")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("[/api/config/hoteis DELETE] Supabase error:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    console.error("[/api/config/hoteis DELETE]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

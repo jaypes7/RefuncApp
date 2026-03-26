@@ -3,108 +3,106 @@
  * API: /api/config/acessos
  * ============================================================================
  *
- * Planilha: Aba "USERS_PERMITIDOS"
- * Layout: A=RE | B=NOME | C=ROLE
- *
- * GET: Lista usuários permitidos
- * POST: Adiciona um novo acesso
- * DELETE: Remove um acesso
+ * CRUD de usuários autorizados na tabela `usuarios_permitidos`.
+ * Campo `re` é UNIQUE — usado como chave de lookup e conflito no upsert.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSheetData, appendRow, deleteRow, SHEETS } from "@/lib/sheets";
+import { ZodError } from "zod";
 import { requireAuth } from "@/lib/auth";
-import { registrarLog } from "@/lib/logs";
+import { createServerClient } from "@/lib/supabase";
+import { UsuariosPermitidosCreateSchema } from "@/lib/schemas";
 
-// GET /api/config/acessos
+// GET /api/config/acessos — lista todos os usuários autorizados
 export async function GET() {
   try {
     await requireAuth();
-    const rows = await getSheetData(SHEETS.USERS_PERMITIDOS);
+    const db = createServerClient();
+    const { data, error } = await db
+      .from("usuarios_permitidos")
+      .select("id, re, nome, perfil, autorizado_em")
+      .order("nome", { ascending: true });
 
-    // Linha 0 = header (ou primeira entrada), dados a partir da linha 1
-    const acessos = rows.slice(1)
-      .map((row, index) => ({
-        id: index + 1,
-        re: row[0] || "",
-        nome: row[1] || "",
-        role: row[2] || "user",
-      }))
-      .filter((a) => a.re);
-
-    return NextResponse.json(acessos);
+    if (error) throw error;
+    return NextResponse.json(data ?? []);
   } catch (error) {
-    console.error("Erro ao carregar acessos:", error);
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    console.error("[/api/config/acessos GET]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
 
-// POST /api/config/acessos
+// POST /api/config/acessos — cria ou atualiza um usuário (upsert por re)
 export async function POST(request: NextRequest) {
   try {
+    // 1. AUTENTICAÇÃO: Pega os dados do usuário logado
     const user = await requireAuth();
-    const body = await request.json();
-    const { re, nome, role } = body;
 
-    if (!re?.trim() || !nome?.trim()) {
+    // 2. AUTORIZAÇÃO (RBAC): Apenas 'admin' passa. Fail Fast!
+    if (user.perfil !== 'admin') {
       return NextResponse.json(
-        { error: "RE e Nome são obrigatórios" },
-        { status: 400 }
+        { error: "Acesso negado: Requer privilégios de Administrador" }, 
+        { status: 403 }
       );
     }
 
-    const validRole = role || "user";
+    // 3. SANITIZAÇÃO (Zod): Agora sim lemos e limpamos o body
+    const body = await request.json();
+    const payload = UsuariosPermitidosCreateSchema.parse(body);
 
-    // Col A = RE | Col B = NOME | Col C = ROLE
-    await appendRow(SHEETS.USERS_PERMITIDOS, [
-      re.trim(),
-      nome.trim(),
-      validRole,
-    ]);
+    // 4. PERSISTÊNCIA: Banco de Dados
+    const db = createServerClient();
+    const { data, error } = await db
+      .from("usuarios_permitidos")
+      .upsert(payload, { onConflict: "re" })
+      .select("id, re, nome, perfil, autorizado_em")
+      .single();
 
-    await registrarLog(
-      user.re,
-      "CONFIG",
-      `Acesso criado: ${nome} (RE: ${re}, role: ${validRole})`
-    );
-
-    return NextResponse.json({
-      success: true,
-      message: "Acesso configurado com sucesso",
-    });
+    if (error) throw error;
+    
+    return NextResponse.json(data, { status: 201 });
+    
   } catch (error) {
-    console.error("Erro ao configurar acesso:", error);
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
+    }
+    console.error("[/api/config/acessos POST]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
 
-// DELETE /api/config/acessos
+// DELETE /api/config/acessos?id=UUID — remove um usuário pelo ID
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await requireAuth();
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    await requireAuth();
 
+    const id = request.nextUrl.searchParams.get("id");
     if (!id) {
-      return NextResponse.json({ error: "ID é obrigatório" }, { status: 400 });
+      return NextResponse.json({ error: "ID não fornecido" }, { status: 400 });
     }
 
-    const rowIndex = parseInt(id) + 1; // +1 pelo header
-    await deleteRow(SHEETS.USERS_PERMITIDOS, rowIndex, 3); // 3 colunas: RE, NOME, ROLE
-    await registrarLog(user.re, "CONFIG", `Acesso removido ID: ${id}`);
+    const db = createServerClient();
+    const { error } = await db
+      .from("usuarios_permitidos")
+      .delete()
+      .eq("id", id);
 
-    return NextResponse.json({ success: true, message: "Acesso removido" });
+    if (error) {
+      console.error("[/api/config/acessos DELETE] Supabase error:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Erro ao remover acesso:", error);
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    console.error("[/api/config/acessos DELETE]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

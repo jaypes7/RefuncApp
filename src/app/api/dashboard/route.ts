@@ -3,206 +3,266 @@
  * API: GET /api/dashboard
  * ============================================================================
  *
- * Retorna métricas agregadas para alimentar o dashboard:
- * - Total de ativos
- * - % de MOB concluído
- * - % de ASO apto
- * - Dados para gráficos
+ * Retorna métricas agregadas para alimentar o dashboard.
+ * Todas as leituras de dados vêm do Supabase (Fase 4).
+ *
+ * Fontes:
+ *   • colaboradores      → métricas, gráficos, distribuições
+ *   • configuracoes      → datas, meta, orçamento, feriados
+ *   • etapas             → curva S e déficit de mobilização
+ *   • suprimentos_ordens → KPIs de suprimentos
+ *   • logistica_controle → turno de trabalho e ocupação de hotéis
  */
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
-import { getSheetData, SHEETS, COLABORADORES_RANGE } from "@/lib/sheets";
+import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import type { DashboardData } from "@/lib/axios";
 import {
   calcularMetricas,
   calcularProgressoReal,
-  gerarDadosGraficoCurvaS,
   calcularDiaAtual,
   verificarAtraso,
   sigmoid,
 } from "@/lib/curva-s";
-import { EtapaConfig } from "@/lib/schemas";
+import { ColaboradorSchema, type EtapaConfig } from "@/lib/schemas";
 
 // ============================================================================
-// FUNÇÕES AUXILIARES
+// HELPERS
 // ============================================================================
 
 /**
- * Converte data Excel (serial) ou string para formato ISO YYYY-MM-DD
- * Excel: dias desde 30/12/1899
+ * Limpa qualquer representação numérica (R$ 1.234,56 → 1234.56).
  */
-function parseDate(value: string | number | undefined | null): string | null {
-  if (value === undefined || value === null) return null;
-
-  // Se já é uma string no formato YYYY-MM-DD
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value;
+function cleanNumeric(val: unknown): number {
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (typeof val === "string") {
+    const cleaned = val.replace(/[R$\s.]/g, "").replace(",", ".");
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
   }
-
-  // Se é número (Excel serial date)
-  if (typeof value === "number" || /^\d+$/.test(String(value))) {
-    const excelSerial = Number(value);
-    // Excel epoch é 30/12/1899
-    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-    const date = new Date(
-      excelEpoch.getTime() + excelSerial * 24 * 60 * 60 * 1000,
-    );
-    return date.toISOString().split("T")[0];
-  }
-
-  // Tenta parse como data brasileira (DD/MM/YYYY)
-  const brMatch = String(value).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (brMatch) {
-    const [, day, month, year] = brMatch;
-    return `${year}-${month}-${day}`;
-  }
-
-  return null;
+  return 0;
 }
+
+// ============================================================================
+// MAPEAMENTO: Supabase (snake_case) → ColaboradorSchema (UPPERCASE)
+// ============================================================================
 
 /**
- * Converte array de valores da planilha para objeto
- * Garante que todos os valores sejam string ou null
+ * Converte as chaves snake_case do Supabase para SCREAMING_SNAKE_CASE e
+ * delega ao ColaboradorSchema a validação/transformação dos valores
+ * (CPF padding, datas, enums, etc.).
+ * Retorna null quando o registro falha na validação.
  */
-function rowToColaborador(row: (string | number | undefined)[]) {
-  // Helper para converter valor da planilha para string|null
-  const toStr = (val: string | number | undefined): string | null => {
-    if (val === undefined || val === null) return null;
-    return String(val);
-  };
-
-  // Garante que CPF tenha 11 dígitos (para evitar problemas com CPFs que perderam o zero à esquerda)
-  const cpfRaw = row[30];
-  const cpfFormatted = cpfRaw
-    ? String(cpfRaw).replace(/\D/g, "").padStart(11, "0")
-    : null;
-
-  return {
-    IND: toStr(row[0]),
-    STATUS: toStr(row[1]),
-    ENVIADO_RH: toStr(row[2]),
-    PESSOA: toStr(row[3]),
-    REQ: toStr(row[4]),
-    VINCULADO: toStr(row[5]),
-    CARTA_OFERTA: toStr(row[6]),
-    COLAB_PEND: toStr(row[7]),
-    EXAME: toStr(row[8]),
-    CLINICA: toStr(row[9]),
-    DOCS: toStr(row[10]),
-    ASO: toStr(row[11]),
-    RPV: toStr(row[12]),
-    PRE_ADMISSAO: toStr(row[13]),
-    MOB: toStr(row[14]),
-    OP: toStr(row[15]),
-    DATA_ADMISSAO: parseDate(row[16]),
-    CONTRATO: toStr(row[17]),
-    PORTAL: toStr(row[18]),
-    CRACHA: toStr(row[19]),
-    PONTO: toStr(row[20]),
-    TREINAMENTO: toStr(row[21]),
-    REALIZAR_TREINAMENTO: toStr(row[22]),
-    LOCAL_TREINAMENTO: toStr(row[23]),
-    RE: toStr(row[24]),
-    NOME: toStr(row[25]),
-    FUNCAO_CLT: toStr(row[26]),
-    HISTOGRAMA: toStr(row[27]),
-    IDADE: toStr(row[28]),
-    DT_NASCIMENTO: parseDate(row[29]),
-    CPF: cpfFormatted,
-    VR: toStr(row[31]),
-    TERMINO: parseDate(row[32]),
-    PRORROGACAO: parseDate(row[33]),
-    DEMISSAO: parseDate(row[34]),
-    MUNICIPIO: toStr(row[35]),
-    UF: toStr(row[36]),
-    TELEFONE: toStr(row[37]),
-  };
+function parseSupabaseColaborador(row: Record<string, unknown>) {
+  const upper = Object.fromEntries(
+    Object.entries(row).map(([k, v]) => [k.toUpperCase(), v]),
+  );
+  const result = ColaboradorSchema.safeParse(upper);
+  return result.success ? result.data : null;
 }
+
+type ColaboradorRow = NonNullable<ReturnType<typeof parseSupabaseColaborador>>;
 
 // ============================================================================
 // TIPOS INTERNOS
 // ============================================================================
 
-type ColaboradorRow = ReturnType<typeof rowToColaborador>;
+interface ConfigDB {
+  dataInicio: string | null;
+  dataFim: string | null;
+  etapas: EtapaConfig[];
+  metaAdmissoes: number;
+  colaboradoresPrevistos: number;
+  orcadoSuprimentos: number;
+  feriados: Date[];
+}
 
-interface Hotel {
-  nome: string;
-  vagasTotais: number;
-  vagasOcupadas: number;
+// ============================================================================
+// CURVA S — BASEADA EM PESO PROPORCIONAL DE ETAPAS
+// ============================================================================
+
+/**
+ * Gera arrays para o AreaChart da Curva S sem valores hardcoded.
+ *
+ * Planejado (linha azul):
+ *   Cada etapa contribui exatamente (dias_etapa / totalDias) × 100 pontos
+ *   percentuais ao progresso. O ponto final é sempre 100%.
+ *
+ * Realizado (linha verde):
+ *   Baseado no `percentualConcluido` inserido manualmente pelo supervisor.
+ *   Contribuição de cada etapa = (percentualConcluido/100) × (dias_etapa/totalDias) × 100.
+ *   A soma acumulada forma a linha de acompanhamento físico.
+ *
+ * Proteção divisão por zero:
+ *   Se não houver etapas cadastradas, retorna arrays vazios.
+ */
+function gerarCurvaSEtapas(
+  dataInicio: string,
+  etapas: EtapaConfig[],
+): { labels: string[]; planejado: number[]; realizado: number[] } {
+  const totalDias = etapas.reduce((s, e) => s + (e.duracaoDias || 0), 0);
+
+  if (!dataInicio || totalDias === 0 || etapas.length === 0) {
+    return { labels: [], planejado: [], realizado: [] };
+  }
+
+  const fmtLabel = (d: Date) =>
+    d.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone: "UTC",
+    });
+
+  const inicio = new Date(dataInicio + "T00:00:00Z");
+
+  const labels: string[] = [];
+  const planejado: number[] = [];
+  const realizado: number[] = [];
+
+  // Ponto 0 — início do projeto (progresso = 0%)
+  labels.push(fmtLabel(inicio));
+  planejado.push(0);
+  realizado.push(0);
+
+  let diasAcum = 0;
+  let planejadoAcum = 0;
+  let realizadoAcum = 0;
+
+  for (const etapa of etapas) {
+    diasAcum += etapa.duracaoDias || 0;
+
+    // Data do fim desta etapa
+    const pontoDt = new Date(inicio);
+    pontoDt.setUTCDate(pontoDt.getUTCDate() + diasAcum);
+
+    // Peso desta etapa no cronograma (%)
+    const peso = (etapa.duracaoDias / totalDias) * 100;
+
+    // Planejado: acumula linearmente até 100% na última etapa
+    planejadoAcum = Math.min(100, planejadoAcum + peso);
+
+    // Realizado: avanço físico proporcional ao percentual informado
+    const pctFisico = etapa.percentualConcluido ?? 0;
+    realizadoAcum = Math.min(100, realizadoAcum + (pctFisico / 100) * peso);
+
+    labels.push(fmtLabel(pontoDt));
+    planejado.push(Math.round(planejadoAcum * 10) / 10);
+    realizado.push(Math.round(realizadoAcum * 10) / 10);
+  }
+
+  return { labels, planejado, realizado };
+}
+
+// ============================================================================
+// FUNÇÕES DE DADOS — SUPABASE
+// ============================================================================
+
+/**
+ * Busca config + etapas do Supabase em paralelo.
+ */
+async function getConfig(): Promise<ConfigDB> {
+  const supabase = createServerClient();
+
+  const [
+    { data: configRow, error: configError },
+    { data: etapasRows, error: etapasError },
+  ] = await Promise.all([
+    supabase.from("configuracoes").select("*").single(),
+    supabase.from("etapas").select("*").order("ordem", { ascending: true }),
+  ]);
+
+  if (configError && configError.code !== "PGRST116") {
+    console.error("[Dashboard] Erro ao buscar config:", configError.message);
+  }
+  if (etapasError) {
+    console.error("[Dashboard] Erro ao buscar etapas:", etapasError.message);
+  }
+
+  // Mapeia etapas do Supabase incluindo percentual de avanço físico
+  const etapasFinal: EtapaConfig[] = (etapasRows ?? []).map((e, idx) => ({
+    id: e.id ?? idx + 1,
+    nome: e.nome ?? `Etapa ${idx + 1}`,
+    duracaoDias: e.dias ?? 7,
+    concluida: e.concluida ?? false,
+    percentualConcluido: e.percentual_concluido ?? 0,
+  }));
+
+  // meta_admissoes pode nunca ter sido preenchido na rota /api/config/projeto-dados
+  // (que não persiste esse campo). Nesse caso, usamos colaboradores_previstos como
+  // proxy — semanticamente equivalente: "quantas pessoas planejamos mobilizar".
+  const rawMeta       = Number(configRow?.meta_admissoes ?? 0);
+  const rawPrevistos  = Number(configRow?.colaboradores_previstos ?? 0);
+  const metaAdmissoes = rawMeta > 0 ? rawMeta : rawPrevistos;
+
+  return {
+    dataInicio: configRow?.data_inicio_projeto ?? null,
+    dataFim: configRow?.data_fim_projeto ?? null,
+    etapas: etapasFinal,
+    metaAdmissoes,
+    colaboradoresPrevistos: rawPrevistos,
+    orcadoSuprimentos: Number(configRow?.orcado_suprimentos ?? 0),
+    feriados: Array.isArray(configRow?.feriados_projeto)
+      ? (configRow.feriados_projeto as string[]).map((d) => new Date(d))
+      : [],
+  };
+}
+
+/**
+ * Busca suprimentos do Supabase.
+ */
+async function getSuprimentos(): Promise<
+  Array<{
+    ordemCompra: string;
+    totalReqPrevistas: number;
+    valores: number;
+    status: string;
+    entregueObra: string;
+  }>
+> {
+  const supabase = createServerClient();
+  const { data, error } = await supabase.from("suprimentos_ordens").select("*");
+
+  if (error) {
+    console.error("[Dashboard] Erro ao buscar suprimentos:", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    ordemCompra: String(row["ordem_compra"] ?? "").trim(),
+    totalReqPrevistas: cleanNumeric(row["total_req_previstas"]),
+    valores: cleanNumeric(row["valores"]),
+    status: String(row["status"] ?? "").trim(),
+    entregueObra: String(row["entregue_obra"] ?? "").trim(),
+  }));
+}
+
+/**
+ * Busca a capacidade dos hotéis cadastrados na tabela `configuracoes_hoteis`.
+ * Usado para compor vagasTotais no cálculo de ocupação.
+ */
+async function getHoteis(): Promise<Array<{ nome: string; vagas_totais: number }>> {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from("configuracoes_hoteis")
+    .select("nome, vagas_totais");
+  if (error) {
+    console.error("[Dashboard] Erro ao buscar configuracoes_hoteis:", error.message);
+    return [];
+  }
+  return (data ?? []).map((h) => ({
+    nome: String(h.nome ?? "").trim(),
+    vagas_totais: Number(h.vagas_totais ?? 0),
+  }));
 }
 
 // ============================================================================
 // FUNÇÕES DE AGREGAÇÃO
 // ============================================================================
 
-/**
- * Busca hotéis da aba Hoteis com mapeamento dinâmico pelo header.
- * Lê a linha 1 como cabeçalho e monta um índice por nome de coluna —
- * imune a reordenação ou adição de novas colunas na planilha.
- *
- * Nomes reconhecidos (case-insensitive, sem espaços):
- *   NOME / HOTEL          → nome do hotel
- *   VAGAS / QT_VAGAS      → vagas totais
- *   VAGAS_OCUPADAS        → vagas já preenchidas
- */
-async function getHoteis(): Promise<Hotel[]> {
-  try {
-    const rows = await getSheetData(SHEETS.HOTEIS);
-
-    console.log("[Logística] TOTAL DE LINHAS:", rows.length);
-    if (rows.length > 0) console.log("[Logística] HEADER:", JSON.stringify(rows[0]));
-    if (rows.length > 1) console.log("[Logística] LINHA 1:", JSON.stringify(rows[1]));
-
-    if (rows.length < 2) return [];
-
-    // Monta mapa: nome_normalizado → índice
-    const header = rows[0];
-    const idx: Record<string, number> = {};
-    header.forEach((cell, i) => {
-      const key = String(cell).trim().toUpperCase().replace(/\s+/g, "_");
-      idx[key] = i;
-    });
-    console.log("[Logística] MAPA DE COLUNAS:", JSON.stringify(idx));
-
-    // Resolve índice com fallbacks: tenta múltiplos aliases
-    const col = (aliases: string[], fallback: number): number => {
-      for (const alias of aliases) {
-        if (idx[alias] !== undefined) return idx[alias];
-      }
-      return fallback;
-    };
-
-    const iNome      = col(["NOME", "HOTEL", "NOME_HOTEL"], 1);
-    const iVagas     = col(["QT_VAGAS", "VAGAS_TOTAIS", "VAGAS", "TOTAL_VAGAS"], 2);
-    const iOcupadas  = col(["VAGAS_OCUPADAS", "OCUPADAS", "VAGAS_PREENCHIDAS"], 3);
-
-    console.log(`[Logística] Colunas resolvidas → nome:${iNome} vagas:${iVagas} ocupadas:${iOcupadas}`);
-
-    return rows
-      .slice(1)
-      .map((row) => {
-        const nome = String(row[iNome] ?? row[0] ?? "").trim();
-        if (!nome) return null;
-        const vagasTotais   = cleanNumeric(row[iVagas]   ?? 0);
-        const vagasOcupadas = cleanNumeric(row[iOcupadas] ?? 0);
-        console.log(`[Logística] hotel="${nome}" totais=${vagasTotais} ocupadas=${vagasOcupadas}`);
-        return { nome, vagasTotais, vagasOcupadas };
-      })
-      .filter((h): h is Hotel => h !== null);
-  } catch (error) {
-    console.error("[Logística] getHoteis falhou:", error);
-    return [];
-  }
-}
-
-/**
- * Agrupa colaboradores por FUNCAO_CLT.
- * Retorna array ordenado decrescente, excluindo funções vazias.
- */
 function agruparPorFuncao(
   colaboradores: ColaboradorRow[],
 ): DashboardData["agregacoes"]["distribuicaoFuncoes"] {
@@ -216,11 +276,6 @@ function agruparPorFuncao(
     .sort((a, b) => b.total - a.total);
 }
 
-/**
- * Agrupa colaboradores por faixa etária.
- * Faixas: "18-25", "26-35", "36-45", "46+"
- * Colaboradores sem idade registrada são ignorados.
- */
 function agruparPorFaixaEtaria(
   colaboradores: ColaboradorRow[],
 ): DashboardData["agregacoes"]["distribuicaoIdades"] {
@@ -230,7 +285,6 @@ function agruparPorFaixaEtaria(
     "36-45": 0,
     "46+": 0,
   };
-
   for (const c of colaboradores) {
     const idade = parseInt(String(c.IDADE || ""), 10);
     if (isNaN(idade) || idade < 18) continue;
@@ -239,14 +293,9 @@ function agruparPorFaixaEtaria(
     else if (idade <= 45) faixas["36-45"]++;
     else faixas["46+"]++;
   }
-
   return Object.entries(faixas).map(([faixa, total]) => ({ faixa, total }));
 }
 
-/**
- * Agrupa colaboradores por UF.
- * Retorna array ordenado decrescente, excluindo UFs vazias.
- */
 function agruparPorUF(
   colaboradores: ColaboradorRow[],
 ): DashboardData["agregacoes"]["distribuicaoUF"] {
@@ -260,103 +309,92 @@ function agruparPorUF(
     .sort((a, b) => b.total - a.total);
 }
 
-/**
- * Monta o array vagasHoteis usando VAGAS_OCUPADAS direto da planilha.
- */
-function calcularVagasHoteis(
-  hoteis: Hotel[],
+function agruparPorTurno(
+  colaboradores: ColaboradorRow[],
+): DashboardData["agregacoes"]["turnoTrabalho"] {
+  const contagem: Record<string, number> = {};
+  for (const c of colaboradores) {
+    const turno = c.turno_trabalho?.trim() || "Não informado";
+    contagem[turno] = (contagem[turno] || 0) + 1;
+  }
+  return Object.entries(contagem)
+    .map(([turno, total]) => ({ turno, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function agruparTerminoPorFuncao(
+  colaboradores: ColaboradorRow[],
+): DashboardData["agregacoes"]["terminoPorFuncao"] {
+  const contagem: Record<string, number> = {};
+  for (const c of colaboradores) {
+    if (!c.TERMINO) continue;
+    const funcao = c.FUNCAO_CLT?.trim() || "Não informado";
+    contagem[funcao] = (contagem[funcao] || 0) + 1;
+  }
+  return Object.entries(contagem)
+    .map(([funcao, total]) => ({ funcao, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function agruparTurnoLogistica(
+  rows: Array<{ turno_trabalho: string | null }>,
+): DashboardData["agregacoes"]["turnoTrabalho"] {
+  const contagem: Record<string, number> = {};
+  for (const r of rows) {
+    const turno = r.turno_trabalho?.trim() || "Não informado";
+    contagem[turno] = (contagem[turno] || 0) + 1;
+  }
+  return Object.entries(contagem)
+    .map(([turno, total]) => ({ turno, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function calcularHoteisLogistica(
+  rows: Array<{ hotel: string | null }>,
+  hotelConfigs: Array<{ nome: string; vagas_totais: number }>,
 ): DashboardData["agregacoes"]["vagasHoteis"] {
-  return hoteis.map((h) => {
-    const vagasPreenchidas = h.vagasOcupadas;
-    const percentual =
-      h.vagasTotais > 0
-        ? Math.round((vagasPreenchidas / h.vagasTotais) * 100)
-        : 0;
-    return {
-      hotel:           h.nome,
-      vagasTotais:     h.vagasTotais,
-      vagasPreenchidas,
-      percentual,
-    };
-  });
-}
-
-// ============================================================================
-// SUPRIMENTOS
-// ============================================================================
-
-type SuprimentoNormalizado = {
-  ordemCompra: string;
-  totalReqPrevistas: number;
-  valores: number;
-  status: string;
-  entregueObra: string;
-};
-
-/**
- * Limpa qualquer representação numérica da planilha e retorna number.
- * Trata: número nativo, "R$ 25,75", "1.234,56", "42"
- */
-function cleanNumeric(val: unknown): number {
-  if (typeof val === "number") return isNaN(val) ? 0 : val;
-  if (typeof val === "string") {
-    const cleaned = val.replace(/[R$\s.]/g, "").replace(",", ".");
-    const parsed = parseFloat(cleaned);
-    return isNaN(parsed) ? 0 : parsed;
+  // Conta ocupados por hotel a partir de logistica_controle
+  const ocupadas: Record<string, number> = {};
+  for (const r of rows) {
+    const h = r.hotel?.trim();
+    if (h) ocupadas[h] = (ocupadas[h] || 0) + 1;
   }
-  return 0;
-}
 
-/**
- * Lê a aba SUPRIMENTOS com abordagem bruta — sem Zod, sem nomes de colunas.
- * Layout real: A=TOTAL_REQ_PREVISTAS | B=VALORES | C=ORDEM_COMPRA | D=STATUS | E=ENTREGUE_OBRA
- */
-async function getSuprimentos(): Promise<SuprimentoNormalizado[]> {
-  try {
-    const rows = await getSheetData(SHEETS.SUPRIMENTOS);
-
-    console.log("--- DEBUG SUPRIMENTOS ---");
-    console.log("ABA:", SHEETS.SUPRIMENTOS, "| LINHAS:", rows.length);
-    if (rows.length > 0) console.log("ROW[0] (header):", JSON.stringify(rows[0]));
-    if (rows.length > 1) console.log("ROW[1] (dados):",  JSON.stringify(rows[1]));
-
-    return rows.slice(1).map((row) => {
-      // Aceita tanto array de strings (getSheetData retorna string[][])
-      // quanto objeto — abordagem defensiva com fallback por chave
-      const r = row as unknown as Record<string | number, unknown>;
-
-      const rawPrevistas  = r[0] ?? r["TOTAL_REQ_PREVISTAS"] ?? 0;
-      const rawValores    = r[1] ?? r["VALORES"]             ?? 0;
-      const rawOrdem      = r[2] ?? r["ORDEM_COMPRA"]        ?? "";
-      const rawStatus     = r[3] ?? r["STATUS"]              ?? "";
-      const rawEntregue   = r[4] ?? r["ENTREGUE_OBRA"]       ?? "";
-
-      console.log("ROW BRUTA:", JSON.stringify({ rawPrevistas, rawValores, rawOrdem, rawStatus, rawEntregue }));
-
-      return {
-        ordemCompra:       String(rawOrdem).trim(),
-        totalReqPrevistas: cleanNumeric(rawPrevistas),
-        valores:           cleanNumeric(rawValores),
-        status:            String(rawStatus).trim(),
-        entregueObra:      String(rawEntregue).trim(),
-      };
-    });
-  } catch (error) {
-    console.error("--- ERRO getSuprimentos ---", error);
-    return [];
+  // Com configuracoes_hoteis: usa capacidade real para percentual correto
+  if (hotelConfigs.length > 0) {
+    return hotelConfigs
+      .map((h) => {
+        const preenchidas = ocupadas[h.nome] ?? 0;
+        return {
+          hotel:            h.nome,
+          vagasTotais:      h.vagas_totais,
+          vagasPreenchidas: preenchidas,
+          percentual:       h.vagas_totais > 0
+            ? Math.round((preenchidas / h.vagas_totais) * 100)
+            : 0,
+        };
+      })
+      .sort((a, b) => b.vagasPreenchidas - a.vagasPreenchidas);
   }
+
+  // Fallback sem configurações cadastradas: trata total = preenchidas
+  return Object.entries(ocupadas)
+    .map(([hotel, preenchidas]) => ({
+      hotel,
+      vagasTotais:      preenchidas,
+      vagasPreenchidas: preenchidas,
+      percentual:       100,
+    }))
+    .sort((a, b) => b.vagasPreenchidas - a.vagasPreenchidas);
 }
 
-/**
- * Sumariza as linhas de suprimentos para os KPIs e gráficos.
- */
 function sumarizarSuprimentos(
-  ordens: SuprimentoNormalizado[],
+  ordens: Awaited<ReturnType<typeof getSuprimentos>>,
+  orcado: number,
 ): DashboardData["agregacoes"]["suprimentos"] {
   const totalInvestido = ordens.reduce((s, o) => s + o.valores, 0);
   const entregues = ordens.filter((o) => o.entregueObra === "Sim").length;
 
-  // Contagem por STATUS
   const statusMap: Record<string, number> = {};
   for (const o of ordens) {
     if (o.status) statusMap[o.status] = (statusMap[o.status] || 0) + 1;
@@ -371,91 +409,10 @@ function sumarizarSuprimentos(
     entregues,
     percentualEntregue:
       ordens.length > 0 ? Math.round((entregues / ordens.length) * 100) : 0,
+    orcado,
     distribuicaoStatus,
     ordens,
   };
-}
-
-/**
- * Busca configurações do projeto (estrutura horizontal)
- * Linha 1: Headers, Linha 2: Valores
- */
-async function getConfig(): Promise<{
-  dataInicio: string | null;
-  dataFim: string | null;
-  etapas: EtapaConfig[];
-  metaAdmissoes: number;
-}> {
-  try {
-    const configData = await getSheetData(SHEETS.CONFIG);
-
-    const config: Record<string, string> = {};
-
-    if (configData.length >= 2) {
-      // Linha 1 = headers, Linha 2 = valores
-      const headers = configData[0];
-      const values = configData[1];
-
-      headers.forEach((header, index) => {
-        if (header && values[index]) {
-          config[header] = values[index];
-        }
-      });
-    }
-
-    // Parse das etapas
-    let etapas: EtapaConfig[] = [];
-    if (config.ETAPAS_PROJETO && config.DURACAO_ETAPAS) {
-      try {
-        const nomes = JSON.parse(config.ETAPAS_PROJETO);
-        const duracoes = JSON.parse(config.DURACAO_ETAPAS);
-        etapas = nomes.map((nome: string, index: number) => ({
-          id: index + 1,
-          nome,
-          duracaoDias: duracoes[index] || 1,
-        }));
-      } catch {
-        // Fallback para etapas padrão
-        etapas = Array.from({ length: 12 }, (_, i) => ({
-          id: i + 1,
-          nome: `Etapa ${i + 1}`,
-          duracaoDias: 7,
-        }));
-      }
-    } else {
-      // Etapas padrão
-      etapas = Array.from({ length: 12 }, (_, i) => ({
-        id: i + 1,
-        nome: `Etapa ${i + 1}`,
-        duracaoDias: 7,
-      }));
-    }
-
-    const dataInicio = parseDate(config.DATA_INICIO_PROJETO);
-    const dataFim = parseDate(config.DATA_FIM_PROJETO);
-
-    console.log(`[Dashboard API] Datas convertidas:`, {
-      dataInicio,
-      dataFim,
-      originalInicio: config.DATA_INICIO_PROJETO,
-      originalFim: config.DATA_FIM_PROJETO,
-    });
-
-    return {
-      dataInicio,
-      dataFim,
-      etapas,
-      metaAdmissoes: parseInt(config.META_ADMISSOES || "0", 10) || 0,
-    };
-  } catch (error) {
-    console.error("Erro ao carregar configurações:", error);
-    return {
-      dataInicio: null,
-      dataFim: null,
-      etapas: [],
-      metaAdmissoes: 0,
-    };
-  }
 }
 
 // ============================================================================
@@ -463,53 +420,60 @@ async function getConfig(): Promise<{
 // ============================================================================
 
 export async function GET() {
-  console.log("[Dashboard API] Requisição recebida");
-
   try {
-    // Verifica autenticação
-    console.log("[Dashboard API] Verificando autenticação...");
     await requireAuth();
-    console.log("[Dashboard API] Autenticação OK");
 
-    console.log("[Dashboard API] Buscando dados...");
+    const supabase = createServerClient();
 
-    // Busca dados em paralelo
-    const [colaboradoresRows, config, hoteis, suprimentosRows] = await Promise.all([
-      getSheetData(SHEETS.COLABORADORES, COLABORADORES_RANGE),
+    // ── 5 leituras em paralelo (Supabase) ────────────────────────────────────
+    const [
+      { data: colaboradoresData, error: colabError },
+      config,
+      suprimentosRows,
+      { data: logisticaData },
+      hotelConfigs,
+    ] = await Promise.all([
+      supabase.from("colaboradores").select("*"),
       getConfig(),
-      getHoteis(),
       getSuprimentos(),
+      supabase.from("logistica_controle").select("turno_trabalho, hotel"),
+      getHoteis(),
     ]);
+    const logisticaRows = (logisticaData ?? []) as Array<{
+      turno_trabalho: string | null;
+      hotel: string | null;
+    }>;
 
-    console.log(
-      `[Dashboard API] ${colaboradoresRows.length} linhas lidas da planilha`,
-    );
+    if (colabError) {
+      throw new Error(`Falha ao buscar colaboradores: ${colabError.message}`);
+    }
 
-    // Converte para objetos (ignora linhas vazias)
-    const colaboradores = colaboradoresRows
-      .map(rowToColaborador)
-      .filter((c) => c.CPF && c.NOME);
+    // Valida e transforma Supabase rows via ColaboradorSchema; descarta inválidos
+    const colaboradores = (colaboradoresData ?? [])
+      .map((row) => parseSupabaseColaborador(row as Record<string, unknown>))
+      .filter((c): c is ColaboradorRow => c !== null && !!c.CPF && !!c.NOME);
 
-    console.log(
-      `[Dashboard API] ${colaboradores.length} colaboradores válidos`,
-    );
-    console.log(`[Dashboard API] Config:`, config);
+    // ── Métricas principais ──────────────────────────────────────────────────
+    const metricas = {
+      ...calcularMetricas(colaboradores),
+      colaboradoresPrevistos: config.colaboradoresPrevistos,
+    };
 
-    // Calcula métricas principais
-    const metricas = calcularMetricas(colaboradores);
-
-    // Calcula progresso real (% médio — usado internamente)
     const progressoReal = calcularProgressoReal(colaboradores);
 
-    // ── Admissões acumuladas por DATA_ADMISSAO ────────────────────────────
-    // Calculado ANTES da curva S para poder ser passado como realizado.
+    // ── Admissões acumuladas por DATA_ADMISSAO ────────────────────────────────
+    // Normaliza para YYYY-MM-DD: Supabase pode retornar timestamps com timezone
+    // (ex: "2024-01-15T00:00:00+00:00") que quebrariam a comparação lexicográfica
+    // usada em gerarDadosGraficoCurvaS.
     const admissoesPorDia: Record<string, number> = {};
-    colaboradores.forEach((c) => {
-      if (c.DATA_ADMISSAO) {
-        admissoesPorDia[c.DATA_ADMISSAO] =
-          (admissoesPorDia[c.DATA_ADMISSAO] || 0) + 1;
+    for (const c of colaboradores) {
+      const dataAdm = c.DATA_ADMISSAO
+        ? c.DATA_ADMISSAO.split("T")[0]   // garante YYYY-MM-DD
+        : null;
+      if (dataAdm) {
+        admissoesPorDia[dataAdm] = (admissoesPorDia[dataAdm] || 0) + 1;
       }
-    });
+    }
 
     const admissoesAcumuladas = Object.entries(admissoesPorDia)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -527,69 +491,53 @@ export async function GET() {
         ? admissoesAcumuladas[admissoesAcumuladas.length - 1].acumulado
         : 0;
 
-    // ── Curva S sigmoide ─────────────────────────────────────────────────
+    // ── Curva S — peso proporcional por etapa ────────────────────────────────
+    // A geração NÃO depende mais de meta_admissoes: usa os dias e o
+    // percentual_concluido de cada etapa cadastrada no banco.
     let curvaS = null;
     let statusProjeto = null;
 
-    console.log(
-      `[Dashboard API] Curva S: inicio=${config.dataInicio} fim=${config.dataFim} meta=${config.metaAdmissoes}`,
-    );
+    if (config.dataInicio && config.etapas.length > 0) {
+      curvaS = gerarCurvaSEtapas(config.dataInicio, config.etapas);
+    }
 
+    // verificarAtraso ainda usa metaAdmissoes (headcount); mantido como auxiliar
     if (config.dataInicio && config.dataFim && config.metaAdmissoes > 0) {
-      curvaS = gerarDadosGraficoCurvaS(
-        config.dataInicio,
-        config.dataFim,
-        config.metaAdmissoes,
-        admissoesAcumuladas,
-      );
-
       statusProjeto = verificarAtraso(
         config.dataInicio,
         config.dataFim,
         config.metaAdmissoes,
         admitidosHoje,
       );
-
-      console.log(
-        `[Dashboard API] Curva S: ${curvaS.labels.length} pontos | status: atrasado=${statusProjeto.atrasado}`,
-      );
-    } else {
-      console.log(
-        `[Dashboard API] Curva S NÃO gerada — faltam: dataFim=${config.dataFim} meta=${config.metaAdmissoes}`,
-      );
     }
 
-    // ── Evolução por setor ───────────────────────────────────────────────
+    // ── Evolução por setor ───────────────────────────────────────────────────
+    const total = colaboradores.length || 1;
     const evolucaoPorSetor = {
       rh: {
         total: colaboradores.filter((c) => c.STATUS && c.STATUS !== "Pendente")
           .length,
         percentual: Math.round(
           (colaboradores.filter((c) => c.STATUS && c.STATUS !== "Pendente")
-            .length /
-            (colaboradores.length || 1)) *
+            .length / total) *
             100,
         ),
       },
       logistica: {
         total: colaboradores.filter((c) => c.MOB === "Sim").length,
         percentual: Math.round(
-          (colaboradores.filter((c) => c.MOB === "Sim").length /
-            (colaboradores.length || 1)) *
-            100,
+          (colaboradores.filter((c) => c.MOB === "Sim").length / total) * 100,
         ),
       },
       seguranca: {
         total: colaboradores.filter((c) => c.ASO === "Apto").length,
         percentual: Math.round(
-          (colaboradores.filter((c) => c.ASO === "Apto").length /
-            (colaboradores.length || 1)) *
-            100,
+          (colaboradores.filter((c) => c.ASO === "Apto").length / total) * 100,
         ),
       },
     };
 
-    // Status dos colaboradores
+    // ── Status dos colaboradores ─────────────────────────────────────────────
     const statusCount = {
       Ativo: colaboradores.filter((c) => c.STATUS === "Ativo").length,
       Pendente: colaboradores.filter((c) => c.STATUS === "Pendente").length,
@@ -597,18 +545,15 @@ export async function GET() {
       Desligado: colaboradores.filter((c) => c.STATUS === "Desligado").length,
     };
 
-    // Dias do projeto
     const diasProjeto = config.dataInicio
       ? calcularDiaAtual(config.dataInicio)
       : 0;
 
-    // ── Déficit de Mobilização (Etapas) ────────────────────────────────
-    const hoje = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    // ── Déficit de Mobilização (Etapas) ──────────────────────────────────────
+    const hoje = new Date().toISOString().split("T")[0];
     const hojeMs = new Date(hoje + "T00:00:00Z").getTime();
 
     const pendencias: DashboardData["pendencias"] = [];
-
-    // Realizado acumulado = total de colaboradores ativos no RH
     const realizadoAcumulado = colaboradores.filter(
       (c) => c.STATUS === "Ativo",
     ).length;
@@ -618,18 +563,14 @@ export async function GET() {
       config.etapas.length > 0 &&
       config.metaAdmissoes > 0
     ) {
-      const inicioProjetoMs = new Date(config.dataInicio + "T00:00:00Z").getTime();
+      const inicioProjetoMs = new Date(
+        config.dataInicio + "T00:00:00Z",
+      ).getTime();
 
-      // Total de dias das etapas (cronograma) — usado para normalizar t na sigmoide
       const totalDiasEtapas = config.etapas.reduce(
         (sum, e) => sum + (e.duracaoDias || 0),
         0,
       );
-
-      console.log("[Déficit] inicioProjetoMs:", inicioProjetoMs,
-        "totalDiasEtapas:", totalDiasEtapas,
-        "metaAdmissoes:", config.metaAdmissoes,
-        "realizadoAcumulado:", realizadoAcumulado);
 
       if (totalDiasEtapas > 0) {
         let diasAcum = 0;
@@ -638,37 +579,25 @@ export async function GET() {
           diasAcum += etapa.duracaoDias || 0;
           const fimEtapaDias = diasAcum;
 
-          const inicioEtapaMs = inicioProjetoMs + inicioEtapaDias * 86400000;
+          const inicioEtapaMs =
+            inicioProjetoMs + inicioEtapaDias * 86400000;
           const fimEtapaMs = inicioProjetoMs + fimEtapaDias * 86400000;
-          const fimEtapaStr = new Date(fimEtapaMs).toISOString().split("T")[0];
-          const inicioEtapaStr = new Date(inicioEtapaMs).toISOString().split("T")[0];
+          const fimEtapaStr = new Date(fimEtapaMs)
+            .toISOString()
+            .split("T")[0];
+          const inicioEtapaStr = new Date(inicioEtapaMs)
+            .toISOString()
+            .split("T")[0];
 
-          // Só avaliar etapas cuja dataInicio já chegou
           if (hoje < inicioEtapaStr) continue;
 
-          // t normalizado pelo cronograma (0→1 ao longo das etapas, não do calendário)
           const tFimEtapa = Math.min(1, fimEtapaDias / totalDiasEtapas);
-          const metaAcumuladaEtapa = Math.ceil(
-            sigmoid(tFimEtapa) * config.metaAdmissoes,
-          ) || 0;
+          const metaAcumuladaEtapa =
+            Math.ceil(sigmoid(tFimEtapa) * config.metaAdmissoes) || 0;
 
-          // Déficit: faltam pessoas para bater a meta
           const deficit = metaAcumuladaEtapa - realizadoAcumulado;
+          if (deficit <= 0) continue;
 
-          console.log("DEBUG ETAPA:", {
-            nome: etapa.nome || `Etapa ${etapa.id}`,
-            inicioEtapaStr,
-            fimEtapaStr,
-            tFimEtapa: tFimEtapa.toFixed(4),
-            metaEtapa: metaAcumuladaEtapa,
-            realizadoAcumulado,
-            deficit,
-          });
-
-          if (deficit <= 0) continue; // meta batida, auto-limpa
-
-          // Nível 1 (Crítico/Vermelho): já passou o fimEtapa e ainda há déficit
-          // Nível 2 (Atenção/Amarelo): dentro do prazo da etapa, mas com déficit
           const passouPrazo = hoje > fimEtapaStr;
           const diasAtraso = passouPrazo
             ? Math.floor((hojeMs - fimEtapaMs) / 86400000)
@@ -689,19 +618,12 @@ export async function GET() {
       }
     }
 
-    // Ordenar: nível 1 (crítico) primeiro, depois maior déficit
     pendencias.sort((a, b) => {
       if (a.nivel !== b.nivel) return a.nivel - b.nivel;
       return b.pessoasFaltando - a.pessoasFaltando;
     });
 
-    // Limitar a 10
-    const pendenciasLimitadas = pendencias.slice(0, 10);
-
-    console.log(
-      `[Dashboard API] ${pendencias.length} déficits detectados (exibindo ${pendenciasLimitadas.length})`,
-    );
-
+    // ── Monta resposta ───────────────────────────────────────────────────────
     const responseData: DashboardData = {
       metricas,
       progresso: {
@@ -715,7 +637,7 @@ export async function GET() {
         metaAdmissoes: config.metaAdmissoes,
         status: statusProjeto,
       },
-      pendencias: pendenciasLimitadas,
+      pendencias: pendencias.slice(0, 10),
       graficos: {
         curvaS,
         evolucaoPorSetor,
@@ -723,46 +645,24 @@ export async function GET() {
         statusCount,
       },
       agregacoes: {
-        distribuicaoFuncoes: (() => {
-          try { return agruparPorFuncao(colaboradores); }
-          catch (e) { console.error("[Dashboard] distribuicaoFuncoes falhou:", e); return []; }
-        })(),
-        distribuicaoIdades: (() => {
-          try { return agruparPorFaixaEtaria(colaboradores); }
-          catch (e) { console.error("[Dashboard] distribuicaoIdades falhou:", e); return []; }
-        })(),
-        distribuicaoUF: (() => {
-          try { return agruparPorUF(colaboradores); }
-          catch (e) { console.error("[Dashboard] distribuicaoUF falhou:", e); return []; }
-        })(),
-        vagasHoteis: (() => {
-          try {
-            const resultado = calcularVagasHoteis(hoteis);
-            console.log("[Dashboard] vagasHoteis:", JSON.stringify(resultado));
-            return resultado;
-          } catch (e) { console.error("[Dashboard] vagasHoteis falhou:", e); return []; }
-        })(),
-        suprimentos: (() => {
-          try { return sumarizarSuprimentos(suprimentosRows); }
-          catch (e) {
-            console.error("[Dashboard] suprimentos falhou:", e);
-            return { totalInvestido: 0, totalOrdens: 0, entregues: 0, percentualEntregue: 0, distribuicaoStatus: [], ordens: [] };
-          }
-        })(),
+        distribuicaoFuncoes: agruparPorFuncao(colaboradores),
+        distribuicaoIdades: agruparPorFaixaEtaria(colaboradores),
+        distribuicaoUF: agruparPorUF(colaboradores),
+        turnoTrabalho: agruparTurnoLogistica(logisticaRows),
+        terminoPorFuncao: agruparTerminoPorFuncao(colaboradores),
+        vagasHoteis: calcularHoteisLogistica(logisticaRows, hotelConfigs),
+        suprimentos: sumarizarSuprimentos(
+          suprimentosRows,
+          config.orcadoSuprimentos,
+        ),
       },
     };
 
-    console.log(
-      "[Dashboard API] Retornando dados:",
-      JSON.stringify(responseData, null, 2),
-    );
-
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error("[Dashboard API] Erro ao carregar dashboard:", error);
+    console.error("[Dashboard API] Erro:", error);
 
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      console.log("[Dashboard API] Usuário não autorizado");
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 

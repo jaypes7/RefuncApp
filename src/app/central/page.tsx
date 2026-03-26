@@ -6,7 +6,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Search,
-  Plus,
   Upload,
   Download,
   MoreHorizontal,
@@ -452,14 +451,6 @@ export default function CentralPage() {
             >
               <Upload className="h-3.5 w-3.5" />
               Importar
-            </Button>
-            <Button
-              size="sm"
-              className="gap-1.5 font-semibold"
-              onClick={() => router.push("/central/novo")}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Novo Colaborador
             </Button>
           </div>
         </div>

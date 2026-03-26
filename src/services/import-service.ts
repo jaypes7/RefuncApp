@@ -32,11 +32,10 @@ export type { RawRow, ImportError, ImportReport } from "@/lib/import-utils";
  * Envia as linhas brutas da planilha para o backend processar em batch.
  *
  * O backend realiza, em uma única requisição:
- *   1. getSheetData()          → 1 leitura total da aba
- *   2. Sanitização em memória  → nenhuma chamada ao Google Sheets
- *   3. appendRowsBatch()       → 1 escrita para todos os novos
- *   4. updateRowsBatch()       → 1 escrita para todos os existentes
- *   5. logImport()             → 1 entrada de log
+ *   1. Leitura dos registros existentes via Supabase
+ *   2. Sanitização em memória
+ *   3. Upsert dos registros no banco
+ *   4. Registro de log da importação
  *
  * @param rows        Linhas brutas do Excel (chaves = headers originais)
  * @param onProgress  Callback opcional de progresso (chamado no início e fim)

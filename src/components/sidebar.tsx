@@ -15,6 +15,7 @@ import {
   UserCog,
   Truck,
   Package,
+  ShieldCheck,
   Sun,
   Moon,
 } from "lucide-react";
@@ -25,9 +26,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 
 const dashboardSubItems = [
-  { name: "Geral", href: "/dashboard", icon: BarChart3 },
-  { name: "RH", href: "/dashboard/rh", icon: UserCog },
-  { name: "Logística", href: "/dashboard/logistica", icon: Truck },
+  { name: "Geral",       href: "/dashboard",             icon: BarChart3 },
+  { name: "RH",          href: "/dashboard/rh",          icon: UserCog },
+  { name: "Logística",   href: "/dashboard/logistica",   icon: Truck },
+  { name: "Segurança",   href: "/dashboard/seguranca",   icon: ShieldCheck },
   { name: "Suprimentos", href: "/dashboard/suprimentos", icon: Package },
 ];
 
@@ -110,14 +112,25 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* ── Navigation ─────────────────────────────────────────────── */}
         <nav className="flex-1 space-y-px">
 
-          {/* Central */}
+          {/* Configurações do projeto */}
+          <Link href="/configuracoes">
+            <span
+              className={navItem(pathname === "/configuracoes")}
+              title={collapsed ? "Configurações do projeto" : undefined}
+            >
+              <Settings className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>Configurações do projeto</span>}
+            </span>
+          </Link>
+
+          {/* Central de colaboradores */}
           <Link href="/central">
             <span
               className={navItem(pathname === "/central")}
-              title={collapsed ? "Central" : undefined}
+              title={collapsed ? "Central de colaboradores" : undefined}
             >
               <Users className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>Central</span>}
+              {!collapsed && <span>Central de colaboradores</span>}
             </span>
           </Link>
 
@@ -131,7 +144,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <LayoutDashboard className="h-4 w-4 shrink-0" />
               {!collapsed && (
                 <>
-                  <span className="flex-1 text-left">Dashboard</span>
+                  <span className="flex-1 text-left">Dashboards</span>
                   <ChevronDown
                     className={cn(
                       "h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-150",
@@ -185,16 +198,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             )}
           </div>
 
-          {/* Configurações */}
-          <Link href="/configuracoes">
-            <span
-              className={navItem(pathname === "/configuracoes")}
-              title={collapsed ? "Configurações" : undefined}
-            >
-              <Settings className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>Configurações</span>}
-            </span>
-          </Link>
         </nav>
 
         {/* ── Footer ─────────────────────────────────────────────────── */}
