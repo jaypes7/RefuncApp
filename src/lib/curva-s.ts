@@ -220,6 +220,24 @@ export function verificarAtraso(
 }
 
 // ============================================================================
+// VERIFICAR ATRASO FÍSICO — baseado em percentual de cronograma
+// ============================================================================
+
+/**
+ * Compara o percentual planejado vs. realizado do cronograma físico.
+ * Não depende de admissões — usa os arrays da gerarCurvaSEtapas.
+ */
+export function verificarAtrasoFisico(
+  planejadoHoje: number,
+  realizadoHoje: number,
+): { atrasado: boolean; percentualAtraso: number } {
+  const diferenca = planejadoHoje - realizadoHoje;
+  const atrasado = diferenca > 0.5;
+  const percentualAtraso = Math.round(Math.max(0, diferenca) * 10) / 10;
+  return { atrasado, percentualAtraso };
+}
+
+// ============================================================================
 // MÉTRICAS E PROGRESSO — mantidos para compatibilidade
 // ============================================================================
 

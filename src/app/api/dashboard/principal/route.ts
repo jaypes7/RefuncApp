@@ -20,8 +20,7 @@ import { requireAuth } from "@/lib/auth";
 import {
   calcularMetricas,
   calcularDiaAtual,
-  verificarAtraso,
-  sigmoid,
+  verificarAtrasoFisico,
 } from "@/lib/curva-s";
 import type { EtapaConfig } from "@/lib/schemas";
 
@@ -172,11 +171,6 @@ export async function GET() {
         [] as Array<{ data: string; quantidade: number; acumulado: number }>,
       );
 
-    const admitidosHoje =
-      admissoesAcumuladas.length > 0
-        ? admissoesAcumuladas[admissoesAcumuladas.length - 1].acumulado
-        : 0;
-
     const hoje = new Date().toISOString().split("T")[0];
     const hojeMs = new Date(hoje + "T00:00:00Z").getTime();
 
@@ -186,10 +180,15 @@ export async function GET() {
         ? gerarCurvaSEtapas(dataInicio, etapas, hoje)
         : null;
 
-    const statusProjeto =
-      dataInicio && dataFim && metaAdmissoes > 0
-        ? verificarAtraso(dataInicio, dataFim, metaAdmissoes, admitidosHoje)
-        : null;
+    // statusProjeto: atraso físico comparando último ponto planejado vs. realizado
+    let statusProjeto: { atrasado: boolean; diasAtraso: number; percentualAtraso: number } | null = null;
+    if (curvaS && curvaS.planejado.length > 0) {
+      const lastPlanejado = ([...curvaS.planejado].reverse().find((v) => v != null) ?? 0) as number;
+      const lastRealizado = (curvaS.realizado
+        ? ([...curvaS.realizado].reverse().find((v) => v != null) ?? 0)
+        : 0) as number;
+      statusProjeto = { ...verificarAtrasoFisico(lastPlanejado, lastRealizado), diasAtraso: 0 };
+    }
 
     // ── Evolução por setor ───────────────────────────────────────────────────
     const total = colaboradores.length || 1;
@@ -221,7 +220,7 @@ export async function GET() {
       Desligado: colaboradores.filter((c) => c.STATUS === "Desligado").length,
     };
 
-    // ── Déficit de mobilização ───────────────────────────────────────────────
+    // ── Atraso físico por etapa ──────────────────────────────────────────────
     const pendencias: Array<{
       tipo: "etapa";
       nivel: 1 | 2;
@@ -229,53 +228,43 @@ export async function GET() {
       nome: string;
       dataLimite: string;
       diasAtraso: number;
-      pessoasFaltando: number;
-      metaEtapa: number;
-      realizadoAtual: number;
+      percentualFaltando: number;
+      status: "Atrasado" | "Em Andamento";
     }> = [];
 
-    const realizadoAcumulado = colaboradores.filter((c) => c.STATUS === "Ativo").length;
-
-    if (dataInicio && etapas.length > 0 && metaAdmissoes > 0) {
+    if (dataInicio && etapas.length > 0) {
       const inicioMs = new Date(dataInicio + "T00:00:00Z").getTime();
-      const totalDiasEtapas = etapas.reduce((s, e) => s + (e.duracaoDias || 0), 0);
+      let diasAcum = 0;
+      for (const etapa of etapas) {
+        const inicioEtapaDias = diasAcum;
+        diasAcum += etapa.duracaoDias || 0;
+        const fimEtapaDias = diasAcum;
+        const inicioEtapaStr = new Date(inicioMs + inicioEtapaDias * 86400000).toISOString().split("T")[0];
+        const fimEtapaMs = inicioMs + fimEtapaDias * 86400000;
+        const fimEtapaStr = new Date(fimEtapaMs).toISOString().split("T")[0];
 
-      if (totalDiasEtapas > 0) {
-        let diasAcum = 0;
-        for (const etapa of etapas) {
-          const inicioEtapaDias = diasAcum;
-          diasAcum += etapa.duracaoDias || 0;
-          const fimEtapaDias = diasAcum;
-          const inicioEtapaStr = new Date(inicioMs + inicioEtapaDias * 86400000).toISOString().split("T")[0];
-          const fimEtapaMs = inicioMs + fimEtapaDias * 86400000;
-          const fimEtapaStr = new Date(fimEtapaMs).toISOString().split("T")[0];
+        if (hoje < inicioEtapaStr) continue;
+        if ((etapa.percentualConcluido ?? 0) >= 100) continue;
 
-          if (hoje < inicioEtapaStr) continue;
+        const passou = hoje > fimEtapaStr;
+        const diasAtraso = passou ? Math.floor((hojeMs - fimEtapaMs) / 86400000) : 0;
+        const percentualFaltando = 100 - (etapa.percentualConcluido ?? 0);
 
-          const tFim = Math.min(1, fimEtapaDias / totalDiasEtapas);
-          const metaAcum = Math.ceil(sigmoid(tFim) * metaAdmissoes) || 0;
-          const deficit = metaAcum - realizadoAcumulado;
-          if (deficit <= 0) continue;
-
-          const passou = hoje > fimEtapaStr;
-          const diasAtraso = passou ? Math.floor((hojeMs - fimEtapaMs) / 86400000) : 0;
-          pendencias.push({
-            tipo: "etapa",
-            nivel: passou ? 1 : 2,
-            cor: passou ? "red" : "yellow",
-            nome: etapa.nome || `Etapa ${etapa.id}`,
-            dataLimite: fimEtapaStr,
-            diasAtraso,
-            pessoasFaltando: deficit,
-            metaEtapa: metaAcum,
-            realizadoAtual: realizadoAcumulado,
-          });
-        }
+        pendencias.push({
+          tipo: "etapa",
+          nivel: passou ? 1 : 2,
+          cor: passou ? "red" : "yellow",
+          nome: etapa.nome || `Etapa ${etapa.id}`,
+          dataLimite: fimEtapaStr,
+          diasAtraso,
+          percentualFaltando,
+          status: passou ? "Atrasado" : "Em Andamento",
+        });
       }
     }
 
     pendencias.sort((a, b) =>
-      a.nivel !== b.nivel ? a.nivel - b.nivel : b.pessoasFaltando - a.pessoasFaltando,
+      a.nivel !== b.nivel ? a.nivel - b.nivel : b.percentualFaltando - a.percentualFaltando,
     );
 
     return NextResponse.json({

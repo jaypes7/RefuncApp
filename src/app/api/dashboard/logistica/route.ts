@@ -45,7 +45,7 @@ export async function GET() {
       { data: hoteisData,    error: hoteisErr },
     ] = await Promise.all([
       db.from("logistica_controle").select("hotel,turno_trabalho"),
-      db.from("hoteis").select("nome,vagas_totais"),
+      db.from("configuracoes_hoteis").select("nome, qt_vagas"),
     ]);
 
     if (logErr) throw new Error(logErr.message);
@@ -58,7 +58,7 @@ export async function GET() {
     const hoteisMap = new Map<string, number>();
     for (const h of hoteisData ?? []) {
       const nome = String(h.nome ?? "").trim();
-      if (nome) hoteisMap.set(nome.toLowerCase(), Number(h.vagas_totais ?? 0));
+      if (nome) hoteisMap.set(nome.toLowerCase(), Number(h.qt_vagas ?? 0));
     }
 
     // ── KPIs globais ──────────────────────────────────────────────────────────
