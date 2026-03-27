@@ -1,7 +1,7 @@
 // src/app/configuracoes/page.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { calculateWorkingDays, calculateWorkingDaysDetailed, addWorkingDays, formatDateISO } from "@/lib/date-utils";
 import { validateScheduleTotal } from "@/constants/cronograma-data";
@@ -245,47 +245,42 @@ export default function ConfiguracoesPage() {
   const logs = logsResponse?.data ?? [];
 
   // ── Sync projeto/cronograma form state from server data ────────────────────
-  // Uses the "setState during render" pattern recommended by React to avoid
-  // calling setState inside useEffect (which can cause cascading renders).
-  const [syncedProjetoData, setSyncedProjetoData] = useState(projetoData);
-  if (projetoData !== syncedProjetoData) {
-    setSyncedProjetoData(projetoData);
-    if (projetoData) {
-      setProjeto({
-        gerente_operacoes: projetoData.GERENTE_OPERACOES || "",
-        gerente_contrato: projetoData.GERENTE_CONTRATO || "",
-        nome_cliente: projetoData.NOME_CLIENTE || "",
-        centro_custo: projetoData.CENTRO_CUSTO || "",
-        data_inicio: projetoData.DATA_INICIO_PROJETO || "",
-        data_fim: projetoData.DATA_FIM_PROJETO || "",
-        colaboradores_previstos:
-          projetoData.COLABORADORES_PREVISTOS > 0
-            ? String(projetoData.COLABORADORES_PREVISTOS)
-            : "",
-        orcado_suprimentos:
-          projetoData.ORCADO_SUPRIMENTOS > 0
-            ? String(projetoData.ORCADO_SUPRIMENTOS)
-            : "",
+  useEffect(() => {
+    if (!projetoData) return;
+    setProjeto({
+      gerente_operacoes: projetoData.GERENTE_OPERACOES || "",
+      gerente_contrato: projetoData.GERENTE_CONTRATO || "",
+      nome_cliente: projetoData.NOME_CLIENTE || "",
+      centro_custo: projetoData.CENTRO_CUSTO || "",
+      data_inicio: projetoData.DATA_INICIO_PROJETO || "",
+      data_fim: projetoData.DATA_FIM_PROJETO || "",
+      colaboradores_previstos:
+        projetoData.COLABORADORES_PREVISTOS > 0
+          ? String(projetoData.COLABORADORES_PREVISTOS)
+          : "",
+      orcado_suprimentos:
+        projetoData.ORCADO_SUPRIMENTOS > 0
+          ? String(projetoData.ORCADO_SUPRIMENTOS)
+          : "",
+    });
+    if (projetoData.ETAPAS_PROJETO?.length) {
+      const novasEtapas = ETAPAS_DEFAULT.map((etapaDefault) => {
+        const salva = projetoData.ETAPAS_PROJETO.find(
+          (e) => e.nome === etapaDefault.nome,
+        );
+        return salva
+          ? {
+              ...etapaDefault,
+              dias: salva.duracaoDias,
+              concluida: salva.concluida ?? false,
+              percentual_concluido: salva.percentualConcluido ?? 0,
+            }
+          : { ...etapaDefault, concluida: false };
       });
-      if (projetoData.ETAPAS_PROJETO?.length) {
-        const novasEtapas = ETAPAS_DEFAULT.map((etapaDefault) => {
-          const salva = projetoData.ETAPAS_PROJETO.find(
-            (e) => e.nome === etapaDefault.nome,
-          );
-          return salva
-            ? {
-                ...etapaDefault,
-                dias: salva.duracaoDias,
-                concluida: salva.concluida ?? false,
-                percentual_concluido: salva.percentualConcluido ?? 0,
-              }
-            : { ...etapaDefault, concluida: false };
-        });
-        const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
-        setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
-      }
+      const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
+      setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
     }
-  }
+  }, [projetoData]);
 
   // --- Mutations ---
   const projetoMutation = useMutation({
@@ -749,7 +744,7 @@ export default function ConfiguracoesPage() {
                           Total de Dias Úteis do Projeto
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Seg – Sex, excluindo sáb/dom
+                          Seg – Sex, excluindo sáb/dom e feriados nacionais
                         </p>
                       </div>
                       <span className="text-3xl font-bold text-primary tabular-nums">
@@ -801,6 +796,20 @@ export default function ConfiguracoesPage() {
                       {cronograma.etapas.reduce((s, e) => s + e.dias, 0)} dias
                       úteis
                     </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-0.5 p-3 bg-primary/5 rounded-lg border border-primary/15">
+                      <span className="text-xs text-muted-foreground">Total Dias Corridos</span>
+                      <span className="text-xl font-bold text-primary tabular-nums">
+                        {etapasDatas?.reduce((s, e) => s + e.calendarDays, 0) ?? 0}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 p-3 bg-primary/5 rounded-lg border border-primary/15">
+                      <span className="text-xs text-muted-foreground">Total Dias Úteis</span>
+                      <span className="text-xl font-bold text-primary tabular-nums">
+                        {etapasDatas?.reduce((s, e) => s + e.workingDays, 0) ?? 0}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Aviso de validação — aparece apenas quando as datas do projeto estão definidas */}

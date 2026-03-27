@@ -61,11 +61,11 @@ const chartConfigStatus = {
 
 const chartConfigCurvaS = {
   previsto: {
-    label: "Meta",
+    label: "Planejado",
     color: "#94a3b8",
   },
   realizado: {
-    label: "Admitidos",
+    label: "Realizado",
     color: "#5bc0ec",
   },
 };
@@ -470,13 +470,13 @@ export default function DashboardPage() {
               estiver configurado. */}
           {configData?.DATA_INICIO_PROJETO && (
             <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-              {/* Curva de mobilização — 2/3 da largura */}
+              {/* Curva S (Avanço Físico) — 2/3 da largura */}
               <Card className="glass-card lg:col-span-2">
                 <CardHeader className="flex flex-row items-start justify-between gap-4">
                   <div>
-                    <CardTitle>Curva de mobilização</CardTitle>
+                    <CardTitle>Evolução do projeto</CardTitle>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Meta planejada vs. admitidos reais acumulados
+                      Avanço Planejado vs. Realizado do Cronograma
                     </p>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                       <p className="text-xs text-muted-foreground">
@@ -498,24 +498,20 @@ export default function DashboardPage() {
                       </p>
                       {dashboardData?.projeto?.status?.atrasado && (
                         <p className="text-xs font-medium text-destructive">
-                          ▼ {dashboardData.projeto.status.diasAtraso}d de atraso
+                          ▼ {dashboardData.projeto.status.percentualAtraso.toFixed(1)}% de atraso físico
                         </p>
                       )}
                       {dashboardData?.projeto?.status &&
-                        !dashboardData.projeto.status.atrasado && (
-                          <p className="text-xs font-medium text-emerald-400">
-                            ▲ No prazo
-                          </p>
-                        )}
+                        !dashboardData.projeto.status.atrasado }
                     </div>
                   </div>
                   {/* Indicador: leitura dos pontos do gráfico na data de hoje */}
                   {indicadorCurvaS && (
                     <div className="shrink-0 flex flex-col items-end gap-0.5 text-right">
                       <span className="text-xs text-muted-foreground">
-                        Previsão para hoje:{" "}
+                        Planejado:{" "}
                         <span className="font-semibold text-foreground">
-                          {indicadorCurvaS.previsto}%
+                          {indicadorCurvaS.previsto.toFixed(1)}%
                         </span>
                       </span>
                       <span className="text-xs text-muted-foreground">
@@ -529,7 +525,7 @@ export default function DashboardPage() {
                                 : "#ef4444",
                           }}
                         >
-                          {indicadorCurvaS.realizado}%
+                          {indicadorCurvaS.realizado.toFixed(1)}%
                         </span>
                       </span>
                     </div>
@@ -540,7 +536,7 @@ export default function DashboardPage() {
                     <div className="flex h-[350px] flex-col items-center justify-center gap-2 text-muted-foreground">
                       <AlertTriangle className="h-10 w-10 opacity-30" />
                       <p className="text-sm">
-                        Configure a meta de admissões para gerar a curva
+                        Configure as etapas do cronograma para gerar a curva
                       </p>
                     </div>
                   ) : (
@@ -583,10 +579,10 @@ export default function DashboardPage() {
                         tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
                         tickLine={false}
                         axisLine={false}
-                        allowDecimals={false}
-                        tickFormatter={(v) => String(v)}
+                        domain={[0, 100]}
+                        tickFormatter={(v) => `${v}%`}
                         label={{
-                          value: "Pessoas",
+                          value: "Progresso (%)",
                           angle: -90,
                           position: "insideLeft",
                           offset: 10,
@@ -598,8 +594,8 @@ export default function DashboardPage() {
                         content={
                           <ChartTooltipContent
                             formatter={(value, name) => [
-                              `${value} pessoas`,
-                              name === "previsto" ? "Meta (sigmoide)" : "Admitidos",
+                              `${value}%`,
+                              name === "previsto" ? "Planejado" : "Realizado",
                             ]}
                           />
                         }
@@ -685,7 +681,7 @@ export default function DashboardPage() {
                                 {p.nome}
                               </p>
                               <p className="text-xs 2xl:text-sm text-muted-foreground">
-                                Meta: {p.metaEtapa} · Atual: {p.realizadoAtual}
+                                {p.status}
                               </p>
                               {p.dataLimite && (
                                 <p className="text-xs 2xl:text-sm text-muted-foreground">
@@ -699,14 +695,14 @@ export default function DashboardPage() {
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1">
                               <Badge
-                                className={`border font-medium${p.pessoasFaltando > 15 ? " animate-pulse" : ""}`}
+                                className={`border font-medium${p.percentualFaltando > 50 ? " animate-pulse" : ""}`}
                                 style={{
                                   backgroundColor: badgeColors.bg,
                                   color: badgeColors.fg,
                                   borderColor: badgeColors.border,
                                 }}
                               >
-                                Faltam {p.pessoasFaltando}
+                                Faltam {p.percentualFaltando}%
                               </Badge>
                               {p.diasAtraso > 0 && (
                                 <Badge

@@ -25,8 +25,7 @@ import {
   calcularMetricas,
   calcularProgressoReal,
   calcularDiaAtual,
-  verificarAtraso,
-  sigmoid,
+  verificarAtrasoFisico,
 } from "@/lib/curva-s";
 import { ColaboradorSchema, type EtapaConfig } from "@/lib/schemas";
 
@@ -248,14 +247,14 @@ async function getHoteis(): Promise<Array<{ nome: string; vagas_totais: number }
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("configuracoes_hoteis")
-    .select("nome, vagas_totais");
+    .select("nome, qt_vagas");
   if (error) {
     console.error("[Dashboard] Erro ao buscar configuracoes_hoteis:", error.message);
     return [];
   }
   return (data ?? []).map((h) => ({
     nome: String(h.nome ?? "").trim(),
-    vagas_totais: Number(h.vagas_totais ?? 0),
+    vagas_totais: Number(h.qt_vagas ?? 0),
   }));
 }
 
@@ -486,11 +485,6 @@ export async function GET() {
         [] as Array<{ data: string; quantidade: number; acumulado: number }>,
       );
 
-    const admitidosHoje =
-      admissoesAcumuladas.length > 0
-        ? admissoesAcumuladas[admissoesAcumuladas.length - 1].acumulado
-        : 0;
-
     // ── Curva S — peso proporcional por etapa ────────────────────────────────
     // A geração NÃO depende mais de meta_admissoes: usa os dias e o
     // percentual_concluido de cada etapa cadastrada no banco.
@@ -501,14 +495,11 @@ export async function GET() {
       curvaS = gerarCurvaSEtapas(config.dataInicio, config.etapas);
     }
 
-    // verificarAtraso ainda usa metaAdmissoes (headcount); mantido como auxiliar
-    if (config.dataInicio && config.dataFim && config.metaAdmissoes > 0) {
-      statusProjeto = verificarAtraso(
-        config.dataInicio,
-        config.dataFim,
-        config.metaAdmissoes,
-        admitidosHoje,
-      );
+    // statusProjeto: atraso físico usando último ponto da curva S por etapas
+    if (curvaS && curvaS.planejado.length > 0) {
+      const lastPlanejado = ([...curvaS.planejado].reverse().find((v) => v != null) ?? 0) as number;
+      const lastRealizado = ([...curvaS.realizado].reverse().find((v) => v != null) ?? 0) as number;
+      statusProjeto = { ...verificarAtrasoFisico(lastPlanejado, lastRealizado), diasAtraso: 0 };
     }
 
     // ── Evolução por setor ───────────────────────────────────────────────────
@@ -549,78 +540,50 @@ export async function GET() {
       ? calcularDiaAtual(config.dataInicio)
       : 0;
 
-    // ── Déficit de Mobilização (Etapas) ──────────────────────────────────────
+    // ── Atraso físico por etapa ──────────────────────────────────────────────
     const hoje = new Date().toISOString().split("T")[0];
     const hojeMs = new Date(hoje + "T00:00:00Z").getTime();
 
     const pendencias: DashboardData["pendencias"] = [];
-    const realizadoAcumulado = colaboradores.filter(
-      (c) => c.STATUS === "Ativo",
-    ).length;
 
-    if (
-      config.dataInicio &&
-      config.etapas.length > 0 &&
-      config.metaAdmissoes > 0
-    ) {
-      const inicioProjetoMs = new Date(
-        config.dataInicio + "T00:00:00Z",
-      ).getTime();
+    if (config.dataInicio && config.etapas.length > 0) {
+      const inicioProjetoMs = new Date(config.dataInicio + "T00:00:00Z").getTime();
+      let diasAcum = 0;
+      for (const etapa of config.etapas) {
+        const inicioEtapaDias = diasAcum;
+        diasAcum += etapa.duracaoDias || 0;
+        const fimEtapaDias = diasAcum;
 
-      const totalDiasEtapas = config.etapas.reduce(
-        (sum, e) => sum + (e.duracaoDias || 0),
-        0,
-      );
+        const inicioEtapaMs = inicioProjetoMs + inicioEtapaDias * 86400000;
+        const fimEtapaMs = inicioProjetoMs + fimEtapaDias * 86400000;
+        const fimEtapaStr = new Date(fimEtapaMs).toISOString().split("T")[0];
+        const inicioEtapaStr = new Date(inicioEtapaMs).toISOString().split("T")[0];
 
-      if (totalDiasEtapas > 0) {
-        let diasAcum = 0;
-        for (const etapa of config.etapas) {
-          const inicioEtapaDias = diasAcum;
-          diasAcum += etapa.duracaoDias || 0;
-          const fimEtapaDias = diasAcum;
+        if (hoje < inicioEtapaStr) continue;
+        if ((etapa.percentualConcluido ?? 0) >= 100) continue;
 
-          const inicioEtapaMs =
-            inicioProjetoMs + inicioEtapaDias * 86400000;
-          const fimEtapaMs = inicioProjetoMs + fimEtapaDias * 86400000;
-          const fimEtapaStr = new Date(fimEtapaMs)
-            .toISOString()
-            .split("T")[0];
-          const inicioEtapaStr = new Date(inicioEtapaMs)
-            .toISOString()
-            .split("T")[0];
+        const passouPrazo = hoje > fimEtapaStr;
+        const diasAtraso = passouPrazo
+          ? Math.floor((hojeMs - fimEtapaMs) / 86400000)
+          : 0;
+        const percentualFaltando = 100 - (etapa.percentualConcluido ?? 0);
 
-          if (hoje < inicioEtapaStr) continue;
-
-          const tFimEtapa = Math.min(1, fimEtapaDias / totalDiasEtapas);
-          const metaAcumuladaEtapa =
-            Math.ceil(sigmoid(tFimEtapa) * config.metaAdmissoes) || 0;
-
-          const deficit = metaAcumuladaEtapa - realizadoAcumulado;
-          if (deficit <= 0) continue;
-
-          const passouPrazo = hoje > fimEtapaStr;
-          const diasAtraso = passouPrazo
-            ? Math.floor((hojeMs - fimEtapaMs) / 86400000)
-            : 0;
-
-          pendencias.push({
-            tipo: "etapa",
-            nivel: passouPrazo ? 1 : 2,
-            cor: passouPrazo ? "red" : "yellow",
-            nome: etapa.nome || `Etapa ${etapa.id}`,
-            dataLimite: fimEtapaStr,
-            diasAtraso,
-            pessoasFaltando: deficit,
-            metaEtapa: metaAcumuladaEtapa,
-            realizadoAtual: realizadoAcumulado,
-          });
-        }
+        pendencias.push({
+          tipo: "etapa",
+          nivel: passouPrazo ? 1 : 2,
+          cor: passouPrazo ? "red" : "yellow",
+          nome: etapa.nome || `Etapa ${etapa.id}`,
+          dataLimite: fimEtapaStr,
+          diasAtraso,
+          percentualFaltando,
+          status: passouPrazo ? "Atrasado" : "Em Andamento",
+        });
       }
     }
 
     pendencias.sort((a, b) => {
       if (a.nivel !== b.nivel) return a.nivel - b.nivel;
-      return b.pessoasFaltando - a.pessoasFaltando;
+      return b.percentualFaltando - a.percentualFaltando;
     });
 
     // ── Monta resposta ───────────────────────────────────────────────────────

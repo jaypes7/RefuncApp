@@ -340,18 +340,22 @@ export default function DashboardLogisticaPage() {
                   Nenhum hotel cadastrado
                 </div>
               ) : (
-                <ChartContainer config={chartConfig} className="h-[300px] 2xl:h-[420px] w-full">
+                <ChartContainer config={chartConfig} className="h-[450px] 2xl:h-[550px] w-full">
                   <BarChart
                     data={dadosGrafico}
-                    margin={{ top: 20, right: 60, left: 20, bottom: 40 }}
+                    barSize={40}
+                    barGap={5}
+                    margin={{ top: 20, right: 60, left: 20, bottom: 60 }}
                   >
                     <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
                     <XAxis
                       dataKey="hotel"
-                      tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13 }}
-                      angle={-35}
+                      tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                      angle={-45}
                       textAnchor="end"
                       interval={0}
+                      height={60}
+                      dy={10}
                       tickLine={false}
                       axisLine={false}
                     />
@@ -369,7 +373,7 @@ export default function DashboardLogisticaPage() {
                         />
                       }
                     />
-                    <ChartLegend content={<ChartLegendContent />} />
+                    <ChartLegend wrapperStyle={{ paddingTop: "15px", position: "relative" }} content={<ChartLegendContent />} />
                     <Bar
                       dataKey="vagasPreenchidas"
                       name="vagasPreenchidas"

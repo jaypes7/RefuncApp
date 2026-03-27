@@ -216,7 +216,7 @@ export interface DashboardData {
       Desligado: number;
     };
   };
-  /** Déficit de Mobilização por etapa (máx. 10) */
+  /** Atraso físico por etapa do cronograma (máx. 10) */
   pendencias: Array<{
     tipo: "etapa";
     nivel: 1 | 2;
@@ -224,9 +224,8 @@ export interface DashboardData {
     nome: string;
     dataLimite: string;
     diasAtraso: number;
-    pessoasFaltando: number;
-    metaEtapa: number;
-    realizadoAtual: number;
+    percentualFaltando: number;
+    status: "Atrasado" | "Em Andamento";
   }>;
   /** Agregações para os dashboards temáticos (RH, Logística, etc.) */
   agregacoes: {
