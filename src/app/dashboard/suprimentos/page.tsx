@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import {
 import { dashboardSuprimentosApi } from "@/lib/axios";
 import { SheetUpload } from "@/components/sheet-upload";
 import { toast } from "sonner";
+import { CanAccess } from "@/components/CanAccess";
 
 // ============================================================================
 // PALETA & CONFIG
@@ -136,7 +138,15 @@ function SuprimentosSkeleton() {
 
 export default function DashboardSuprimentosPage() {
   const router      = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+
+  // Redireciona guests para o Dashboard Geral (única página permitida)
+  useEffect(() => {
+    if (!authLoading && user?.perfil === "guest") {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, user, router]);
 
   // ── Query do dashboard de suprimentos (KPIs + gráficos) ───────────────────
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -547,12 +557,14 @@ export default function DashboardSuprimentosPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <Switch
-                                checked={o.entregue_obra}
-                                onCheckedChange={(checked) => handleToggleEntregue(o.id, checked)}
-                                aria-label={`Marcar ordem ${o.ordem_compra ?? o.id} como entregue`}
-                                size="sm"
-                              />
+                              <CanAccess role="user">
+                                <Switch
+                                  checked={o.entregue_obra}
+                                  onCheckedChange={(checked) => handleToggleEntregue(o.id, checked)}
+                                  aria-label={`Marcar ordem ${o.ordem_compra ?? o.id} como entregue`}
+                                  size="sm"
+                                />
+                              </CanAccess>
                               <span
                                 className={`text-xs font-medium ${
                                   o.entregue_obra ? "text-emerald-400" : "text-muted-foreground"

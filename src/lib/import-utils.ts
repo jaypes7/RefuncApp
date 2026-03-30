@@ -221,6 +221,39 @@ export function sanitizeText(value: unknown, options: { upper?: boolean } = {}):
   return options.upper ? str.toUpperCase() : str;
 }
 
+/**
+ * Normaliza valores de turno para um padrão único.
+ *
+ * Retorna "N/A"      → vazio, null, undefined, "N/A" ou "NA".
+ * Retorna "Xº TURNO" → qualquer string que contenha o dígito 1, 2 ou 3
+ *                      (prioridade: 3 > 2 > 1, mais específico primeiro).
+ * Retorna null       → valor existe mas não contém 1, 2 ou 3 (ex: "TURNO DIURNO").
+ *
+ * Estratégia — busca direta sem regex de âncoras:
+ *   "3º TURNO", "TURNO 3", "3", "3º TURNO - NOITE" → todos retornam "3º TURNO".
+ *   A proteção contra rodapés (ex: "134" com CPF inválido) é feita na camada
+ *   de importação, não aqui.
+ */
+export function normalizeTurno(value: unknown): string | null {
+  const str = toStr(value);
+
+  // Vazio / null / undefined → N/A explícito
+  if (!str) return "N/A";
+
+  const up = str.toUpperCase().trim();
+
+  // Strings que indicam ausência de turno → N/A explícito
+  if (up === "N/A" || up === "NA") return "N/A";
+
+  // Busca direta — prioridade 3 > 2 > 1
+  if (up.includes("3")) return "3º TURNO";
+  if (up.includes("2")) return "2º TURNO";
+  if (up.includes("1")) return "1º TURNO";
+
+  // Valor existe mas não contém dígito de turno reconhecível
+  return null;
+}
+
 export function mapStrictEnums(schemaId: string, rawValue: string | null): string | null {
   if (!rawValue) {
     if (["status_adm", "docs", "aso_status", "mob", "vr_status", "vr", "carta_oferta", "cracha", "ponto_batida"].includes(schemaId)) return "Pendente";
@@ -245,7 +278,9 @@ export function mapStrictEnums(schemaId: string, rawValue: string | null): strin
       if (v.includes("INAPTO") || v.includes("RESTRI")) return "Inapto";
       return "Pendente";
     case "mob":
-      if (v === "OK" || v.includes("MOB") || v === "SIM") return "Sim";
+      // Preserva valores dinâmicos como "MOB 01", "MOB 02.2", etc.
+      if (v.includes("MOB")) return rawValue.trim();
+      if (v === "OK" || v === "SIM") return "Sim";
       if (v === "NÃO" || v === "NAO") return "Não";
       return "Pendente";
     case "contrato_tipo":
@@ -278,43 +313,58 @@ export function mapStrictEnums(schemaId: string, rawValue: string | null): strin
   }
 }
 
-// ── Resolução de Cabeçalhos ──────────────────────────────────────────────────
+// ── Resolução de Cabeçalhos (Two-Pass Match) ────────────────────────────────
 
 export function buildHeaderMap(headers: string[]): Map<string, string> {
   const map = new Map<string, string>();
+
+  // ── Passagem 1: Match Exato ─────────────────────────────────────────────────
+  // Máxima prioridade: header normalizado idêntico a qualquer alias → mapeado.
+  // Garante que "TURNO" não perca para "HORAS TURNO" na passagem seguinte.
   for (const rawHeader of headers) {
     const normalized = rawHeader.trim().toUpperCase().replace(/\s+/g, " ");
     for (const [schemaId, aliases] of Object.entries(HEADER_ALIASES)) {
-      // Guarda de segurança para 'hotel': headers com palavras financeiras
-      // (CUSTO, VALOR, C.C.) nunca devem mapear para este campo.
-      // O alias "HOSPEDAGEM" só aceita match exato para evitar
-      // capturar "C. CUSTOS HOSPEDAGEM" via substring.
-      if (schemaId === "hotel") {
-        if (/\bCUSTO|VALOR|C\.C\.|C\. C\.\b/.test(normalized)) continue;
-        const found = aliases.some((alias) => {
-          const a = alias.toUpperCase().replace(/\s+/g, " ");
-          return normalized === a; // match exato obrigatório para hotel
-        });
-        if (found) {
-          map.set(rawHeader, schemaId);
-          break;
-        }
-        continue;
-      }
+      // Guarda financeira para 'hotel': nunca mapeia se o header contiver
+      // palavras de custo/valor — independente de ser exato ou substring.
+      if (schemaId === "hotel" && /\bCUSTO|VALOR|C\.C\.|C\. C\.\b/.test(normalized)) continue;
 
-      const found = aliases.some((alias) => {
+      const exactMatch = aliases.some((alias) => {
         const a = alias.toUpperCase().replace(/\s+/g, " ");
-        // Aliases curtos (≤3 chars, ex: "RE", "UF", "OP", "ASO") exigem match exato.
-        // Aliases longos permitem substring match para cabeçalhos variados.
-        if (a.length <= 3) return normalized === a;
-        return normalized === a || normalized.includes(a);
+        return normalized === a;
       });
-      if (found) {
+      if (exactMatch) {
         map.set(rawHeader, schemaId);
         break;
       }
     }
   }
+
+  // ── Passagem 2: Fallback Substring ──────────────────────────────────────────
+  // Apenas para headers que não foram mapeados na Passagem 1.
+  // Impede que colunas exatas ("TURNO") sejam ofuscadas por substrings
+  // de colunas calculadas ("HORAS TURNO") que chegam depois no loop.
+  for (const rawHeader of headers) {
+    if (map.has(rawHeader)) continue; // já resolvido na Passagem 1
+
+    const normalized = rawHeader.trim().toUpperCase().replace(/\s+/g, " ");
+    for (const [schemaId, aliases] of Object.entries(HEADER_ALIASES)) {
+      // 'hotel' aceita apenas match exato; a Passagem 1 já tratou o caso.
+      if (schemaId === "hotel") continue;
+
+      const substringMatch = aliases.some((alias) => {
+        const a = alias.toUpperCase().replace(/\s+/g, " ");
+        // Aliases curtos (≤3 chars, ex: "RE", "UF") mantêm exigência de match
+        // exato mesmo no fallback — evita que "AREA" capture o alias "RE".
+        if (a.length <= 3) return normalized === a;
+        return normalized.includes(a);
+      });
+      if (substringMatch) {
+        map.set(rawHeader, schemaId);
+        break;
+      }
+    }
+  }
+
   return map;
 }
 

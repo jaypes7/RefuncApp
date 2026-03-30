@@ -411,7 +411,7 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* Mobilização (MOB) */}
+            {/* Mobilização (MOB) - Distribuição por Fase */}
             <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
@@ -420,10 +420,35 @@ export default function DashboardPage() {
                 <Truck className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-foreground">
-                  {kpis.mobPercentual}%
-                </div>
-                <p className="text-xs text-muted-foreground">MOB Concluído</p>
+                {(() => {
+                  const distribuicaoMob = dashboardData?.agregacoes?.distribuicaoMob ?? [];
+                  
+                  if (distribuicaoMob.length === 0) {
+                    return (
+                      <>
+                        <div className="text-2xl 2xl:text-3xl font-bold text-foreground">
+                          {kpis.mobPercentual}%
+                        </div>
+                        <p className="text-xs text-muted-foreground">MOB Concluído</p>
+                      </>
+                    );
+                  }
+
+                  return (
+                    <div className="max-h-24 overflow-y-auto pr-1 space-y-1">
+                      {distribuicaoMob.map((item) => (
+                        <div key={item.mob} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground truncate" title={item.mob}>
+                            {item.mob}
+                          </span>
+                          <span className="font-medium text-foreground ml-2">
+                            {item.total}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
 

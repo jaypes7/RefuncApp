@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -109,7 +110,15 @@ function SegurancaSkeleton() {
 
 export default function DashboardSegurancaPage() {
   const router      = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+
+  // Redireciona guests para o Dashboard Geral (única página permitida)
+  useEffect(() => {
+    if (!authLoading && user?.perfil === "guest") {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, user, router]);
 
   const { data, isLoading, isError, error, refetch } = useQuery<SegurancaDashboardData>({
     queryKey: ["seguranca-dashboard"],

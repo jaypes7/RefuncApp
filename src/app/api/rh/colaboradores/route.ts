@@ -171,14 +171,15 @@ export async function POST(request: NextRequest) {
       if (cpf) existingByCpf.set(cpf, row as Record<string, unknown>);
     }
 
-    // FASE 4: merge conservador
+    // FASE 4: merge Overwrite (planilha sobrescreve banco; células vazias preservam banco)
     const payload: Record<string, unknown>[] = [];
 
     for (const [cpf, newData] of validRows.entries()) {
       if (existingByCpf.has(cpf)) {
         const merged = { ...existingByCpf.get(cpf)! };
         for (const [k, v] of Object.entries(newData)) {
-          if (isEmpty(merged[k]) && !isEmpty(v)) merged[k] = v;
+          // Sobrescreve o banco se a célula da planilha não estiver vazia
+          if (!isEmpty(v)) merged[k] = v;
         }
         merged.cpf = cpf;
         payload.push(merged);

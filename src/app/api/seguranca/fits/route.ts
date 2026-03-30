@@ -242,7 +242,8 @@ export async function POST(request: NextRequest) {
       if (existMap.has(re)) {
         const merged = { ...existMap.get(re)! };
         for (const [k, v] of Object.entries(newData)) {
-          if (isEmpty(merged[k]) && !isEmpty(v)) merged[k] = v;
+          // Sobrescreve o banco se a célula da planilha não estiver vazia
+          if (!isEmpty(v)) merged[k] = v;
         }
         merged.re = re;
         payload.push(merged);

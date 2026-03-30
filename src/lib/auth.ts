@@ -29,6 +29,18 @@ const secretKey = new TextEncoder().encode(JWT_SECRET);
 // TIPOS
 // ============================================================================
 
+export type UserRole = "admin" | "user" | "guest";
+
+/**
+ * Hierarquia de roles: admin (3) > user (2) > guest (1).
+ * Um nível maior sempre inclui os privilégios dos níveis inferiores.
+ */
+const ROLE_LEVEL: Record<UserRole, number> = {
+  guest: 1,
+  user:  2,
+  admin: 3,
+};
+
 export interface JWTPayload {
   re: string;
   nome?: string;
@@ -132,14 +144,30 @@ export async function getCurrentUser(): Promise<JWTPayload | null> {
 }
 
 /**
- * Middleware de autenticação para rotas de API
- * Retorna o usuário autenticado ou lança erro
+ * Middleware de autenticação e autorização para rotas de API.
+ *
+ * @param requiredRole - Role mínimo exigido (opcional).
+ *   Omitido → apenas valida autenticação (qualquer role passa).
+ *   "guest"  → qualquer usuário autenticado.
+ *   "user"   → bloqueia guests.
+ *   "admin"  → apenas administradores.
+ *
+ * @throws Error("UNAUTHORIZED") — sem sessão válida → HTTP 401
+ * @throws Error("FORBIDDEN")    — role insuficiente → HTTP 403
  */
-export async function requireAuth(): Promise<JWTPayload> {
+export async function requireAuth(requiredRole?: UserRole): Promise<JWTPayload> {
   const user = await getCurrentUser();
 
   if (!user) {
     throw new Error("UNAUTHORIZED");
+  }
+
+  if (requiredRole) {
+    const userLevel     = ROLE_LEVEL[(user.perfil as UserRole) ?? "guest"] ?? 0;
+    const requiredLevel = ROLE_LEVEL[requiredRole];
+    if (userLevel < requiredLevel) {
+      throw new Error("FORBIDDEN");
+    }
   }
 
   return user;

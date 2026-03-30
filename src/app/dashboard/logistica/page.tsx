@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -151,7 +152,15 @@ function LogisticaSkeleton() {
 
 export default function DashboardLogisticaPage() {
   const router      = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+
+  // Redireciona guests para o Dashboard Geral (única página permitida)
+  useEffect(() => {
+    if (!authLoading && user?.perfil === "guest") {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, user, router]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard-logistica"],
@@ -192,14 +201,17 @@ export default function DashboardLogisticaPage() {
   );
 
   // ── Turnos de trabalho ────────────────────────────────────────────────────
+  // Filtra "Não informado" e valores vazios para não poluir o gráfico
 
   const dadosTurnos = useMemo(
     () =>
-      (data?.turnoTrabalho ?? []).map((t, i) => ({
-        turno: t.turno,
-        total: t.total,
-        fill: TURNO_COLORS[i % TURNO_COLORS.length],
-      })),
+      (data?.turnoTrabalho ?? [])
+        .filter((t) => t.turno && t.turno !== "Não informado")
+        .map((t, i) => ({
+          turno: t.turno,
+          total: t.total,
+          fill: TURNO_COLORS[i % TURNO_COLORS.length],
+        })),
     [data],
   );
 

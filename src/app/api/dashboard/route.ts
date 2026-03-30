@@ -321,6 +321,21 @@ function agruparPorTurno(
     .sort((a, b) => b.total - a.total);
 }
 
+function agruparPorMob(
+  colaboradores: ColaboradorRow[],
+): DashboardData["agregacoes"]["distribuicaoMob"] {
+  const contagem: Record<string, number> = {};
+  for (const c of colaboradores) {
+    const mob = c.MOB?.trim();
+    if (mob) {
+      contagem[mob] = (contagem[mob] || 0) + 1;
+    }
+  }
+  return Object.entries(contagem)
+    .map(([mob, total]) => ({ mob, total }))
+    .sort((a, b) => a.mob.localeCompare(b.mob));
+}
+
 function agruparTerminoPorFuncao(
   colaboradores: ColaboradorRow[],
 ): DashboardData["agregacoes"]["terminoPorFuncao"] {
@@ -504,6 +519,8 @@ export async function GET() {
 
     // ── Evolução por setor ───────────────────────────────────────────────────
     const total = colaboradores.length || 1;
+    // Conta colaboradores com MOB preenchido (qualquer valor não vazio)
+    const totalMob = colaboradores.filter((c) => c.MOB?.trim()).length;
     const evolucaoPorSetor = {
       rh: {
         total: colaboradores.filter((c) => c.STATUS && c.STATUS !== "Pendente")
@@ -515,10 +532,8 @@ export async function GET() {
         ),
       },
       logistica: {
-        total: colaboradores.filter((c) => c.MOB === "Sim").length,
-        percentual: Math.round(
-          (colaboradores.filter((c) => c.MOB === "Sim").length / total) * 100,
-        ),
+        total: totalMob,
+        percentual: Math.round((totalMob / total) * 100),
       },
       seguranca: {
         total: colaboradores.filter((c) => c.ASO === "Apto").length,
@@ -611,6 +626,7 @@ export async function GET() {
         distribuicaoFuncoes: agruparPorFuncao(colaboradores),
         distribuicaoIdades: agruparPorFaixaEtaria(colaboradores),
         distribuicaoUF: agruparPorUF(colaboradores),
+        distribuicaoMob: agruparPorMob(colaboradores),
         turnoTrabalho: agruparTurnoLogistica(logisticaRows),
         terminoPorFuncao: agruparTerminoPorFuncao(colaboradores),
         vagasHoteis: calcularHoteisLogistica(logisticaRows, hotelConfigs),

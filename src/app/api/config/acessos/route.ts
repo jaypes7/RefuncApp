@@ -37,22 +37,14 @@ export async function GET() {
 // POST /api/config/acessos — cria ou atualiza um usuário (upsert por re)
 export async function POST(request: NextRequest) {
   try {
-    // 1. AUTENTICAÇÃO: Pega os dados do usuário logado
-    const user = await requireAuth();
+    // 1. AUTENTICAÇÃO + AUTORIZAÇÃO: apenas admins
+    const user = await requireAuth("admin");
 
-    // 2. AUTORIZAÇÃO (RBAC): Apenas 'admin' passa. Fail Fast!
-    if (user.perfil !== 'admin') {
-      return NextResponse.json(
-        { error: "Acesso negado: Requer privilégios de Administrador" }, 
-        { status: 403 }
-      );
-    }
-
-    // 3. SANITIZAÇÃO (Zod): Agora sim lemos e limpamos o body
+    // 2. SANITIZAÇÃO (Zod): lê e limpa o body
     const body = await request.json();
     const payload = UsuariosPermitidosCreateSchema.parse(body);
 
-    // 4. PERSISTÊNCIA: Banco de Dados
+    // 3. PERSISTÊNCIA: Banco de Dados
     const db = createServerClient();
     const { data, error } = await db
       .from("usuarios_permitidos")
@@ -61,12 +53,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) throw error;
-    
+
+    // Suprime aviso de variável não utilizada (user é capturado para auditoria futura)
+    void user;
+
     return NextResponse.json(data, { status: 201 });
-    
+
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
     }
     if (error instanceof ZodError) {
       return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
@@ -79,7 +77,7 @@ export async function POST(request: NextRequest) {
 // DELETE /api/config/acessos?id=UUID — remove um usuário pelo ID
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("admin");
 
     const id = request.nextUrl.searchParams.get("id");
     if (!id) {
@@ -101,6 +99,9 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
     }
     console.error("[/api/config/acessos DELETE]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

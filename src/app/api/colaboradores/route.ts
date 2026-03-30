@@ -125,7 +125,7 @@ function calcularProgresso(colaborador: Colaborador) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("user");
 
     const { searchParams } = new URL(request.url);
     const queryParams = {
@@ -210,6 +210,9 @@ export async function GET(request: NextRequest) {
     }
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
     }
     return NextResponse.json(
       { error: "Erro interno do servidor" },

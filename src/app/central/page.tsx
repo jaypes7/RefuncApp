@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -47,6 +48,7 @@ import { colaboradoresApi, exportApi, type Colaborador } from "@/lib/axios";
 import { ImportModal } from "@/components/ImportModal";
 import { ColaboradorDetailsModal } from "@/components/ColaboradorDetailsModal";
 import { EditColaboradorModal } from "@/components/EditColaboradorModal";
+import { CanAccess } from "@/components/CanAccess";
 import * as XLSX from "xlsx";
 import { useDebounce } from "@/hooks/use-debounce";
 
@@ -117,7 +119,7 @@ function getSetor(colaborador: Colaborador): Setor {
   if (colaborador.TREINAMENTO || colaborador.ASO === "Apto") {
     return "Segurança";
   }
-  if (colaborador.MOB === "Sim" || colaborador.PORTAL === "Liberado") {
+  if (colaborador.MOB?.trim() || colaborador.PORTAL === "Liberado") {
     return "Logística";
   }
   return "RH";
@@ -201,7 +203,15 @@ function TableSkeleton() {
 
 export default function CentralPage() {
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+
+  // Redireciona guests para o Dashboard Geral (única página permitida)
+  useEffect(() => {
+    if (!authLoading && user?.perfil === "guest") {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, user, router]);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 500);
   const [statusFilter, setStatusFilter] = useState<string>("todos");
@@ -443,15 +453,17 @@ export default function CentralPage() {
               <Download className="h-3.5 w-3.5" />
               {isExporting ? "Exportando..." : "Exportar"}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5"
-              onClick={() => setImportModalOpen(true)}
-            >
-              <Upload className="h-3.5 w-3.5" />
-              Importar
-            </Button>
+            <CanAccess role="user">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setImportModalOpen(true)}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Importar
+              </Button>
+            </CanAccess>
           </div>
         </div>
 
@@ -644,39 +656,41 @@ export default function CentralPage() {
                                   <Eye className="h-4 w-4" />
                                   Ver Detalhes
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="cursor-pointer gap-2"
-                                  onSelect={(e) => {
-                                    e.preventDefault();
-                                    // Navega para a rota dedicada de edição, passando o CPF limpo
-                                    const cpfLimpo = String(
-                                      colab.CPF || "",
-                                    ).replace(/\D/g, "");
-                                    router.push(`/central/editar/${cpfLimpo}`);
-                                  }}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                  Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  className="cursor-pointer gap-2"
-                                  disabled={deleteMutation.isPending}
-                                  onClick={() =>
-                                    handleDelete(
-                                      colab.CPF || "",
-                                      colab.NOME || "",
-                                    )
-                                  }
-                                >
-                                  {deleteMutation.isPending ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                  Remover
-                                </DropdownMenuItem>
+                                <CanAccess role="user">
+                                  <DropdownMenuItem
+                                    className="cursor-pointer gap-2"
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      // Navega para a rota dedicada de edição, passando o CPF limpo
+                                      const cpfLimpo = String(
+                                        colab.CPF || "",
+                                      ).replace(/\D/g, "");
+                                      router.push(`/central/editar/${cpfLimpo}`);
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    className="cursor-pointer gap-2"
+                                    disabled={deleteMutation.isPending}
+                                    onClick={() =>
+                                      handleDelete(
+                                        colab.CPF || "",
+                                        colab.NOME || "",
+                                      )
+                                    }
+                                  >
+                                    {deleteMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                    Remover
+                                  </DropdownMenuItem>
+                                </CanAccess>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>

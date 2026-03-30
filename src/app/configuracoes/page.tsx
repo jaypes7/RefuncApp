@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 // --- Types ---
 type ConfigProjeto = {
@@ -135,6 +136,9 @@ const getAcaoBadgeVariant = (acao: string) => {
 
 // --- Component ---
 export default function ConfiguracoesPage() {
+  // ── RBAC: deve ser o primeiro hook para garantir ordem estável ───────────
+  const { user, isLoading: authLoading } = useAuth();
+
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("projeto");
 
@@ -536,6 +540,25 @@ export default function ConfiguracoesPage() {
       return { id: e.id, startDate, endDate, calendarDays, workingDays };
     });
   }, [projeto.data_inicio, cronograma.etapas]);
+
+  // ── Guard: aguarda auth resolver, depois verifica perfil admin ─────────────
+  if (authLoading) return null;
+
+  if (user?.perfil !== "admin") {
+    return (
+      <ProtectedRoute>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+            <Settings className="h-8 w-8 text-destructive/60" />
+          </div>
+          <h2 className="text-xl font-semibold text-foreground">Acesso Negado</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Apenas administradores podem visualizar esta página.
+          </p>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>

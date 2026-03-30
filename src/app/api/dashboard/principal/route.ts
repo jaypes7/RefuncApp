@@ -102,6 +102,17 @@ function agruparPorFuncao(cols: ColabRow[]) {
     .sort((a, b) => b.total - a.total);
 }
 
+function agruparPorMob(cols: ColabRow[]) {
+  const m: Record<string, number> = {};
+  for (const c of cols) {
+    const mob = c.MOB?.trim();
+    if (mob) m[mob] = (m[mob] || 0) + 1;
+  }
+  return Object.entries(m)
+    .map(([mob, total]) => ({ mob, total }))
+    .sort((a, b) => a.mob.localeCompare(b.mob));
+}
+
 // ============================================================================
 // GET /api/dashboard/principal
 // ============================================================================
@@ -200,9 +211,9 @@ export async function GET() {
         ),
       },
       logistica: {
-        total: colaboradores.filter((c) => c.MOB === "Sim").length,
+        total: colaboradores.filter((c) => c.MOB?.trim()).length,
         percentual: Math.round(
-          (colaboradores.filter((c) => c.MOB === "Sim").length / total) * 100,
+          (colaboradores.filter((c) => c.MOB?.trim()).length / total) * 100,
         ),
       },
       seguranca: {
@@ -286,6 +297,7 @@ export async function GET() {
       },
       agregacoes: {
         distribuicaoFuncoes: agruparPorFuncao(colaboradores),
+        distribuicaoMob: agruparPorMob(colaboradores),
       },
     });
   } catch (error) {

@@ -65,7 +65,7 @@ export async function GET() {
 // POST /api/config/hoteis — insere um novo hotel
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("admin");
 
     const body = await request.json().catch(() => null);
     if (!body) {
@@ -102,6 +102,9 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
+    }
     console.error("[/api/config/hoteis POST]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
@@ -110,7 +113,7 @@ export async function POST(request: NextRequest) {
 // PATCH /api/config/hoteis — atualiza qt_vagas de um hotel existente
 export async function PATCH(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("admin");
 
     const body = await request.json().catch(() => null);
     if (!body) {
@@ -145,6 +148,9 @@ export async function PATCH(request: NextRequest) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
+    }
     console.error("[/api/config/hoteis PATCH]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
@@ -153,7 +159,7 @@ export async function PATCH(request: NextRequest) {
 // DELETE /api/config/hoteis?id=<uuid> — remove um hotel pelo ID
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("admin");
     const id = request.nextUrl.searchParams.get("id");
     if (!id) {
       return NextResponse.json({ error: "Parâmetro 'id' é obrigatório" }, { status: 400 });
@@ -173,6 +179,9 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
     }
     console.error("[/api/config/hoteis DELETE]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

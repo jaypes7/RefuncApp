@@ -277,7 +277,7 @@ export function calcularMetricas(
       c.CPF &&
       c.NOME &&
       (c.DATA_ADMISSAO || (c.STATUS && c.STATUS !== "Pendente")) &&
-      (c.MOB === "Sim" || c.ASO === "Apto"),
+      (c.MOB?.trim() || c.ASO === "Apto"),
   ).length;
 
   const totalEmTreinamento = colaboradores.filter(
@@ -289,12 +289,15 @@ export function calcularMetricas(
       ? Math.round((n / totalCadastrados) * 10000) / 100
       : 0;
 
+  // Conta colaboradores com MOB preenchido (qualquer valor não vazio)
+  const totalMob = colaboradores.filter((c) => c.MOB?.trim()).length;
+
   return {
     totalCadastrados,
     totalAdmitidos,
     totalLiberados,
     totalEmTreinamento,
-    percentualMOB:   pct(colaboradores.filter((c) => c.MOB === "Sim").length),
+    percentualMOB:   pct(totalMob),
     percentualASO:   pct(colaboradores.filter((c) => c.ASO === "Apto").length),
     percentualPortal: pct(colaboradores.filter((c) => c.PORTAL === "Liberado").length),
   };
@@ -318,7 +321,7 @@ export function calcularProgressoReal(
     let etapa = 1;
     if (c.STATUS && c.STATUS !== "Pendente") etapa = 2;
     if (c.PRE_ADMISSAO === "Sim") etapa = 3;
-    if (c.MOB === "Sim") etapa = 4;
+    if (c.MOB?.trim()) etapa = 4;
     if (c.PORTAL === "Liberado") etapa = 5;
     if (c.ASO === "Apto") etapa = 6;
     if (c.TREINAMENTO === "Em Andamento") etapa = 7;
