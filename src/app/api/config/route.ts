@@ -109,7 +109,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth("admin");
     const supabase = createServerClient();
 
     const body = await request.json();
@@ -219,6 +219,10 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
     }
 
     return NextResponse.json(

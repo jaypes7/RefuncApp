@@ -20,7 +20,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import type { ImportReport, ImportError } from "@/lib/import-utils";
-import { sanitizeCPF, sanitizeDate, sanitizeText, mapStrictEnums } from "@/lib/import-utils";
+import { sanitizeCPF, sanitizeDate, sanitizeText, mapStrictEnums, normalizeTurno } from "@/lib/import-utils";
 
 // ============================================================================
 // MAPEAMENTO DE CABEÇALHOS — Logística
@@ -39,10 +39,19 @@ const LOGISTICA_ALIASES: Record<string, string[]> = {
   data_admissao:  ["ADMISSÃO", "ADMISSAO", "DATA ADMISSÃO", "DATA ADMISSAO", "DT ADMISSAO"],
   cracha:         ["CRACHA", "CRACHÁ", "STATUS CRACHÁ"],
   // Turno de semana — captura variações com travessões, acentos e espaços extras
+  // ATENÇÃO: O alias "TURNO -   (2ª A 6ª)" deve ter os espaços exatos da planilha
+  // Como usamos normalize (replace(/\s+/g, " ")), tanto o header quanto o alias
+  // são colapsados para comparação.
   turno_trabalho: [
-    "TURNO", "TURNO SEMANA", "TURNO TRABALHO", "JORNADA",
-    "TURNO - (2ª A 6ª)", "TURNO - (2A A 6A)", "TURNO (2ª A 6ª)",
-    "TURNO 2A 6A", "TURNO SEG SEX",
+    "TURNO - (2ª A 6ª)",     // Normalizado: espaços colapsados
+    "TURNO - (2A A 6A)",     // Sem acento
+    "TURNO (2ª A 6ª)",       // Sem travessão
+    "TURNO 2A 6A",           // Formato compacto
+    "TURNO SEG SEX",         // Abreviado
+    "TURNO SEMANA",          // Genérico
+    "TURNO TRABALHO",        // Alternativo
+    "TURNO TRABALHO",        // Sem acento           // Fallback genérico
+    "JORNADA",               // Sinônimo
   ],
   turno_sabado:   ["TURNO SÁBADO", "TURNO SABADO", "TURNO SAB", "TURNO SÁB"],
   turno_domingo:  ["TURNO DOMINGO", "TURNO DOM"],
@@ -76,9 +85,12 @@ const EXACT_MATCH_ONLY_FIELDS = new Set(["hotel"]);
 
 function buildLogisticaHeaderMap(headers: string[]): Map<string, string> {
   const map = new Map<string, string>();
+  console.log("[AUDIT-HEADERS] Headers brutos da planilha:", headers);
+  
   for (const header of headers) {
     // Normaliza: trim + colapsa espaços múltiplos + uppercase
     const norm = header.trim().toUpperCase().replace(/\s+/g, " ");
+    
     for (const [field, aliases] of Object.entries(LOGISTICA_ALIASES)) {
       // Guarda de segurança para 'hotel': colunas financeiras (CUSTO, C.C., CC)
       // nunca devem mapear para hotel, independentemente do alias encontrado.
@@ -94,11 +106,14 @@ function buildLogisticaHeaderMap(headers: string[]): Map<string, string> {
         return norm === aliasNorm || norm.includes(aliasNorm);
       });
       if (matched) {
+        console.log(`[AUDIT-HEADERS] Match: "${header}" → ${field}`);
         map.set(header, field);
         break;
       }
     }
   }
+  
+  console.log("[AUDIT-HEADERS] HeaderMap final:", Object.fromEntries(map));
   return map;
 }
 
@@ -140,15 +155,35 @@ function rowToLogistica(
       case "cracha":
         result.cracha = mapStrictEnums("cracha", sanitizeText(val)) ?? undefined;
         break;
-      case "turno_trabalho":
-        result.turno_trabalho = sanitizeText(val) ?? undefined;
+      case "turno_trabalho": {
+        if (val === null || val === undefined || val === "") {
+          result.turno_trabalho = "N/A";
+          break;
+        }
+        const rawStr = String(val).trim();
+        // BLOQUEIO: Destrói floats numéricos de horas do Excel (ex: "0.75")
+        if (/^[\d.,]+$/.test(rawStr)) {
+          result.turno_trabalho = "N/A";
+          break;
+        }
+        const normalized = normalizeTurno(val);
+        if (normalized && normalized !== "N/A") {
+          result.turno_trabalho = normalized;
+        } else {
+          result.turno_trabalho = rawStr || "N/A";
+        }
         break;
-      case "turno_sabado":
-        result.turno_sabado = sanitizeText(val) ?? undefined;
+      }
+      case "turno_sabado": {
+        const sab = val ? String(val).trim() : "";
+        result.turno_sabado = sab && !/^[\d.,]+$/.test(sab) ? sab : undefined;
         break;
-      case "turno_domingo":
-        result.turno_domingo = sanitizeText(val) ?? undefined;
+      }
+      case "turno_domingo": {
+        const dom = val ? String(val).trim() : "";
+        result.turno_domingo = dom && !/^[\d.,]+$/.test(dom) ? dom : undefined;
         break;
+      }
       case "coordenador":
         result.coordenador = sanitizeText(val, { upper: true }) ?? undefined;
         break;
@@ -274,19 +309,28 @@ export async function POST(request: NextRequest) {
     const byCpf = new Map<string, Record<string, unknown>>();
     const seenCpfs = new Set<string>();
 
+    // Identifica o header bruto do CPF uma vez, para poder acessar o valor
+    // original da célula antes de qualquer sanitização (evitando o padStart
+    // de sanitizeCPF mascarar valores curtos como "433" ou "495").
+    const cpfRawHeader = [...headerMap.entries()].find(([, f]) => f === "cpf")?.[0] ?? null;
+
     rows.forEach((row, idx) => {
       try {
-        const parsed = rowToLogistica(row, headerMap);
-        const nome = String(parsed.nome ?? "").trim();
-
-        if (!nome) {
-          report.erros.push({ linha: idx + 1, campo: "NOME", motivo: "NOME ausente." });
+        // ── Única regra de guarda: CPF com menos de 5 dígitos brutos ─────────────
+        // Totalizadores de rodapé (ex: "433", "495") têm poucos dígitos no CPF.
+        // CPFs brasileiros legítimos sempre têm 11 dígitos.
+        // O threshold de 5 garante que CPFs reais nunca sejam descartados,
+        // mesmo que venham com formatação incompleta.
+        const cpfRawDigits = cpfRawHeader
+          ? String(row[cpfRawHeader] ?? "").replace(/\D/g, "")
+          : "";
+        if (cpfRawDigits.length < 5) {
+          report.ignorados++;
           return;
         }
 
-        const cpf = parsed.cpf ? String(parsed.cpf).replace(/\D/g, "").padStart(11, "0") : "";
-
-        if (!cpf) { report.ignorados++; return; }
+        const parsed = rowToLogistica(row, headerMap);
+        const cpf = String(parsed.cpf ?? "").trim();
 
         if (seenCpfs.has(cpf)) {
           report.erros.push({ linha: idx + 1, motivo: `CPF ${cpf}: duplicado no arquivo.` });
@@ -318,7 +362,8 @@ export async function POST(request: NextRequest) {
         if (existMap.has(cpf)) {
           const merged = { ...existMap.get(cpf)! };
           for (const [k, v] of Object.entries(newData)) {
-            if (isEmpty(merged[k]) && !isEmpty(v)) merged[k] = v;
+            // Sobrescreve o banco se a célula da planilha não estiver vazia
+            if (!isEmpty(v)) merged[k] = v;
           }
           merged.cpf = cpf;
           payload.push(merged);

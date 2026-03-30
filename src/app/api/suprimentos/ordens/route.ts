@@ -295,11 +295,14 @@ export async function POST(request: NextRequest) {
     for (const [key, newData] of validRows.entries()) {
       if (existMap.has(key)) {
         const existing = existMap.get(key)!;
-        
+        // Filtra células vazias para não apagar dados do banco (Overwrite apenas se não-vazio)
+        const nonEmptyNewData = Object.fromEntries(
+          Object.entries(newData).filter(([, v]) => v != null && v !== "")
+        );
         toUpdate.push({
-          ...existing, 
-          ...newData,  
-          entregue_obra: existing.entregue_obra 
+          ...existing,
+          ...nonEmptyNewData,
+          entregue_obra: existing.entregue_obra,
         });
         report.atualizados++;
       } else {

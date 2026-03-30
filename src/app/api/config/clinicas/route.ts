@@ -36,7 +36,7 @@ export async function GET() {
 // POST /api/config/clinicas — cria ou atualiza uma clínica (upsert por nome)
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("admin");
     const body = await request.json();
     const payload = ClinicaSchema.parse(body);
 
@@ -53,6 +53,9 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
+    }
     if (error instanceof ZodError) {
       return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
     }
@@ -64,7 +67,7 @@ export async function POST(request: NextRequest) {
 // DELETE /api/config/clinicas?id=<uuid> — remove uma clínica pelo ID
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("admin");
     const id = request.nextUrl.searchParams.get("id");
     if (!id) {
       return NextResponse.json({ error: "Parâmetro 'id' é obrigatório" }, { status: 400 });
@@ -81,6 +84,9 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
     }
     console.error("[/api/config/clinicas DELETE]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

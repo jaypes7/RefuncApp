@@ -67,10 +67,8 @@ function calcularStatusGeral(colab: Colaborador) {
   }
 
   // Verificar MOB
-  if (colab.MOB === "Sim") {
-    ok.push("MOB Concluído");
-  } else if (colab.MOB === "Em Trânsito") {
-    alertas.push("Em Deslocamento");
+  if (colab.MOB?.trim()) {
+    ok.push(`MOB: ${colab.MOB}`);
   } else {
     pendencias.push("MOB Pendente");
   }
@@ -378,12 +376,12 @@ export function ColaboradorDetailsModal({
                   <Badge
                     variant="outline"
                     className={`${
-                      colaborador.MOB === "Sim"
+                      colaborador.MOB?.trim()
                         ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
                         : "border-amber-500/30 bg-amber-500/10 text-amber-400"
                     }`}
                   >
-                    {colaborador.MOB || "Pendente"}
+                    {colaborador.MOB?.trim() || "Pendente"}
                   </Badge>
                 </div>
               </div>

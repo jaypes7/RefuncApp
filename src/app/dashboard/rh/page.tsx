@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -166,7 +167,15 @@ function RhSkeleton() {
 
 export default function DashboardRhPage() {
   const router      = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+
+  // Redireciona guests para o Dashboard Geral (única página permitida)
+  useEffect(() => {
+    if (!authLoading && user?.perfil === "guest") {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, user, router]);
 
   // ── Filtros da seção "Término de Contrato" ────────────────────────────────
   const [filterNome,   setFilterNome]   = useState("");

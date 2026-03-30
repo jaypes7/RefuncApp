@@ -39,7 +39,7 @@ function cleanNumeric(val: unknown): number {
 
 export async function GET() {
   try {
-    await requireAuth();
+    await requireAuth("user");
 
     const db = createServerClient();
 
@@ -89,6 +89,9 @@ export async function GET() {
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
     }
     console.error("[GET /api/dashboard/suprimentos]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });

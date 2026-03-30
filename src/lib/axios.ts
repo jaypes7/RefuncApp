@@ -235,6 +235,8 @@ export interface DashboardData {
     distribuicaoIdades: Array<{ faixa: string; total: number }>;
     /** Distribuição por UF — alimenta gráfico de bar/mapa no dashboard Geral */
     distribuicaoUF: Array<{ uf: string; total: number }>;
+    /** Distribuição por fase MOB — agrupa colaboradores por valor do campo MOB */
+    distribuicaoMob: Array<{ mob: string; total: number }>;
     /** Ocupação dos hotéis — vagasTotais x vagasPreenchidas (VINCULADO === nome do hotel) */
     vagasHoteis: Array<{
       hotel: string;
@@ -293,7 +295,7 @@ export type DashboardPrincipalData = {
     } | null;
   };
   etapasCount: number;
-  agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes">;
+  agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes" | "distribuicaoMob">;
 };
 
 /** Shape retornada por GET /api/dashboard/rh */

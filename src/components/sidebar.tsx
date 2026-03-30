@@ -24,13 +24,14 @@ import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { CanAccess } from "@/components/CanAccess";
 
 const dashboardSubItems = [
-  { name: "Geral",       href: "/dashboard",             icon: BarChart3 },
-  { name: "RH",          href: "/dashboard/rh",          icon: UserCog },
-  { name: "Logística",   href: "/dashboard/logistica",   icon: Truck },
-  { name: "Segurança",   href: "/dashboard/seguranca",   icon: ShieldCheck },
-  { name: "Suprimentos", href: "/dashboard/suprimentos", icon: Package },
+  { name: "Geral",       href: "/dashboard",             icon: BarChart3,   userOnly: false },
+  { name: "RH",          href: "/dashboard/rh",          icon: UserCog,     userOnly: true  },
+  { name: "Logística",   href: "/dashboard/logistica",   icon: Truck,       userOnly: true  },
+  { name: "Segurança",   href: "/dashboard/seguranca",   icon: ShieldCheck, userOnly: true  },
+  { name: "Suprimentos", href: "/dashboard/suprimentos", icon: Package,     userOnly: true  },
 ];
 
 interface SidebarProps {
@@ -112,27 +113,31 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* ── Navigation ─────────────────────────────────────────────── */}
         <nav className="flex-1 space-y-px">
 
-          {/* Configurações do projeto */}
-          <Link href="/configuracoes">
-            <span
-              className={navItem(pathname === "/configuracoes")}
-              title={collapsed ? "Configurações do projeto" : undefined}
-            >
-              <Settings className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>Configurações do projeto</span>}
-            </span>
-          </Link>
+          {/* Configurações do projeto — visível apenas para admins */}
+          <CanAccess role="admin">
+            <Link href="/configuracoes">
+              <span
+                className={navItem(pathname === "/configuracoes")}
+                title={collapsed ? "Configurações do projeto" : undefined}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Configurações do projeto</span>}
+              </span>
+            </Link>
+          </CanAccess>
 
-          {/* Central de colaboradores */}
-          <Link href="/central">
-            <span
-              className={navItem(pathname === "/central")}
-              title={collapsed ? "Central de colaboradores" : undefined}
-            >
-              <Users className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>Central de colaboradores</span>}
-            </span>
-          </Link>
+          {/* Central de colaboradores — visível apenas para user/admin */}
+          <CanAccess role="user">
+            <Link href="/central">
+              <span
+                className={navItem(pathname === "/central")}
+                title={collapsed ? "Central de colaboradores" : undefined}
+              >
+                <Users className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Central de colaboradores</span>}
+              </span>
+            </Link>
+          </CanAccess>
 
           {/* Dashboard dropdown */}
           <div>
@@ -144,7 +149,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <LayoutDashboard className="h-4 w-4 shrink-0" />
               {!collapsed && (
                 <>
-                  <span className="flex-1 text-left">Dashboards</span>
+                  <span className="flex-1 text-left">Dashboard</span>
                   <ChevronDown
                     className={cn(
                       "h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-150",
@@ -158,42 +163,52 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {/* Sub-items — expanded */}
             {dashboardOpen && !collapsed && (
               <div className="ml-3 mt-px space-y-px border-l border-border pl-2.5">
-                {dashboardSubItems.map((sub) => (
-                  <Link key={sub.href} href={sub.href}>
-                    <span
-                      className={cn(
-                        "flex items-center gap-2 rounded-sm px-2 py-1.5 text-[11px] font-medium transition-colors duration-150",
-                        pathname === sub.href
-                          ? "text-primary bg-primary/[0.06]"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent",
-                      )}
-                    >
-                      <sub.icon className="h-3.5 w-3.5 shrink-0" />
-                      {sub.name}
-                    </span>
-                  </Link>
-                ))}
+                {dashboardSubItems.map((sub) => {
+                  const link = (
+                    <Link key={sub.href} href={sub.href}>
+                      <span
+                        className={cn(
+                          "flex items-center gap-2 rounded-sm px-2 py-1.5 text-[11px] font-medium transition-colors duration-150",
+                          pathname === sub.href
+                            ? "text-primary bg-primary/[0.06]"
+                            : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                        )}
+                      >
+                        <sub.icon className="h-3.5 w-3.5 shrink-0" />
+                        {sub.name}
+                      </span>
+                    </Link>
+                  );
+                  return sub.userOnly ? (
+                    <CanAccess key={sub.href} role="user">{link}</CanAccess>
+                  ) : link;
+                })}
               </div>
             )}
 
             {/* Sub-items — collapsed */}
             {dashboardOpen && collapsed && (
               <div className="mt-px space-y-px">
-                {dashboardSubItems.map((sub) => (
-                  <Link key={sub.href} href={sub.href}>
-                    <span
-                      className={cn(
-                        "flex items-center justify-center rounded-sm py-1.5 transition-colors duration-150",
-                        pathname === sub.href
-                          ? "bg-primary/[0.08] text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent",
-                      )}
-                      title={sub.name}
-                    >
-                      <sub.icon className="h-3.5 w-3.5" />
-                    </span>
-                  </Link>
-                ))}
+                {dashboardSubItems.map((sub) => {
+                  const link = (
+                    <Link key={sub.href} href={sub.href}>
+                      <span
+                        className={cn(
+                          "flex items-center justify-center rounded-sm py-1.5 transition-colors duration-150",
+                          pathname === sub.href
+                            ? "bg-primary/[0.08] text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                        )}
+                        title={sub.name}
+                      >
+                        <sub.icon className="h-3.5 w-3.5" />
+                      </span>
+                    </Link>
+                  );
+                  return sub.userOnly ? (
+                    <CanAccess key={sub.href} role="user">{link}</CanAccess>
+                  ) : link;
+                })}
               </div>
             )}
           </div>

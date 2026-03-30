@@ -11,8 +11,8 @@
  *      Deduplicação intra-arquivo em memória  →  Set<cpf>
  *   3. SELECT único no Supabase               →  .in("cpf", cpfArray)
  *   4. Merge em memória:
- *      • CPF existente → preserva campos preenchidos no banco; preenche apenas
- *                        os que estão nulos/vazios (não sobrescreve edições manuais)
+ *      • CPF existente → dados da planilha sobrescrevem o banco, exceto se a
+ *                        célula estiver vazia/nula (preserva dados existentes)
  *      • CPF novo      → insere o objeto completo
  *   5. UPSERT único                            →  .upsert(payload, { onConflict: "cpf" })
  *      Log único                               →  logImport()
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // ── Auth ─────────────────────────────────────────────────────────────────
-    const user = await requireAuth();
+    const user = await requireAuth("user");
 
     // ── Payload ──────────────────────────────────────────────────────────────
     const body = await request.json();
@@ -113,6 +113,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(report);
     }
 
+    // ── Localiza o header bruto do turno UMA VEZ (antes do forEach) ──────────
+    // turno_semana tem SCHEMA_TO_API = null, então não aparece no colaborador
+    // processado — precisamos ler o valor diretamente da linha bruta.
+    let turnoRawHeader: string | null = null;
+    for (const [rawH, schemaId] of headerMap.entries()) {
+      if (schemaId === "turno_semana") { turnoRawHeader = rawH; break; }
+    }
+
     // ── FASE 2: Sanitizar linhas em memória ──────────────────────────────────
     // Produz: Map<cpf, record_em_lowercase> — chaves prontas para o Supabase
     const validRows = new Map<string, Record<string, unknown>>();
@@ -124,22 +132,38 @@ export async function POST(request: NextRequest) {
         // rowToColaborador devolve UPPERCASE keys (CPF, NOME, STATUS, …)
         const colaborador = rowToColaborador(row, headerMap);
 
+        // ── Proteção contra linhas de rodapé/totalizador ────────────────────────
+        const nome = String(colaborador["NOME"] ?? "").trim();
+        const nomeUpper = nome.toUpperCase();
+
+        // Detecta linhas de rodapé: nome vazio ou contendo "TOTAL", "SOMA", "GERAL"
+        if (!nome || nomeUpper.includes("TOTAL") || nomeUpper.includes("SOMA") || nomeUpper.includes("GERAL")) {
+          report.ignorados++;
+          return;
+        }
+
+        // Turno bruto da linha original (SCHEMA_TO_API é null, não chega no colaborador)
+        const rawTurno = turnoRawHeader
+          ? String(row[turnoRawHeader] ?? "").trim()
+          : "";
+
+        // Rodapé por CPF inválido + turno numérico puro:
+        // ex. linha de totalização onde CPF = "" e coluna turno = "134"
+        const cpfRaw = extractCpf(colaborador);
+        if ((!cpfRaw || cpfRaw.length !== 11) && /^\d+$/.test(rawTurno)) {
+          report.ignorados++;
+          return;
+        }
+
         // CPF obrigatório para qualquer operação de upsert
-        const cpf = extractCpf(colaborador);
+        const cpf = cpfRaw;
         if (!cpf || cpf.length !== 11) {
           report.ignorados++;
           return;
         }
 
-        // NOME obrigatório para novas inserções (e útil para logs)
-        if (!String(colaborador["NOME"] ?? "").trim()) {
-          report.erros.push({
-            linha: lineNumber,
-            campo: "NOME",
-            motivo: `CPF ${cpf}: campo NOME ausente ou vazio.`,
-          });
-          return;
-        }
+        // CPF válido + turno "N/A" → importa normalmente como colaborador
+        // pendente de turno (rawTurno vazio/"N/A"/"NA" é aceito — não descartado)
 
         // Duplicata dentro do mesmo arquivo
         if (seenCpfs.has(cpf)) {
@@ -192,12 +216,11 @@ export async function POST(request: NextRequest) {
       if (cpf) existingByCpf.set(cpf, row as Record<string, unknown>);
     }
 
-    // ── FASE 4: Aplicar regra de MERGE ───────────────────────────────────────
+    // ── FASE 4: Aplicar regra de MERGE (Overwrite) ───────────────────────────
     //
-    // Colaborador existente  →  preserva o que já está no banco; preenche
-    //                           APENAS os campos que estão nulos/vazios.
-    //                           Isso evita sobrescrever edições manuais feitas
-    //                           diretamente no banco entre importações.
+    // Colaborador existente  →  dados da planilha sobrescrevem o banco;
+    //                           células vazias/nulas são ignoradas (não apagam
+    //                           dados já preenchidos no banco).
     //
     // Colaborador novo       →  insere o objeto completo da planilha.
     //
@@ -205,12 +228,12 @@ export async function POST(request: NextRequest) {
 
     for (const [cpf, newData] of validRows.entries()) {
       if (existingByCpf.has(cpf)) {
-        // ── UPDATE com merge conservador ─────────────────────────────────────
+        // ── UPDATE com merge Overwrite ────────────────────────────────────────
         const merged = { ...existingByCpf.get(cpf)! };
 
         for (const [key, incomingValue] of Object.entries(newData)) {
-          // Só preenche se o campo atual no banco estiver vazio
-          if (isEmpty(merged[key]) && !isEmpty(incomingValue)) {
+          // Sobrescreve o banco se a célula da planilha não estiver vazia
+          if (!isEmpty(incomingValue)) {
             merged[key] = incomingValue;
           }
         }
@@ -248,6 +271,10 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
     }
 
     return NextResponse.json(

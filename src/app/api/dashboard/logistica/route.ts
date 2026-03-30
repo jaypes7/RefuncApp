@@ -29,6 +29,7 @@ export const revalidate = 0;
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
+import { normalizeTurno } from "@/lib/import-utils";
 
 // ============================================================================
 // GET /api/dashboard/logistica
@@ -36,7 +37,7 @@ import { requireAuth } from "@/lib/auth";
 
 export async function GET() {
   try {
-    await requireAuth();
+    await requireAuth("user");
 
     const db = createServerClient();
 
@@ -96,10 +97,36 @@ export async function GET() {
       .sort((a, b) => b.vagasPreenchidas - a.vagasPreenchidas);
 
     // ── Distribuição por turno ────────────────────────────────────────────────
+    // Nenhum registro é descartado — todos entram em alguma fatia do gráfico.
+    //
+    // Prioridade de classificação:
+    //   1. normalizeTurno reconhece o dígito (1/2/3) → label "Xº TURNO"
+    //   2. Valor vazio/null/"N/A"/"NA"               → "Não informado (N/A)"
+    //   3. Valor existe mas sem dígito reconhecível   → exibe texto original (auditável)
+    //
+    // Nota: valores já salvos no banco como "3º TURNO", "3", "TURNO 3", etc.
+    // são normalizados para "3º TURNO" via normalizeTurno (busca por includes("3")).
     const turnoMap: Record<string, number> = {};
     for (const r of rows) {
-      const t = String(r.turno_trabalho ?? "").trim() || "Não informado";
-      turnoMap[t] = (turnoMap[t] || 0) + 1;
+      const rawValue = String(r.turno_trabalho ?? "").trim();
+      const t = normalizeTurno(r.turno_trabalho);
+
+      let turnoLabel: string;
+      if (t === "N/A") {
+        // Apenas registros realmente vazios ou explicitamente "N/A"
+        turnoLabel = "Não informado (N/A)";
+      } else if (t) {
+        // Turno reconhecido: "1º TURNO", "2º TURNO" ou "3º TURNO"
+        turnoLabel = t;
+      } else {
+        // Valor não normalizado: exibe o texto original (ex: "Turno Especial")
+        // para que nada fique oculto no gráfico de pizza.
+        // rawValue vazio aqui seria caso impossível (normalizeTurno já retorna "N/A"),
+        // mas o fallback garante que "Não informado (N/A)" só aparece quando realmente vazio.
+        turnoLabel = rawValue || "Não informado (N/A)";
+      }
+
+      turnoMap[turnoLabel] = (turnoMap[turnoLabel] || 0) + 1;
     }
     const turnoTrabalho = Object.entries(turnoMap)
       .map(([turno, total]) => ({ turno, total }))
@@ -118,6 +145,9 @@ export async function GET() {
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
     }
     console.error("[GET /api/dashboard/logistica]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });

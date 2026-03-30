@@ -125,7 +125,7 @@ const editSchema = z.object({
   PONTO: z.enum(["Cadastrado", "Pendente"]).optional().nullable(),
 
   // Mobilização
-  MOB: z.enum(["Sim", "Não", "Pendente"]).optional().nullable(),
+  MOB: z.string().optional().nullable(),
   PRE_ADMISSAO: z.enum(["Sim", "Não", "Pendente"]).optional().nullable(),
   OP: z.string().optional().nullable(),
   REQ: z.string().optional().nullable(),
@@ -265,7 +265,7 @@ export function EditColaboradorModal({
         PORTAL: safeEnum(colaborador.PORTAL, ["Liberado", "Pendente", "Bloqueado"] as const),
         CRACHA: safeEnum(colaborador.CRACHA, ["Emitido", "Pendente"] as const),
         PONTO: safeEnum(colaborador.PONTO, ["Cadastrado", "Pendente"] as const),
-        MOB: safeEnum(colaborador.MOB, ["Sim", "Não", "Pendente"] as const),
+        MOB: colaborador.MOB ?? null,
         PRE_ADMISSAO: safeEnum(colaborador.PRE_ADMISSAO, ["Sim", "Não", "Pendente"] as const),
         OP: colaborador.OP || "",
         REQ: colaborador.REQ || "",

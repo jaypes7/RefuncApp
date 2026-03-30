@@ -80,6 +80,23 @@ const preprocessDate = (val: unknown): unknown => {
   return val;
 };
 
+const preprocessTurno = (val: unknown) => {
+  if (val === null || val === undefined || val === "") return undefined;
+
+  const str = String(val).toUpperCase().trim();
+
+  // BLOQUEIO CRÍTICO: Se a string for apenas um número ou float (ex: "0.75", "18.00"), converte para undefined.
+  if (/^[\d.,]+$/.test(str)) return undefined;
+
+  // Whitelist de Turnos
+  if (str.includes("3")) return "3º TURNO";
+  if (str.includes("2")) return "2º TURNO";
+  if (str.includes("1")) return "1º TURNO";
+  if (str.includes("ADM")) return "ADMINISTRATIVO";
+
+  return undefined;
+};
+
 // ============================================================================
 // SCHEMAS AUXILIARES
 // ============================================================================
@@ -167,7 +184,7 @@ export const ColaboradorSchema = z.object({
   ASO: z.preprocess(emptyStringToUndefined, AsoEnum.optional()),
   RPV: z.preprocess(emptyStringToUndefined, z.string().optional()),
   PRE_ADMISSAO: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
-  MOB: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
+  MOB: z.preprocess(emptyStringToUndefined, z.string().optional()),
 
   // Colunas 16-20
   OP: z.preprocess(emptyStringToUndefined, z.string().optional()),
@@ -204,7 +221,7 @@ export const ColaboradorSchema = z.object({
 
   // ── Campos extras (DB) — não presentes na planilha de importação ──────────
   // Ignorados durante o parse de planilhas (strip); persistidos via Supabase.
-  turno_trabalho: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
 });
 
 /**
@@ -528,10 +545,10 @@ export const LogisticaSchema = z.object({
   portal: z.preprocess(emptyStringToUndefined, z.string().optional()),
   ponto: z.preprocess(emptyStringToUndefined, z.string().optional()),
   cracha: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  turno_semana: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  turno_trabalho: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  turno_sabado: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  turno_domingo: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  turno_semana: z.preprocess(preprocessTurno, z.string().optional()),
+  turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
+  turno_sabado: z.preprocess(preprocessTurno, z.string().optional()),
+  turno_domingo: z.preprocess(preprocessTurno, z.string().optional()),
   hotel: z.preprocess(emptyStringToUndefined, z.string().optional()),
   /** DB column: `quarto` — recebe "Nº APTO." da planilha */
   quarto: z.preprocess(emptyStringToUndefined, z.string().optional()),
@@ -567,7 +584,7 @@ export const SegurancaSchema = z.object({
   cpf: z.preprocess(emptyStringToUndefined, CPFSchema.optional()),
   nome: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
   funcao_clt: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  mob: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
+  mob: z.preprocess(emptyStringToUndefined, z.string().optional()),
   data_admissao: DateSchema,
   municipio: z.preprocess(emptyStringToUndefined, z.string().optional()),
   uf: z.preprocess(emptyStringToUndefined, UFEnum.optional()),

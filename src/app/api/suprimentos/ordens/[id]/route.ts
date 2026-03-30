@@ -23,7 +23,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth();
+    await requireAuth("user");
 
     const { id } = await params;
     if (!id) {
@@ -51,6 +51,9 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
     }
     console.error("[PATCH /api/suprimentos/ordens/[id]]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

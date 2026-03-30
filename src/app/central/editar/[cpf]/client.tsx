@@ -44,7 +44,6 @@ export default function EditColaboradorPage({ cpf }: EditColaboradorPageProps) {
   // Estado do modal — fecha quando o usuário dispensa (dados chegaram via query)
   const [dismissed, setDismissed] = useState(false);
 
-  // Busca os dados do colaborador pelo CPF
   const { data, isLoading, isError } = useQuery<{ data: Colaborador }>({
     queryKey: ["colaborador", cpf],
     queryFn: async () => {

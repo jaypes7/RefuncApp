@@ -145,7 +145,7 @@ function calcularProgresso(row: Record<string, unknown>) {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth("user");
     const supabase = createServerClient();
 
     const { searchParams } = new URL(request.url);
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
           break;
         case "LOGISTICA":
           colaboradores = colaboradores.filter(
-            (c) => c.MOB === "Sim" || c.PORTAL === "Liberado",
+            (c) => c.MOB?.trim() || c.PORTAL === "Liberado",
           );
           break;
         case "SEGURANCA":
@@ -215,6 +215,9 @@ export async function GET(request: NextRequest) {
 
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
     }
 
     return NextResponse.json(
