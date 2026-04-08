@@ -59,6 +59,10 @@ type EtapaCronograma = {
   percentual_concluido: number;
   dias: number;
   concluida?: boolean;
+  /** Data de início da etapa (YYYY-MM-DD) */
+  data_inicio?: string;
+  /** Data de fim da etapa (YYYY-MM-DD) */
+  data_fim?: string;
 };
 
 type ConfigCronograma = {
@@ -85,7 +89,7 @@ type ApiConfigResponse = {
   DATA_FIM_PROJETO: string | null;
   ETAPA_ATUAL: number;
   META_ADMISSOES: number;
-  ETAPAS_PROJETO: Array<{ id: number; nome: string; duracaoDias: number; concluida?: boolean; percentualConcluido?: number }>;
+  ETAPAS_PROJETO: Array<{ id: number; nome: string; duracaoDias: number; concluida?: boolean; percentualConcluido?: number; dataInicio?: string; dataFim?: string }>;
   GERENTE_OPERACOES: string | null;
   GERENTE_CONTRATO: string | null;
   NOME_CLIENTE: string | null;
@@ -278,6 +282,8 @@ export default function ConfiguracoesPage() {
               dias: salva.duracaoDias,
               concluida: salva.concluida ?? false,
               percentual_concluido: salva.percentualConcluido ?? 0,
+              data_inicio: salva.dataInicio,
+              data_fim: salva.dataFim,
             }
           : { ...etapaDefault, concluida: false };
       });
@@ -330,6 +336,8 @@ export default function ConfiguracoesPage() {
           duracaoDias: e.dias,
           concluida: e.concluida ?? false,
           percentualConcluido: e.percentual_concluido ?? 0,
+          dataInicio: e.data_inicio || null,
+          dataFim: e.data_fim || null,
         })),
       };
 
@@ -338,14 +346,17 @@ export default function ConfiguracoesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Falha ao salvar cronograma");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar cronograma");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config"] });
       toast.success("Cronograma atualizado com sucesso!");
     },
-    onError: () => toast.error("Erro ao salvar cronograma"),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const clinicaMutation = useMutation({
@@ -508,6 +519,58 @@ export default function ConfiguracoesPage() {
     const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
     setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
   };
+
+  const updateEtapaDataInicio = (id: number, data: string) => {
+    const novasEtapas = cronograma.etapas.map((e) =>
+      e.id === id ? { ...e, data_inicio: data } : e,
+    );
+    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
+    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
+  };
+
+  const updateEtapaDataFim = (id: number, data: string) => {
+    const novasEtapas = cronograma.etapas.map((e) =>
+      e.id === id ? { ...e, data_fim: data } : e,
+    );
+    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
+    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
+  };
+
+  // ── Validação de datas das etapas ────────────────────────────────────────────
+  // Calcula erros de validação para cada etapa: data_inicio e data_fim
+  // devem estar dentro do intervalo [data_inicio_projeto, data_fim_projeto]
+  type EtapaDateError = {
+    id: number;
+    dataInicio: boolean;
+    dataFim: boolean;
+    dataStartGreaterThanEnd: boolean;
+  };
+
+  const etapasDateErrors = useMemo<EtapaDateError[]>(() => {
+    if (!projeto.data_inicio || !projeto.data_fim) return [];
+    return cronograma.etapas.map((etapa) => ({
+      id: etapa.id,
+      dataInicio: !!(
+        etapa.data_inicio &&
+        (etapa.data_inicio < projeto.data_inicio || etapa.data_inicio > projeto.data_fim)
+      ),
+      dataFim: !!(
+        etapa.data_fim &&
+        (etapa.data_fim < projeto.data_inicio || etapa.data_fim > projeto.data_fim)
+      ),
+      dataStartGreaterThanEnd: !!(
+        etapa.data_inicio &&
+        etapa.data_fim &&
+        etapa.data_inicio > etapa.data_fim
+      ),
+    }));
+  }, [cronograma.etapas, projeto.data_inicio, projeto.data_fim]);
+
+  // Verifica se há algum erro de validação de datas
+  const hasDateErrors = useMemo(
+    () => etapasDateErrors.some((e) => e.dataInicio || e.dataFim || e.dataStartGreaterThanEnd),
+    [etapasDateErrors],
+  );
 
   // ── Pesos acumulados calculados dinamicamente pelos dias de cada etapa ──────
   // Usado para exibir o intervalo percentual real (ex: "12% → 28% do cronograma")
@@ -895,114 +958,188 @@ export default function ConfiguracoesPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
-                  {cronograma.etapas.map((etapa) => (
-                    <div
-                      key={etapa.id}
-                      className={`flex items-center gap-4 p-3 rounded-lg border transition-colors ${
-                        etapa.concluida
-                          ? "bg-emerald-500/10 border-emerald-500/30"
-                          : "bg-card/50 border-border/50"
-                      }`}
-                    >
+                <div className="space-y-4">
+                  {cronograma.etapas.map((etapa) => {
+                    const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
+                    return (
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
+                        key={etapa.id}
+                        className={`space-y-3 p-4 rounded-lg border transition-colors ${
                           etapa.concluida
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : "bg-primary/10 text-primary"
+                            ? "bg-emerald-500/10 border-emerald-500/30"
+                            : "bg-card/50 border-border/50"
                         }`}
                       >
-                        {etapa.id}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate flex items-center gap-2">
-                          <span className="truncate">{etapa.nome}</span>
-                          {etapa.concluida && (
-                            <Badge
-                              variant="outline"
-                              className="shrink-0 h-4 px-1.5 text-[10px] border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
-                            >
-                              Concluído
-                            </Badge>
+                        {/* Row 1: Nome, dias, percentual, conclusão */}
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
+                              etapa.concluida
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : "bg-primary/10 text-primary"
+                            }`}
+                          >
+                            {etapa.id}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate flex items-center gap-2">
+                              <span className="truncate">{etapa.nome}</span>
+                              {etapa.concluida && (
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 h-4 px-1.5 text-[10px] border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
+                                >
+                                  Concluído
+                                </Badge>
+                              )}
+                            </div>
+                            {/* Percentual dinâmico calculado a partir dos dias digitados */}
+                            <div className="text-xs text-muted-foreground">
+                              {(() => {
+                                const p = etapasPesos.find((x) => x.id === etapa.id);
+                                return p ? `${p.inicio}% – ${p.fim}% do cronograma` : "";
+                              })()}
+                            </div>
+                            {/* Dias corridos vs. dias úteis por etapa */}
+                            {etapasDatas && (() => {
+                              const d = etapasDatas.find((x) => x.id === etapa.id);
+                              return d ? (
+                                <div className="text-xs text-muted-foreground/70 mt-0.5 tabular-nums">
+                                  Corridos: {d.calendarDays}&nbsp;|&nbsp;Úteis: {d.workingDays}
+                                </div>
+                              ) : null;
+                            })()}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {/* Duração em dias úteis */}
+                            <Input
+                              type="number"
+                              min={1}
+                              value={etapa.dias}
+                              onChange={(e) =>
+                                updateEtapaDias(
+                                  etapa.id,
+                                  parseInt(e.target.value) || 1,
+                                )
+                              }
+                              className="w-20 glass-input text-center"
+                              title="Duração em dias úteis"
+                            />
+                            <span className="text-sm text-muted-foreground w-10 shrink-0">
+                              dias
+                            </span>
+                            {/* Avanço físico (percentual_concluido) */}
+                            <div className="flex flex-col items-center gap-0.5">
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={etapa.percentual_concluido}
+                                onChange={(e) =>
+                                  updateEtapaPercentual(
+                                    etapa.id,
+                                    parseInt(e.target.value),
+                                  )
+                                }
+                                className="w-16 glass-input text-center"
+                                title="Avanço físico desta etapa (0–100%)"
+                              />
+                              <span className="text-[10px] text-muted-foreground">
+                                % físico
+                              </span>
+                            </div>
+                            {/* Switch de conclusão */}
+                            <div className="flex flex-col items-center gap-0.5 ml-1">
+                              <Switch
+                                checked={etapa.concluida ?? false}
+                                onCheckedChange={(checked: boolean) =>
+                                  updateEtapaConcluida(etapa.id, checked)
+                                }
+                                disabled={cronogramaMutation.isPending}
+                              />
+                              <span className="text-[10px] text-muted-foreground">
+                                Concluída
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Datas (data_inicio e data_fim) */}
+                        <div className="flex items-end gap-4 ml-12 pt-2 border-t border-border/30">
+                          <div className="flex-1 flex gap-4">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-medium text-muted-foreground">
+                                Data de Início
+                              </label>
+                              <Input
+                                type="date"
+                                value={etapa.data_inicio || ""}
+                                onChange={(e) =>
+                                  updateEtapaDataInicio(etapa.id, e.target.value)
+                                }
+                                disabled={!projeto.data_inicio || !projeto.data_fim}
+                                className={`glass-input ${
+                                  dateError?.dataInicio || dateError?.dataStartGreaterThanEnd
+                                    ? "border-red-500/50 bg-red-500/5"
+                                    : ""
+                                }`}
+                                title="Data de início da etapa"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-medium text-muted-foreground">
+                                Data de Fim
+                              </label>
+                              <Input
+                                type="date"
+                                value={etapa.data_fim || ""}
+                                onChange={(e) =>
+                                  updateEtapaDataFim(etapa.id, e.target.value)
+                                }
+                                disabled={!projeto.data_inicio || !projeto.data_fim}
+                                className={`glass-input ${
+                                  dateError?.dataFim || dateError?.dataStartGreaterThanEnd
+                                    ? "border-red-500/50 bg-red-500/5"
+                                    : ""
+                                }`}
+                                title="Data de fim da etapa"
+                              />
+                            </div>
+                          </div>
+                          {/* Validação visual */}
+                          {dateError && (dateError.dataInicio || dateError.dataFim || dateError.dataStartGreaterThanEnd) && (
+                            <div className="flex items-center gap-1.5 text-xs text-red-400 pb-0.5">
+                              <X className="w-3.5 h-3.5" />
+                              <span>
+                                {dateError.dataStartGreaterThanEnd
+                                  ? "Início > Fim"
+                                  : dateError.dataInicio
+                                  ? "Início fora do intervalo"
+                                  : "Fim fora do intervalo"}
+                              </span>
+                            </div>
+                          )}
+                          {dateError && !(dateError.dataInicio || dateError.dataFim || dateError.dataStartGreaterThanEnd) && etapa.data_inicio && etapa.data_fim && (
+                            <div className="flex items-center gap-1.5 text-xs text-emerald-400 pb-0.5">
+                              <Check className="w-3.5 h-3.5" />
+                            </div>
                           )}
                         </div>
-                        {/* Percentual dinâmico calculado a partir dos dias digitados */}
-                        <div className="text-xs text-muted-foreground">
-                          {(() => {
-                            const p = etapasPesos.find((x) => x.id === etapa.id);
-                            return p ? `${p.inicio}% – ${p.fim}% do cronograma` : "";
-                          })()}
-                        </div>
-                        {/* Dias corridos vs. dias úteis por etapa */}
-                        {etapasDatas && (() => {
-                          const d = etapasDatas.find((x) => x.id === etapa.id);
-                          return d ? (
-                            <div className="text-xs text-muted-foreground/70 mt-0.5 tabular-nums">
-                              Corridos: {d.calendarDays}&nbsp;|&nbsp;Úteis: {d.workingDays}
-                            </div>
-                          ) : null;
-                        })()}
                       </div>
-                      <div className="flex items-center gap-3">
-                        {/* Duração em dias úteis */}
-                        <Input
-                          type="number"
-                          min={1}
-                          value={etapa.dias}
-                          onChange={(e) =>
-                            updateEtapaDias(
-                              etapa.id,
-                              parseInt(e.target.value) || 1,
-                            )
-                          }
-                          className="w-20 glass-input text-center"
-                          title="Duração em dias úteis"
-                        />
-                        <span className="text-sm text-muted-foreground w-10 shrink-0">
-                          dias
-                        </span>
-                        {/* Avanço físico (percentual_concluido) */}
-                        <div className="flex flex-col items-center gap-0.5">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={etapa.percentual_concluido}
-                            onChange={(e) =>
-                              updateEtapaPercentual(
-                                etapa.id,
-                                parseInt(e.target.value),
-                              )
-                            }
-                            className="w-16 glass-input text-center"
-                            title="Avanço físico desta etapa (0–100%)"
-                          />
-                          <span className="text-[10px] text-muted-foreground">
-                            % físico
-                          </span>
-                        </div>
-                        {/* Switch de conclusão */}
-                        <div className="flex flex-col items-center gap-0.5 ml-1">
-                          <Switch
-                            checked={etapa.concluida ?? false}
-                            onCheckedChange={(checked: boolean) =>
-                              updateEtapaConcluida(etapa.id, checked)
-                            }
-                            disabled={cronogramaMutation.isPending}
-                          />
-                          <span className="text-[10px] text-muted-foreground">
-                            Concluída
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-3">
+                  {hasDateErrors && (
+                    <div className="flex items-center gap-2 text-sm text-red-400">
+                      <AlertCircle className="w-4 h-4" />
+                      Corrija os erros de data para salvar
+                    </div>
+                  )}
                   <Button
                     onClick={() => cronogramaMutation.mutate(cronograma)}
-                    disabled={cronogramaMutation.isPending}
+                    disabled={cronogramaMutation.isPending || hasDateErrors}
                     className="gap-2"
                   >
                     <Save className="w-4 h-4" />

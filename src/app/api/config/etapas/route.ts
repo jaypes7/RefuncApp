@@ -8,9 +8,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { createServerClient } from "@/lib/supabase";
-import { ConfigEtapasSchema } from "@/lib/schemas";
+import { ConfigEtapasSchema, DateSchema } from "@/lib/schemas";
 import { requireAuth } from "@/lib/auth";
 import { logConfig } from "@/lib/logs";
 
@@ -21,6 +21,59 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { etapas } = ConfigEtapasSchema.parse(body);
+
+    // Busca as datas do projeto para validar as datas das etapas
+    const { data: configData, error: configError } = await supabase
+      .from("configuracoes")
+      .select("data_inicio_projeto, data_fim_projeto")
+      .eq("id", 1)
+      .single();
+
+    if (configError) {
+      throw new Error(`Erro ao buscar datas do projeto: ${configError.message}`);
+    }
+
+    const projectStartDate = configData?.data_inicio_projeto;
+    const projectEndDate = configData?.data_fim_projeto;
+
+    // Validar que as datas das etapas estão dentro do intervalo do projeto
+    if (projectStartDate && projectEndDate) {
+      for (const etapa of etapas) {
+        const dataInicio = (body.etapas?.find((e: any) => e.id === etapa.id)?.dataInicio as string | undefined) || null;
+        const dataFim = (body.etapas?.find((e: any) => e.id === etapa.id)?.dataFim as string | undefined) || null;
+
+        if (dataInicio) {
+          if (dataInicio < projectStartDate || dataInicio > projectEndDate) {
+            return NextResponse.json(
+              {
+                error: `Data de início da etapa "${etapa.nome}" está fora do intervalo do projeto`,
+              },
+              { status: 400 },
+            );
+          }
+        }
+
+        if (dataFim) {
+          if (dataFim < projectStartDate || dataFim > projectEndDate) {
+            return NextResponse.json(
+              {
+                error: `Data de fim da etapa "${etapa.nome}" está fora do intervalo do projeto`,
+              },
+              { status: 400 },
+            );
+          }
+        }
+
+        if (dataInicio && dataFim && dataInicio > dataFim) {
+          return NextResponse.json(
+            {
+              error: `Data de início não pode ser maior que data de fim para a etapa "${etapa.nome}"`,
+            },
+            { status: 400 },
+          );
+        }
+      }
+    }
 
     // Remove todas as etapas atuais e insere a nova lista
     const { error: delError } = await supabase
@@ -33,14 +86,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (etapas.length > 0) {
-      const payload = etapas.map((e, idx) => ({
-        id: e.id,
-        nome: e.nome,
-        dias: e.duracaoDias,
-        ordem: idx + 1,
-        concluida: e.concluida ?? false,
-        percentual_concluido: e.percentualConcluido ?? 0,
-      }));
+      const payload = etapas.map((e, idx) => {
+        const rawEtapa = body.etapas?.find((raw: any) => raw.id === e.id);
+        return {
+          id: e.id,
+          nome: e.nome,
+          dias: e.duracaoDias,
+          ordem: idx + 1,
+          concluida: e.concluida ?? false,
+          percentual_concluido: e.percentualConcluido ?? 0,
+          data_inicio: rawEtapa?.dataInicio || null,
+          data_fim: rawEtapa?.dataFim || null,
+        };
+      });
 
       const { error: insError } = await supabase
         .from("etapas")
