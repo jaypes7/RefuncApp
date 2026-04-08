@@ -71,6 +71,8 @@ export async function GET() {
       duracaoDias: e.dias ?? 7,
       concluida: e.concluida ?? false,
       percentualConcluido: e.percentual_concluido ?? 0,
+      dataInicio: e.data_inicio ?? undefined,
+      dataFim: e.data_fim ?? undefined,
     }));
 
     const config: ConfigResponse = {

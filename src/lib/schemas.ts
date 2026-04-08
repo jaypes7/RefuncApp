@@ -278,6 +278,10 @@ export const EtapaConfigSchema = z.object({
   concluida: z.boolean().optional(),
   /** Percentual de avanço físico informado manualmente pelo supervisor (0–100) */
   percentualConcluido: z.number().min(0).max(100).optional(),
+  /** Data de início da etapa (YYYY-MM-DD) — deve estar dentro do intervalo do projeto */
+  dataInicio: DateSchema,
+  /** Data de fim da etapa (YYYY-MM-DD) — deve estar dentro do intervalo do projeto */
+  dataFim: DateSchema,
 });
 
 export const ConfigUpdateSchema = z.object({
@@ -312,6 +316,50 @@ export const ConfigProjetoSchema = z.object({
 export const ConfigEtapasSchema = z.object({
   etapas: z.array(EtapaConfigSchema).min(1).max(20),
 });
+
+/**
+ * Schema para validação de etapas com validação de range de datas.
+ * Garante que:
+ *  - Data de início <= data de fim (cada etapa)
+ *  - Data de início >= data de início do projeto
+ *  - Data de fim <= data de fim do projeto
+ *
+ * Usado server-side para validar o payload antes de persistir no banco.
+ */
+export const ConfigEtapasValidadoSchema = ConfigEtapasSchema.extend({
+  dataInicio: DateRequiredSchema,
+  dataFim: DateRequiredSchema,
+}).refine(
+  (data) => data.dataInicio <= data.dataFim,
+  {
+    message: "Data de início do projeto deve ser menor ou igual à data de fim",
+    path: ["dataInicio"],
+  }
+).refine(
+  (data) => {
+    // Valida que TODAS as etapas estão dentro do intervalo do projeto
+    return data.etapas.every((etapa) => {
+      if (!etapa.dataInicio || !etapa.dataFim) return true; // Campos opcionais
+      return etapa.dataInicio >= data.dataInicio && etapa.dataFim <= data.dataFim;
+    });
+  },
+  {
+    message: "Todas as etapas devem estar dentro do intervalo de datas do projeto",
+    path: ["etapas"],
+  }
+).refine(
+  (data) => {
+    // Valida que em cada etapa, dataInicio <= dataFim
+    return data.etapas.every((etapa) => {
+      if (!etapa.dataInicio || !etapa.dataFim) return true; // Campos opcionais
+      return etapa.dataInicio <= etapa.dataFim;
+    });
+  },
+  {
+    message: "Em cada etapa, a data de início deve ser menor ou igual à data de fim",
+    path: ["etapas"],
+  }
+);
 
 // ============================================================================
 // SCHEMAS DE QUERY PARAMS
