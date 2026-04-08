@@ -218,14 +218,16 @@ export default function DashboardRhPage() {
 
   const dadosASO = useMemo(() => {
     if (!data?.metricas) return [];
-    const total     = data.metricas.totalCadastrados || 1;
+    const total = data.metricas.totalCadastrados || 0;
+    if (total === 0) return []; // Retorna vazio quando não há dados
+
     const aptoCount = Math.round((data.metricas.percentualASO / 100) * total);
-    const inaptoCount   = Math.round(((100 - data.metricas.percentualASO) / 100) * total * 0.2);
+    const inaptoCount = Math.round(((100 - data.metricas.percentualASO) / 100) * total * 0.2);
     const pendenteCount = total - aptoCount - inaptoCount;
     return [
-      { name: "Apto",    value: Math.max(0, aptoCount),    fill: "#22c55e" },
-      { name: "Inapto",  value: Math.max(0, inaptoCount),  fill: "#ef4444" },
-      { name: "Pendente",value: Math.max(0, pendenteCount),fill: "#f59e0b" },
+      { name: "Apto", value: Math.max(0, aptoCount), fill: "#22c55e" },
+      { name: "Inapto", value: Math.max(0, inaptoCount), fill: "#ef4444" },
+      { name: "Pendente", value: Math.max(0, pendenteCount), fill: "#f59e0b" },
     ];
   }, [data]);
 
