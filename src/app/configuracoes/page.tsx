@@ -494,7 +494,7 @@ export default function ConfiguracoesPage() {
   // --- Handlers ---
   const updateEtapaDias = (id: number, dias: number) => {
     const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, dias: Math.max(1, dias) } : e,
+      e.id === id ? { ...e, dias: Math.max(0, dias) } : e,
     );
     const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
     setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
@@ -1014,12 +1014,12 @@ export default function ConfiguracoesPage() {
                             {/* Duração em dias úteis */}
                             <Input
                               type="number"
-                              min={1}
+                              min={0}
                               value={etapa.dias}
                               onChange={(e) =>
                                 updateEtapaDias(
                                   etapa.id,
-                                  parseInt(e.target.value) || 1,
+                                  parseInt(e.target.value) || 0,
                                 )
                               }
                               className="w-20 glass-input text-center"

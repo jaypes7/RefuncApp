@@ -273,7 +273,7 @@ export const ConfigSchema = z.object({
 export const EtapaConfigSchema = z.object({
   id: z.number().min(1).max(20),
   nome: z.string().min(1),
-  duracaoDias: z.number().positive(),
+  duracaoDias: z.number().nonnegative(),
   /** Indica se a etapa já foi concluída (persiste no banco) */
   concluida: z.boolean().optional(),
   /** Percentual de avanço físico informado manualmente pelo supervisor (0–100) */
