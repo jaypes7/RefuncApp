@@ -70,8 +70,8 @@ function gerarCurvaSEtapas(
   const futuro = (dateStr: string) => dateStr > hojeStr;
 
   labels.push(fmt(inicio));
-  planejado.push(futuro(dataInicio) ? null : 0);
-  realizado.push(futuro(dataInicio) ? null : 0);
+  planejado.push(0); // Sempre mostra o planejado (referência do cronograma)
+  realizado.push(0); // Sempre mostra o realizado (progresso das etapas)
 
   let diasAcum = 0, plAcum = 0, reAcum = 0;
   for (const etapa of etapas) {
@@ -84,8 +84,8 @@ function gerarCurvaSEtapas(
     const pct = etapa.percentualConcluido ?? 0;
     reAcum = Math.min(100, reAcum + (pct / 100) * peso);
     labels.push(fmt(pontoDt));
-    planejado.push(futuro(pontoDtStr) ? null : Math.round(plAcum * 10) / 10);
-    realizado.push(futuro(pontoDtStr) ? null : Math.round(reAcum * 10) / 10);
+    planejado.push(Math.round(plAcum * 10) / 10); // Sempre mostra o planejado
+    realizado.push(Math.round(reAcum * 10) / 10); // Sempre mostra o realizado (progresso das etapas)
   }
 
   return { labels, planejado, realizado };

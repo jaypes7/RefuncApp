@@ -334,7 +334,8 @@ export function calcularProgressoReal(
 export function calcularDiaAtual(dataInicio: string): number {
   const inicio = parseUTC(dataInicio);
   const hoje   = new Date();
-  return Math.floor((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const diff = Math.floor((hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  return Math.max(0, diff); // Não retorna negativo quando projeto ainda não começou
 }
 
 // ============================================================================

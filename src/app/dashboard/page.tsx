@@ -31,6 +31,7 @@ import {
   RefreshCw,
   Construction,
   Briefcase,
+  CalendarClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -665,6 +666,7 @@ export default function DashboardPage() {
                   {(() => {
                     const temEtapas = (dashboardData?.etapasCount ?? 0) > 0;
                     const temPendencias = (dashboardData?.pendencias?.length ?? 0) > 0;
+                    const projetoIniciado = (dashboardData?.projeto?.diasCorridos ?? 0) > 0;
 
                     if (!temEtapas) {
                       return (
@@ -672,6 +674,21 @@ export default function DashboardPage() {
                           <AlertTriangle className="h-10 w-10 opacity-20" />
                           <p className="text-sm">Nenhuma etapa cadastrada</p>
                           <p className="text-xs opacity-60">Configure em Configurações › Cronograma</p>
+                        </div>
+                      );
+                    }
+
+                    if (!temPendencias && !projetoIniciado) {
+                      return (
+                        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
+                          <CalendarClock className="h-10 w-10 opacity-30" />
+                          <p className="text-sm">Projeto ainda não iniciado</p>
+                          {configData?.DATA_INICIO_PROJETO && (
+                            <p className="text-xs opacity-60">
+                              Início previsto:{" "}
+                              {new Date(configData.DATA_INICIO_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                            </p>
+                          )}
                         </div>
                       );
                     }
