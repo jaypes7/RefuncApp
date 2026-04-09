@@ -32,6 +32,9 @@ import {
   Briefcase,
   Trash2,
   Plus,
+  Pencil,
+  X,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,6 +169,11 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [novoTexto, setNovoTexto] = useState("");
   const [novaData, setNovaData] = useState("");
+  
+  // Estados para edição
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [editandoTexto, setEditandoTexto] = useState("");
+  const [editandoData, setEditandoData] = useState("");
 
   const { data: ocorrenciasData } = useQuery({
     queryKey: ["ocorrencias"],
@@ -187,6 +195,29 @@ export default function DashboardPage() {
     mutationFn: (id: number) => ocorrenciasApi.deletar(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ocorrencias"] }),
   });
+
+  const atualizarOcorrencia = useMutation({
+    mutationFn: ({ id, texto, data }: { id: number; texto: string; data: string }) =>
+      ocorrenciasApi.atualizar(id, { texto: texto.trim(), data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ocorrencias"] });
+      setEditandoId(null);
+      setEditandoTexto("");
+      setEditandoData("");
+    },
+  });
+
+  const iniciarEdicao = (o: Ocorrencia) => {
+    setEditandoId(o.id);
+    setEditandoTexto(o.texto);
+    setEditandoData(o.data);
+  };
+
+  const cancelarEdicao = () => {
+    setEditandoId(null);
+    setEditandoTexto("");
+    setEditandoData("");
+  };
 
   // Gera dados da Curva S dinamicamente
   const curveData = useMemo(() => {
@@ -683,7 +714,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Ocorrências
+                    Linha do tempo do Contrato
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -736,26 +767,96 @@ export default function DashboardPage() {
                           key={o.id}
                           className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2"
                         >
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate" title={o.texto}>
-                              {o.texto}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(o.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
-                                timeZone: "UTC",
-                              })}
-                            </p>
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="shrink-0 h-7 w-7 text-muted-foreground hover:text-destructive"
-                            disabled={deletarOcorrencia.isPending}
-                            onClick={() => deletarOcorrencia.mutate(o.id)}
-                            title="Remover ocorrência"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {editandoId === o.id ? (
+                            // Modo de edição
+                            <>
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <Input
+                                  className="glass-input h-8 text-sm"
+                                  value={editandoTexto}
+                                  onChange={(e) => setEditandoTexto(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && editandoTexto.trim() && editandoData) {
+                                      atualizarOcorrencia.mutate({
+                                        id: o.id,
+                                        texto: editandoTexto,
+                                        data: editandoData,
+                                      });
+                                    }
+                                  }}
+                                  placeholder="Descrição da ocorrência..."
+                                />
+                                <Input
+                                  className="glass-input h-8 text-sm w-36"
+                                  type="date"
+                                  value={editandoData}
+                                  onChange={(e) => setEditandoData(e.target.value)}
+                                />
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                  disabled={!editandoTexto.trim() || !editandoData || atualizarOcorrencia.isPending}
+                                  onClick={() =>
+                                    atualizarOcorrencia.mutate({
+                                      id: o.id,
+                                      texto: editandoTexto,
+                                      data: editandoData,
+                                    })
+                                  }
+                                  title="Salvar alterações"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-muted-foreground"
+                                  onClick={cancelarEdicao}
+                                  title="Cancelar edição"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            // Modo de visualização
+                            <>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate" title={o.texto}>
+                                  {o.texto}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(o.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                    timeZone: "UTC",
+                                  })}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                  onClick={() => iniciarEdicao(o)}
+                                  title="Editar ocorrência"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  disabled={deletarOcorrencia.isPending}
+                                  onClick={() => deletarOcorrencia.mutate(o.id)}
+                                  title="Remover ocorrência"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>

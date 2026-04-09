@@ -15,6 +15,7 @@ import {
   Trash2,
   Users,
   Loader2,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -462,6 +463,14 @@ export default function CentralPage() {
               >
                 <Upload className="h-3.5 w-3.5" />
                 Importar
+              </Button>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => router.push("/central/novo")}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Adicionar
               </Button>
             </CanAccess>
           </div>
