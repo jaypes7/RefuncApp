@@ -3,6 +3,14 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { calculateWorkingDays, calculateWorkingDaysDetailed, addWorkingDays, formatDateISO } from "@/lib/date-utils";
 import { validateScheduleTotal } from "@/constants/cronograma-data";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +25,7 @@ import {
   Building,
   Check,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -77,6 +86,10 @@ export default function CronogramaPage() {
     etapas: ETAPAS_DEFAULT,
     dias_totais: ETAPAS_DEFAULT.reduce((s, e) => s + e.dias, 0),
   });
+
+  // Estado para modal de confirmação quando cronograma desbalanceado
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingSaveData, setPendingSaveData] = useState<ConfigCronograma | null>(null);
 
   const { data: projetoQueryData } = useQuery<ApiConfigResponse>({
     queryKey: ["config", "projeto"],
@@ -176,6 +189,31 @@ export default function CronogramaPage() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  // Handler de salvamento com verificação de balanceamento
+  const handleSaveClick = (data: ConfigCronograma) => {
+    // Se estiver desbalanceado, mostra modal de confirmação
+    if (scheduleValidation && !scheduleValidation.valid) {
+      setPendingSaveData(data);
+      setShowConfirmModal(true);
+      return;
+    }
+    // Se estiver balanceado, salva direto
+    cronogramaMutation.mutate(data);
+  };
+
+  const confirmSave = () => {
+    if (pendingSaveData) {
+      cronogramaMutation.mutate(pendingSaveData);
+      setShowConfirmModal(false);
+      setPendingSaveData(null);
+    }
+  };
+
+  const cancelSave = () => {
+    setShowConfirmModal(false);
+    setPendingSaveData(null);
+  };
 
   const updateEtapaDias = (id: number, dias: number) => {
     const novasEtapas = cronograma.etapas.map((e) =>
@@ -540,7 +578,7 @@ export default function CronogramaPage() {
                   </div>
                 )}
                 <Button
-                  onClick={() => cronogramaMutation.mutate(cronograma)}
+                  onClick={() => handleSaveClick(cronograma)}
                   disabled={cronogramaMutation.isPending || hasDateErrors}
                   className="gap-2"
                 >
@@ -550,6 +588,31 @@ export default function CronogramaPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Modal de confirmação para cronograma desbalanceado */}
+          <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                  Cronograma Desbalanceado
+                </DialogTitle>
+                <DialogDescription>
+                  {scheduleValidation?.difference && scheduleValidation.difference > 0
+                    ? `As etapas somam ${scheduleValidation.stepsDaysTotal} dias, mas o projeto tem ${diasUteisTotal} dias úteis. Sobram ${scheduleValidation.difference} dias.`
+                    : `As etapas somam ${scheduleValidation?.stepsDaysTotal} dias, mas o projeto tem ${diasUteisTotal} dias úteis. Faltam ${Math.abs(scheduleValidation?.difference || 0)} dias.`}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={cancelSave}>
+                  Cancelar
+                </Button>
+                <Button onClick={confirmSave}>
+                  Salvar Mesmo Assim
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </CanAccess>
     </ProtectedRoute>
