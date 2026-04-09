@@ -198,6 +198,7 @@ export interface DashboardData {
       labels: string[];
       planejado: number[];
       realizado?: number[];
+      valoresHoje?: { planejado: number; realizado: number } | null;
     } | null;
     evolucaoPorSetor: {
       rh: { total: number; percentual: number };
@@ -292,6 +293,7 @@ export type DashboardPrincipalData = {
       labels: string[];
       planejado: (number | null)[];
       realizado?: (number | null)[];
+      valoresHoje?: { planejado: number; realizado: number } | null;
     } | null;
   };
   etapasCount: number;
@@ -478,4 +480,25 @@ export interface ExportResponse {
 export const exportApi = {
   exportar: (params?: ExportParams) =>
     api.get<ExportResponse>("/export", { params }),
+};
+
+// ============================================================================
+// FUNÇÕES DE API - OCORRÊNCIAS
+// ============================================================================
+
+export interface Ocorrencia {
+  id: number;
+  texto: string;
+  /** ISO date string YYYY-MM-DD */
+  data: string;
+  created_at: string;
+}
+
+export const ocorrenciasApi = {
+  listar: () => api.get<{ data: Ocorrencia[] }>("/ocorrencias"),
+
+  criar: (body: { texto: string; data: string }) =>
+    api.post<{ data: Ocorrencia }>("/ocorrencias", body),
+
+  deletar: (id: number) => api.delete(`/ocorrencias/${id}`),
 };
