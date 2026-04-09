@@ -74,6 +74,48 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PATCH /api/config/acessos?id=UUID — atualiza um usuário pelo ID
+export async function PATCH(request: NextRequest) {
+  try {
+    await requireAuth("admin");
+
+    const id = request.nextUrl.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "ID não fornecido" }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const payload = UsuariosPermitidosCreateSchema.parse(body);
+
+    const db = createServerClient();
+    const { data, error } = await db
+      .from("usuarios_permitidos")
+      .update(payload)
+      .eq("id", id)
+      .select("id, re, nome, perfil, autorizado_em")
+      .single();
+
+    if (error) {
+      console.error("[/api/config/acessos PATCH] Supabase error:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: requer privilégios de Administrador" }, { status: 403 });
+    }
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
+    }
+    console.error("[/api/config/acessos PATCH]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
+}
+
 // DELETE /api/config/acessos?id=UUID — remove um usuário pelo ID
 export async function DELETE(request: NextRequest) {
   try {

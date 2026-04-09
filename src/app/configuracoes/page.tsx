@@ -201,6 +201,13 @@ export default function ConfiguracoesPage() {
   const [acessoRE, setAcessoRE] = useState("");
   const [acessoNome, setAcessoNome] = useState("");
   const [acessoRole, setAcessoRole] = useState("");
+
+  // Acessos - edição inline
+  const [editingAcessoId, setEditingAcessoId] = useState<string | null>(null);
+  const [editingAcessoRE, setEditingAcessoRE] = useState("");
+  const [editingAcessoNome, setEditingAcessoNome] = useState("");
+  const [editingAcessoPerfil, setEditingAcessoPerfil] = useState("");
+
   // Clínicas - input para adicionar nova
   const [clinicaInput, setClinicaInput] = useState("");
 
@@ -452,6 +459,46 @@ export default function ConfiguracoesPage() {
     },
     onError: () => toast.error("Erro ao remover acesso"),
   });
+
+  const updateAcessoMutation = useMutation({
+    mutationFn: async (payload: { id: string; re: string; nome: string; perfil: string }) => {
+      const res = await fetch(`/api/config/acessos?id=${payload.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ re: payload.re, nome: payload.nome, perfil: payload.perfil }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao atualizar acesso");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config", "acessos"] });
+      setEditingAcessoId(null);
+      setEditingAcessoRE("");
+      setEditingAcessoNome("");
+      setEditingAcessoPerfil("");
+      toast.success("Acesso atualizado com sucesso!");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Handler para iniciar edição de acesso
+  const iniciarEdicaoAcesso = (acesso: ConfigAcesso) => {
+    setEditingAcessoId(acesso.id || null);
+    setEditingAcessoRE(acesso.re);
+    setEditingAcessoNome(acesso.nome);
+    setEditingAcessoPerfil(acesso.perfil);
+  };
+
+  // Handler para cancelar edição de acesso
+  const cancelarEdicaoAcesso = () => {
+    setEditingAcessoId(null);
+    setEditingAcessoRE("");
+    setEditingAcessoNome("");
+    setEditingAcessoPerfil("");
+  };
 
   const resetProjetoMutation = useMutation({
     mutationFn: async () => {
@@ -906,33 +953,113 @@ export default function ConfiguracoesPage() {
                               key={acesso.id}
                               className="flex items-center justify-between p-3 bg-card/50 rounded-lg border border-border/50"
                             >
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                  <Users className="w-4 h-4 text-primary" />
+                              {editingAcessoId === acesso.id ? (
+                                // Modo de edição
+                                <div className="flex-1 space-y-2">
+                                  <div className="flex gap-2">
+                                    <Input
+                                      className="glass-input h-8 text-sm flex-1"
+                                      value={editingAcessoRE}
+                                      onChange={(e) => setEditingAcessoRE(e.target.value)}
+                                      placeholder="RE"
+                                    />
+                                    <Select
+                                      value={editingAcessoPerfil}
+                                      onValueChange={setEditingAcessoPerfil}
+                                    >
+                                      <SelectTrigger className="glass-input h-8 text-sm w-32">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {ROLES.map((role) => (
+                                          <SelectItem key={role.value} value={role.value}>
+                                            {role.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <Input
+                                    className="glass-input h-8 text-sm w-full"
+                                    value={editingAcessoNome}
+                                    onChange={(e) => setEditingAcessoNome(e.target.value)}
+                                    placeholder="Nome completo"
+                                  />
+                                  <div className="flex gap-1 pt-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0"
+                                      disabled={
+                                        !editingAcessoRE?.trim() ||
+                                        !editingAcessoNome?.trim() ||
+                                        !editingAcessoPerfil ||
+                                        updateAcessoMutation.isPending
+                                      }
+                                      onClick={() =>
+                                        acesso.id &&
+                                        updateAcessoMutation.mutate({
+                                          id: acesso.id,
+                                          re: editingAcessoRE,
+                                          nome: editingAcessoNome,
+                                          perfil: editingAcessoPerfil,
+                                        })
+                                      }
+                                    >
+                                      <Check className="h-4 w-4 text-green-500" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0"
+                                      onClick={cancelarEdicaoAcesso}
+                                    >
+                                      <X className="h-4 w-4 text-muted-foreground" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div>
-                                  <span className="font-medium block">
-                                    {acesso.nome}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    RE: {acesso.re} •{" "}
-                                    {ROLES.find((r) => r.value === acesso.perfil)
-                                      ?.label || acesso.perfil}
-                                  </span>
-                                </div>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  acesso.id &&
-                                  deleteAcessoMutation.mutate(acesso.id)
-                                }
-                                disabled={deleteAcessoMutation.isPending}
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              ) : (
+                                // Modo de visualização
+                                <>
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                      <Users className="w-4 h-4 text-primary" />
+                                    </div>
+                                    <div>
+                                      <span className="font-medium block">
+                                        {acesso.nome}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        RE: {acesso.re} •{" "}
+                                        {ROLES.find((r) => r.value === acesso.perfil)
+                                          ?.label || acesso.perfil}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => acesso.id && iniciarEdicaoAcesso(acesso)}
+                                      className="text-muted-foreground hover:text-primary"
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        acesso.id &&
+                                        deleteAcessoMutation.mutate(acesso.id)
+                                      }
+                                      disabled={deleteAcessoMutation.isPending}
+                                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           ))}
                         </div>
