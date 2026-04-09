@@ -70,7 +70,7 @@ const chartConfigCurvaS = {
   },
   realizado: {
     label: "Realizado",
-    color: "#5bc0ec",
+    color: "#ef4444",
   },
 };
 
@@ -248,6 +248,13 @@ export default function DashboardPage() {
     if (!dashboardData?.graficos?.curvaS?.valoresHoje) return null;
     const { planejado, realizado } = dashboardData.graficos.curvaS.valoresHoje;
     return { previsto: planejado, realizado };
+  }, [dashboardData]);
+
+  // Verifica se existe algum progresso real (alguma etapa com % > 0)
+  const temProgressoReal = useMemo(() => {
+    if (!dashboardData?.graficos?.curvaS?.realizado) return false;
+    const realizado = dashboardData.graficos.curvaS.realizado;
+    return realizado.some((v) => v !== null && v > 0);
   }, [dashboardData]);
 
   // Dados para gráfico de rosca (Status) — inclui Desligado
@@ -587,7 +594,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   {/* Indicador: leitura dos pontos do gráfico na data de hoje */}
-                  {indicadorCurvaS && (
+                  {indicadorCurvaS && temProgressoReal && (
                     <div className="shrink-0 flex flex-col items-end gap-0.5 text-right">
                       <span className="text-xs text-muted-foreground">
                         Planejado:{" "}
@@ -611,6 +618,20 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   )}
+                  {indicadorCurvaS && !temProgressoReal && (
+                    <div className="shrink-0 flex flex-col items-end gap-0.5 text-right">
+                      <span className="text-xs text-muted-foreground">
+                        Planejado:{" "}
+                        <span className="font-semibold text-foreground">
+                          {indicadorCurvaS.previsto.toFixed(1)}%
+                        </span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Realizado:{" "}
+                        <span className="font-semibold text-foreground">-</span>
+                      </span>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
                   {curveData.length === 0 ? (
@@ -631,8 +652,8 @@ export default function DashboardPage() {
                           id="gradientAdmitidos"
                           x1="0" y1="0" x2="0" y2="1"
                         >
-                          <stop offset="5%"  stopColor="#5bc0ec" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="#5bc0ec" stopOpacity={0} />
+                          <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                         </linearGradient>
                         <linearGradient
                           id="gradientMeta"
@@ -694,15 +715,17 @@ export default function DashboardPage() {
                         activeDot={{ r: 5, fill: "#94a3b8" }}
                       />
 
-                      <Area
-                        type="monotone"
-                        dataKey="realizado"
-                        stroke="#5bc0ec"
-                        strokeWidth={3}
-                        fill="url(#gradientAdmitidos)"
-                        dot={false}
-                        activeDot={{ r: 7, fill: "#5bc0ec", stroke: "#fff", strokeWidth: 2 }}
-                      />
+                      {temProgressoReal && (
+                        <Area
+                          type="monotone"
+                          dataKey="realizado"
+                          stroke="#ef4444"
+                          strokeWidth={3}
+                          fill="url(#gradientAdmitidos)"
+                          dot={false}
+                          activeDot={{ r: 7, fill: "#ef4444", stroke: "#fff", strokeWidth: 2 }}
+                        />
+                      )}
                     </AreaChart>
                   </ChartContainer>
                   )}

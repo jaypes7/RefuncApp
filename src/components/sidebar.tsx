@@ -90,7 +90,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           {!collapsed && (
             <div>
               <h2 className="text-[11px] font-bold tracking-widest uppercase text-primary">
-                RefuncApp
+                MobilizaçãoAPP
               </h2>
               <p className="text-[10px] text-muted-foreground/60 tracking-wide">
                 v2.5.0

@@ -88,6 +88,17 @@ export default function CronogramaPage() {
     },
   });
 
+  // Buscar dias trabalhados do calendário
+  const { data: diasTrabalhadosData } = useQuery({
+    queryKey: ["config", "dias-trabalhados"],
+    queryFn: async () => {
+      const res = await fetch("/api/config/dias-trabalhados");
+      if (!res.ok) throw new Error("Falha ao carregar dias trabalhados");
+      const json = await res.json();
+      return json.dias_trabalhados as string[];
+    },
+  });
+
   useEffect(() => {
     if (!projetoQueryData) return;
     setProjetoData(projetoQueryData);
@@ -113,14 +124,20 @@ export default function CronogramaPage() {
     }
   }, [projetoQueryData]);
 
-  const diasUteisTotal = useMemo<number | null>(() => {
+  // Total de dias corridos = fim - início (inclusive)
+  const diasCorridosTotal = useMemo(() => {
     if (!projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO) return null;
-    try {
-      return calculateWorkingDays(projetoData.DATA_INICIO_PROJETO, projetoData.DATA_FIM_PROJETO);
-    } catch {
-      return null;
-    }
-  }, [projetoData]);
+    const start = new Date(projetoData.DATA_INICIO_PROJETO);
+    const end = new Date(projetoData.DATA_FIM_PROJETO);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  }, [projetoData?.DATA_INICIO_PROJETO, projetoData?.DATA_FIM_PROJETO]);
+
+  // Total de dias úteis = dias marcados no calendário
+  const diasUteisTotal = useMemo<number | null>(() => {
+    if (!diasTrabalhadosData) return null;
+    return diasTrabalhadosData.length;
+  }, [diasTrabalhadosData]);
 
   const scheduleValidation = useMemo(() => {
     if (diasUteisTotal === null) return null;
@@ -313,13 +330,13 @@ export default function CronogramaPage() {
                   <div className="flex flex-col gap-0.5 p-3 bg-primary/5 rounded-lg border border-primary/15">
                     <span className="text-xs text-muted-foreground">Total Dias Corridos</span>
                     <span className="text-xl font-bold text-primary tabular-nums">
-                      {etapasDatas?.reduce((s, e) => s + e.calendarDays, 0) ?? 0}
+                      {diasCorridosTotal ?? 0}
                     </span>
                   </div>
                   <div className="flex flex-col gap-0.5 p-3 bg-primary/5 rounded-lg border border-primary/15">
                     <span className="text-xs text-muted-foreground">Total Dias Úteis</span>
                     <span className="text-xl font-bold text-primary tabular-nums">
-                      {etapasDatas?.reduce((s, e) => s + e.workingDays, 0) ?? 0}
+                      {diasUteisTotal ?? 0}
                     </span>
                   </div>
                 </div>
@@ -353,7 +370,7 @@ export default function CronogramaPage() {
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     <span>
                       Configure as datas de início e término na aba Projeto
-                      para validar o cronograma.
+                      e marque os dias trabalhados no calendário para validar o cronograma.
                     </span>
                   </div>
                 )}
