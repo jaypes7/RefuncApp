@@ -491,6 +491,27 @@ export default function ConfiguracoesPage() {
     onError: () => toast.error("Erro ao remover acesso"),
   });
 
+  const resetProjetoMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/config/reset", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao resetar projeto");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Projeto resetado com sucesso! Recarregando página...");
+      setTimeout(() => window.location.reload(), 2000);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // --- Handlers ---
   const updateEtapaDias = (id: number, dias: number) => {
     const novasEtapas = cronograma.etapas.map((e) =>
@@ -682,6 +703,13 @@ export default function ConfiguracoesPage() {
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   Logs
+                </TabsTrigger>
+                <TabsTrigger
+                  value="sistema"
+                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Sistema
                 </TabsTrigger>
               </TabsList>
             </CardHeader>
@@ -1630,6 +1658,54 @@ export default function ConfiguracoesPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              </TabsContent>
+
+              {/* Sistema Tab */}
+              <TabsContent value="sistema" className="w-full mt-10 space-y-8">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-500" />
+                    Resetar Projeto
+                  </h3>
+                  <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                    <CardContent className="p-6 space-y-4">
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-amber-900 dark:text-amber-100">
+                          ⚠️ Esta ação é irreversível
+                        </h4>
+                        <p className="text-sm text-amber-800 dark:text-amber-200">
+                          Resetar o projeto limpará todos os dados operacionais (colaboradores, logística,
+                          segurança, suprimentos, hotéis e clínicas). As seguintes informações serão mantidas:
+                        </p>
+                        <ul className="text-sm text-amber-800 dark:text-amber-200 list-disc list-inside space-y-1 ml-2">
+                          <li>Etapas do cronograma</li>
+                          <li>Configurações do projeto (datas, gerentes, etc)</li>
+                          <li>Usuários permitidos (acessos)</li>
+                          <li>Logs de auditoria (histórico de ações)</li>
+                        </ul>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              "⚠️ ATENÇÃO: Esta ação é IRREVERSÍVEL e limpará todos os dados operacionais do projeto.\n\n" +
+                              "Tem certeza que deseja continuar?\n\n" +
+                              "Digite 'CONFIRMAR' para prosseguir.",
+                            )
+                          ) {
+                            resetProjetoMutation.mutate();
+                          }
+                        }}
+                        disabled={resetProjetoMutation.isPending}
+                        variant="destructive"
+                        className="gap-2 bg-red-600 hover:bg-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {resetProjetoMutation.isPending ? "Resetando..." : "Resetar Projeto"}
+                      </Button>
+                    </CardContent>
+                  </Card>
                 </div>
               </TabsContent>
             </CardContent>

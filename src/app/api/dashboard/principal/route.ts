@@ -51,44 +51,126 @@ type ColabRow = ReturnType<typeof mapColab>;
 
 function gerarCurvaSEtapas(
   dataInicio: string,
+  dataFim: string | null,
   etapas: EtapaConfig[],
   hojeStr: string,
-): { labels: string[]; planejado: (number | null)[]; realizado: (number | null)[] } {
+): {
+  labels: string[];
+  planejado: (number | null)[];
+  realizado: (number | null)[];
+  valoresHoje: { planejado: number; realizado: number } | null;
+} {
   const totalDias = etapas.reduce((s, e) => s + (e.duracaoDias || 0), 0);
   if (!dataInicio || totalDias === 0 || etapas.length === 0) {
-    return { labels: [], planejado: [], realizado: [] };
+    return { labels: [], planejado: [], realizado: [], valoresHoje: null };
   }
 
   const fmt = (d: Date) =>
     d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 
+  const parseDate = (dateStr: string): Date => {
+    const [dia, mes] = dateStr.split("/");
+    return new Date(`2026-${mes}-${dia}T00:00:00Z`); // Assumindo ano 2026
+  };
+
   const inicio = new Date(dataInicio + "T00:00:00Z");
+  const fim = dataFim ? new Date(dataFim + "T00:00:00Z") : null;
   const labels: string[] = [];
   const planejado: (number | null)[] = [];
   const realizado: (number | null)[] = [];
 
-  const futuro = (dateStr: string) => dateStr > hojeStr;
-
-  labels.push(fmt(inicio));
-  planejado.push(0); // Sempre mostra o planejado (referência do cronograma)
-  realizado.push(0); // Sempre mostra o realizado (progresso das etapas)
-
-  let diasAcum = 0, plAcum = 0, reAcum = 0;
-  for (const etapa of etapas) {
-    diasAcum += etapa.duracaoDias || 0;
-    const pontoDt = new Date(inicio);
-    pontoDt.setUTCDate(pontoDt.getUTCDate() + diasAcum);
-    const pontoDtStr = pontoDt.toISOString().split("T")[0];
-    const peso = (etapa.duracaoDias / totalDias) * 100;
-    plAcum = Math.min(100, plAcum + peso);
-    const pct = etapa.percentualConcluido ?? 0;
-    reAcum = Math.min(100, reAcum + (pct / 100) * peso);
-    labels.push(fmt(pontoDt));
-    planejado.push(Math.round(plAcum * 10) / 10); // Sempre mostra o planejado
-    realizado.push(Math.round(reAcum * 10) / 10); // Sempre mostra o realizado (progresso das etapas)
+  // Encontrar última etapa com progresso (> 0%)
+  let ultimaEtapaComProgresso = -1;
+  for (let i = etapas.length - 1; i >= 0; i--) {
+    if ((etapas[i].percentualConcluido ?? 0) > 0) {
+      ultimaEtapaComProgresso = i;
+      break;
+    }
   }
 
-  return { labels, planejado, realizado };
+  // Ponto inicial (início do projeto = dia 0)
+  labels.push(fmt(inicio));
+  planejado.push(0);
+  realizado.push(0);
+
+  let diasAcum = 0;
+  let plAcum = 0;
+  let reAcum = 0;
+  let valoresHoje: { planejado: number; realizado: number } | null = null;
+  let indiceHoje = -1;
+
+  for (let i = 0; i < etapas.length; i++) {
+    const etapa = etapas[i];
+    diasAcum += etapa.duracaoDias || 0;
+
+    const pontoDt = new Date(inicio);
+    // Subtrai 1 porque uma etapa de 1 dia termina no mesmo dia (não no dia seguinte)
+    pontoDt.setUTCDate(pontoDt.getUTCDate() + diasAcum - 1);
+
+    // Se for a última etapa e tiver dataFim, usar dataFim para garantir que o gráfico vá até o fim
+    let pontoFinalDt: Date;
+    if (i === etapas.length - 1 && fim) {
+      pontoFinalDt = fim;
+    } else {
+      pontoFinalDt = pontoDt;
+    }
+
+    const pontoDtStr = pontoFinalDt.toISOString().split("T")[0];
+    const peso = (etapa.duracaoDias / totalDias) * 100;
+    plAcum = Math.min(100, plAcum + peso);
+
+    const pct = etapa.percentualConcluido ?? 0;
+    reAcum = Math.min(100, reAcum + (pct / 100) * peso);
+
+    labels.push(fmt(pontoFinalDt));
+    planejado.push(Math.round(plAcum * 10) / 10);
+
+    // Realizado: só até a última etapa com progresso
+    if (i > ultimaEtapaComProgresso && ultimaEtapaComProgresso >= 0) {
+      realizado.push(null);
+    } else {
+      realizado.push(Math.round(reAcum * 10) / 10);
+    }
+
+    // Encontrar índice do dia atual
+    if (indiceHoje === -1 && pontoDtStr >= hojeStr) {
+      indiceHoje = i + 1; // +1 porque o índice 0 é o ponto inicial
+    }
+  }
+
+  // Calcular valores para o dia atual ou último dia com progresso
+  if (hojeStr < dataInicio) {
+    // Projeto ainda não começou, pegar o último índice com valor não-nulo
+    let lastIndex = -1;
+    for (let i = realizado.length - 1; i >= 0; i--) {
+      if (realizado[i] !== null && realizado[i] !== undefined) {
+        lastIndex = i;
+        break;
+      }
+    }
+
+    if (lastIndex > 0) {  // > 0 para ignorar o ponto inicial (índice 0)
+      valoresHoje = {
+        planejado: planejado[lastIndex] ?? 0,
+        realizado: realizado[lastIndex] ?? 0,
+      };
+    } else {
+      valoresHoje = { planejado: 0, realizado: 0 };
+    }
+  } else if (indiceHoje > 0) {
+    valoresHoje = {
+      planejado: planejado[indiceHoje] ?? planejado[planejado.length - 1] ?? 0,
+      realizado: realizado[indiceHoje] ?? realizado[realizado.length - 1] ?? 0,
+    };
+  } else {
+    // Hoje é depois do último ponto
+    valoresHoje = {
+      planejado: planejado[planejado.length - 1] ?? 0,
+      realizado: realizado[realizado.length - 1] ?? 0,
+    };
+  }
+
+  return { labels, planejado, realizado, valoresHoje };
 }
 
 function agruparPorFuncao(cols: ColabRow[]) {
@@ -188,17 +270,14 @@ export async function GET() {
     // ── Curva S ──────────────────────────────────────────────────────────────
     const curvaS =
       dataInicio && etapas.length > 0
-        ? gerarCurvaSEtapas(dataInicio, etapas, hoje)
+        ? gerarCurvaSEtapas(dataInicio, dataFim, etapas, hoje)
         : null;
 
-    // statusProjeto: atraso físico comparando último ponto planejado vs. realizado
+    // statusProjeto: atraso físico comparando planejado vs. realizado do DIA ATUAL
     let statusProjeto: { atrasado: boolean; diasAtraso: number; percentualAtraso: number } | null = null;
-    if (curvaS && curvaS.planejado.length > 0) {
-      const lastPlanejado = ([...curvaS.planejado].reverse().find((v) => v != null) ?? 0) as number;
-      const lastRealizado = (curvaS.realizado
-        ? ([...curvaS.realizado].reverse().find((v) => v != null) ?? 0)
-        : 0) as number;
-      statusProjeto = { ...verificarAtrasoFisico(lastPlanejado, lastRealizado), diasAtraso: 0 };
+    if (curvaS && curvaS.valoresHoje) {
+      const { planejado, realizado } = curvaS.valoresHoje;
+      statusProjeto = { ...verificarAtrasoFisico(planejado, realizado), diasAtraso: 0 };
     }
 
     // ── Evolução por setor ───────────────────────────────────────────────────

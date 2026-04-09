@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,13 +29,13 @@ import {
   AlertCircle,
   AlertTriangle,
   RefreshCw,
-  Construction,
   Briefcase,
-  CalendarClock,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { dashboardPrincipalApi, configApi, type DashboardPrincipalData } from "@/lib/axios";
+import { Input } from "@/components/ui/input";
+import { dashboardPrincipalApi, configApi, ocorrenciasApi, type DashboardPrincipalData, type Ocorrencia } from "@/lib/axios";
 
 // ============================================================================
 // CONFIGURAÇÃO DOS GRÁFICOS
@@ -162,6 +162,32 @@ export default function DashboardPage() {
 
   const dashboardData: DashboardPrincipalData | undefined = data;
 
+  // ── Ocorrências manuais ──────────────────────────────────────────────────────
+  const queryClient = useQueryClient();
+  const [novoTexto, setNovoTexto] = useState("");
+  const [novaData, setNovaData] = useState("");
+
+  const { data: ocorrenciasData } = useQuery({
+    queryKey: ["ocorrencias"],
+    queryFn: async () => (await ocorrenciasApi.listar()).data.data,
+    staleTime: 30_000,
+  });
+  const ocorrencias: Ocorrencia[] = ocorrenciasData ?? [];
+
+  const criarOcorrencia = useMutation({
+    mutationFn: () => ocorrenciasApi.criar({ texto: novoTexto.trim(), data: novaData }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ocorrencias"] });
+      setNovoTexto("");
+      setNovaData("");
+    },
+  });
+
+  const deletarOcorrencia = useMutation({
+    mutationFn: (id: number) => ocorrenciasApi.deletar(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ocorrencias"] }),
+  });
+
   // Gera dados da Curva S dinamicamente
   const curveData = useMemo(() => {
     if (!dashboardData?.graficos?.curvaS) return [];
@@ -186,14 +212,12 @@ export default function DashboardPage() {
     return d;
   }, [dashboardData]);
 
-  // Indicador: leitura direta dos últimos pontos não-nulos do gráfico
+  // Indicador: usar valores do dia atual retornados pela API
   const indicadorCurvaS = useMemo(() => {
-    if (!curveData.length) return null;
-    const previsto = [...curveData].reverse().find((d) => d.previsto != null)?.previsto ?? null;
-    const realizado = [...curveData].reverse().find((d) => d.realizado != null)?.realizado ?? null;
-    if (previsto == null) return null;
-    return { previsto, realizado: realizado ?? 0 };
-  }, [curveData]);
+    if (!dashboardData?.graficos?.curvaS?.valoresHoje) return null;
+    const { planejado, realizado } = dashboardData.graficos.curvaS.valoresHoje;
+    return { previsto: planejado, realizado };
+  }, [dashboardData]);
 
   // Dados para gráfico de rosca (Status) — inclui Desligado
   const dadosStatus = useMemo(() => {
@@ -654,117 +678,88 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* Plano de ação — 1/3 da largura */}
+              {/* Ocorrências — 1/3 da largura */}
               <Card className="glass-card lg:col-span-1">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Plano de ação
+                    Ocorrências
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {(() => {
-                    const temEtapas = (dashboardData?.etapasCount ?? 0) > 0;
-                    const temPendencias = (dashboardData?.pendencias?.length ?? 0) > 0;
-                    const projetoIniciado = (dashboardData?.projeto?.diasCorridos ?? 0) > 0;
+                  {/* Formulário */}
+                  <div className="flex gap-2 mb-4">
+                    <Input
+                      className="glass-input flex-1 min-w-0"
+                      placeholder="Descreva a ocorrência..."
+                      value={novoTexto}
+                      onChange={(e) => setNovoTexto(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === "Enter" &&
+                          novoTexto.trim() &&
+                          novaData &&
+                          !criarOcorrencia.isPending
+                        )
+                          criarOcorrencia.mutate();
+                      }}
+                    />
+                    <Input
+                      className="glass-input w-36 shrink-0"
+                      type="date"
+                      value={novaData}
+                      onChange={(e) => setNovaData(e.target.value)}
+                    />
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      disabled={!novoTexto.trim() || !novaData || criarOcorrencia.isPending}
+                      onClick={() => criarOcorrencia.mutate()}
+                      title="Adicionar ocorrência"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
 
-                    if (!temEtapas) {
-                      return (
-                        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
-                          <AlertTriangle className="h-10 w-10 opacity-20" />
-                          <p className="text-sm">Nenhuma etapa cadastrada</p>
-                          <p className="text-xs opacity-60">Configure em Configurações › Cronograma</p>
-                        </div>
-                      );
-                    }
+                  <div className="border-t border-white/10 mb-3" />
 
-                    if (!temPendencias && !projetoIniciado) {
-                      return (
-                        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
-                          <CalendarClock className="h-10 w-10 opacity-30" />
-                          <p className="text-sm">Projeto ainda não iniciado</p>
-                          {configData?.DATA_INICIO_PROJETO && (
-                            <p className="text-xs opacity-60">
-                              Início previsto:{" "}
-                              {new Date(configData.DATA_INICIO_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    if (!temPendencias) {
-                      return (
-                        <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
-                          <ShieldCheck className="h-10 w-10 text-emerald-400/50" />
-                          <p className="text-sm">Todas as metas de etapa atingidas</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                    <div className="space-y-2 max-h-[26rem] 2xl:max-h-[34rem] overflow-y-auto pr-1">
-                      {dashboardData?.pendencias.map((p, i) => {
-                        const isRed = p.cor === "red";
-                        const badgeColors = isRed
-                          ? { bg: "#f43f5e22", fg: p.diasAtraso > 15 ? "#b91c1c" : "#f43f5e", border: "#f43f5e44" }
-                          : { bg: "#f59e0b22", fg: "#f59e0b", border: "#f59e0b44" };
-                        return (
-                          <div
-                            key={`${p.nome}-${i}`}
-                            className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2.5"
-                          >
-                            <Construction
-                              className="mt-0.5 h-4 w-4 shrink-0"
-                              style={{ color: badgeColors.fg }}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm 2xl:text-base font-medium truncate" title={p.nome}>
-                                {p.nome}
-                              </p>
-                              <p className="text-xs 2xl:text-sm text-muted-foreground">
-                                {p.status}
-                              </p>
-                              {p.dataLimite && (
-                                <p className="text-xs 2xl:text-sm text-muted-foreground">
-                                  Prazo:{" "}
-                                  {new Date(p.dataLimite + "T00:00:00Z").toLocaleDateString(
-                                    "pt-BR",
-                                    { timeZone: "UTC" },
-                                  )}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex shrink-0 flex-col items-end gap-1">
-                              <Badge
-                                className={`border font-medium${p.percentualFaltando > 50 ? " animate-pulse" : ""}`}
-                                style={{
-                                  backgroundColor: badgeColors.bg,
-                                  color: badgeColors.fg,
-                                  borderColor: badgeColors.border,
-                                }}
-                              >
-                                Faltam {p.percentualFaltando}%
-                              </Badge>
-                              {p.diasAtraso > 0 && (
-                                <Badge
-                                  className={`border font-medium${p.diasAtraso > 15 ? " animate-pulse" : ""}`}
-                                  style={{
-                                    backgroundColor: "#f43f5e22",
-                                    color: p.diasAtraso > 15 ? "#b91c1c" : "#f43f5e",
-                                    borderColor: "#f43f5e44",
-                                  }}
-                                >
-                                  {p.diasAtraso}d atrasado
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                  {/* Lista */}
+                  {ocorrencias.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+                      <AlertTriangle className="h-8 w-8 opacity-20" />
+                      <p className="text-sm">Nenhuma ocorrência registrada</p>
                     </div>
-                  );
-                  })()}
+                  ) : (
+                    <div className="space-y-1.5 max-h-[26rem] 2xl:max-h-[34rem] overflow-y-auto pr-1">
+                      {ocorrencias.map((o) => (
+                        <div
+                          key={o.id}
+                          className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate" title={o.texto}>
+                              {o.texto}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(o.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                timeZone: "UTC",
+                              })}
+                            </p>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="shrink-0 h-7 w-7 text-muted-foreground hover:text-destructive"
+                            disabled={deletarOcorrencia.isPending}
+                            onClick={() => deletarOcorrencia.mutate(o.id)}
+                            title="Remover ocorrência"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
