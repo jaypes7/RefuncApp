@@ -500,5 +500,8 @@ export const ocorrenciasApi = {
   criar: (body: { texto: string; data: string }) =>
     api.post<{ data: Ocorrencia }>("/ocorrencias", body),
 
+  atualizar: (id: number, body: { texto: string; data: string }) =>
+    api.put<{ data: Ocorrencia }>(`/ocorrencias/${id}`, body),
+
   deletar: (id: number) => api.delete(`/ocorrencias/${id}`),
 };
