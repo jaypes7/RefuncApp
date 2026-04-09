@@ -416,7 +416,7 @@ export default function ConfiguracoesPage() {
   });
 
   const addAcessoMutation = useMutation({
-    mutationFn: async (data: { re: string; nome: string; role: string }) => {
+    mutationFn: async (data: { re: string; nome: string; perfil: string }) => {
       const res = await fetch("/api/config/acessos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -871,7 +871,7 @@ export default function ConfiguracoesPage() {
                         addAcessoMutation.mutate({
                           re: acessoRE,
                           nome: acessoNome,
-                          role: acessoRole,
+                          perfil: acessoRole,
                         })
                       }
                       disabled={

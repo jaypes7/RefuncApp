@@ -226,11 +226,21 @@ export function verificarAtraso(
 /**
  * Compara o percentual planejado vs. realizado do cronograma físico.
  * Não depende de admissões — usa os arrays da gerarCurvaSEtapas.
+ *
+ * NOTA: Só calcula atraso se houver progresso real (> 0.1%).
+ * Se realizadoHoje for 0, assume que o projeto ainda não começou
+ * fisicamente e não há atraso computável.
  */
 export function verificarAtrasoFisico(
   planejadoHoje: number,
   realizadoHoje: number,
 ): { atrasado: boolean; percentualAtraso: number } {
+  // Se não há progresso real ainda, não há como calcular atraso
+  // (o projeto pode não ter começado fisicamente)
+  if (realizadoHoje <= 0.1) {
+    return { atrasado: false, percentualAtraso: 0 };
+  }
+
   const diferenca = planejadoHoje - realizadoHoje;
   const atrasado = diferenca > 0.5;
   const percentualAtraso = Math.round(Math.max(0, diferenca) * 10) / 10;
