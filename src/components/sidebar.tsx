@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Sun,
   Moon,
+  CalendarClock,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
@@ -122,6 +123,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               >
                 <Settings className="h-4 w-4 shrink-0" />
                 {!collapsed && <span>Configurações do projeto</span>}
+              </span>
+            </Link>
+          </CanAccess>
+
+          {/* Cronograma - Avanço — visível apenas para admins */}
+          <CanAccess role="admin">
+            <Link href="/cronograma">
+              <span
+                className={navItem(pathname === "/cronograma")}
+                title={collapsed ? "Cronograma - Avanço" : undefined}
+              >
+                <CalendarClock className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Cronograma - Avanço</span>}
               </span>
             </Link>
           </CanAccess>

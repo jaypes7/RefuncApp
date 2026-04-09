@@ -2,9 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Switch } from "@/components/ui/switch";
-import { calculateWorkingDays, calculateWorkingDaysDetailed, addWorkingDays, formatDateISO } from "@/lib/date-utils";
-import { validateScheduleTotal } from "@/constants/cronograma-data";
+import { calculateWorkingDays } from "@/lib/date-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,6 +37,7 @@ import {
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { WorkingDaysCalendar } from "@/components/WorkingDaysCalendar";
 
 // --- Types ---
 type ConfigProjeto = {
@@ -50,24 +49,6 @@ type ConfigProjeto = {
   data_fim: string;
   colaboradores_previstos: string;
   orcado_suprimentos: string;
-};
-
-type EtapaCronograma = {
-  id: number;
-  nome: string;
-  /** Percentual de avanço físico (0–100) informado manualmente pelo supervisor */
-  percentual_concluido: number;
-  dias: number;
-  concluida?: boolean;
-  /** Data de início da etapa (YYYY-MM-DD) */
-  data_inicio?: string;
-  /** Data de fim da etapa (YYYY-MM-DD) */
-  data_fim?: string;
-};
-
-type ConfigCronograma = {
-  etapas: EtapaCronograma[];
-  dias_totais: number;
 };
 
 type ConfigClinica = { id?: number; nome: string };
@@ -98,22 +79,7 @@ type ApiConfigResponse = {
   ORCADO_SUPRIMENTOS: number;
 };
 
-// ─── Etapas unificadas (10 etapas — fase 1) ────────────────────────────────
-// Alterações vs. versão anterior:
-//   • "Treinamento Yara" + "Treinamento MSV"  →  "Treinamentos Normativos"
-//   • "Crachá" + "Credencial"                 →  "Liberação de Credencial"
-const ETAPAS_DEFAULT: EtapaCronograma[] = [
-  { id: 1,  nome: "Seleção de Mão de Obra",    dias: 3,  percentual_concluido: 0 },
-  { id: 2,  nome: "Realização de Exames",       dias: 4,  percentual_concluido: 0 },
-  { id: 3,  nome: "Liberação de ASO",           dias: 2,  percentual_concluido: 0 },
-  { id: 4,  nome: "e-Social",                   dias: 4,  percentual_concluido: 0 },
-  { id: 5,  nome: "Assinatura de contrato",     dias: 3,  percentual_concluido: 0 },
-  { id: 6,  nome: "Treinamentos Normativos",    dias: 8,  percentual_concluido: 0 },
-  { id: 7,  nome: "Portal do Colaborador",      dias: 3,  percentual_concluido: 0 },
-  { id: 8,  nome: "Liberação de Credencial",    dias: 4,  percentual_concluido: 0 },
-  { id: 9,  nome: "Liberação de EPIs",          dias: 3,  percentual_concluido: 0 },
-  { id: 10, nome: "Início de Campo",            dias: 3,  percentual_concluido: 0 },
-];
+
 
 const ROLES = [
   { value: "admin", label: "Administrador" },
@@ -158,15 +124,61 @@ export default function ConfiguracoesPage() {
     orcado_suprimentos: "",
   });
 
-  // Cronograma
-  const [cronograma, setCronograma] = useState<ConfigCronograma>({
-    etapas: ETAPAS_DEFAULT,
-    dias_totais: ETAPAS_DEFAULT.reduce((s, e) => s + e.dias, 0),
+  // ── Dias trabalhados (calendário) ──────────────────────────────────────────
+  const [diasTrabalhados, setDiasTrabalhados] = useState<string[]>([]);
+  const [calendarioAno, setCalendarioAno] = useState(new Date().getFullYear());
+  const [calendarioMes, setCalendarioMes] = useState(new Date().getMonth());
+
+  // Query para buscar dias trabalhados
+  const { data: diasTrabalhadosData } = useQuery({
+    queryKey: ["config", "dias-trabalhados"],
+    queryFn: async () => {
+      const res = await fetch("/api/config/dias-trabalhados");
+      if (!res.ok) throw new Error("Falha ao carregar dias trabalhados");
+      const json = await res.json();
+      return json.dias_trabalhados as string[];
+    },
   });
 
+  // Sincroniza dias trabalhados do servidor
+  useEffect(() => {
+    if (diasTrabalhadosData) {
+      setDiasTrabalhados(diasTrabalhadosData);
+    }
+  }, [diasTrabalhadosData]);
+
+  // Mutation para salvar dias trabalhados
+  const diasTrabalhadosMutation = useMutation({
+    mutationFn: async (dias: string[]) => {
+      const res = await fetch("/api/config/dias-trabalhados", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dias_trabalhados: dias }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar dias trabalhados");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config", "dias-trabalhados"] });
+      toast.success("Dias trabalhados salvos com sucesso!");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Handler para toggle de dia
+  const toggleDiaTrabalhado = (date: string) => {
+    setDiasTrabalhados((prev) => {
+      const newDias = prev.includes(date)
+        ? prev.filter((d) => d !== date)
+        : [...prev, date].sort();
+      return newDias;
+    });
+  };
+
   // ── Dias úteis calculados a partir das datas do projeto ─────────────────────
-  // Recalcula sempre que data_inicio ou data_fim mudarem.
-  // Retorna null enquanto alguma das datas estiver vazia.
   const diasUteisTotal = useMemo<number | null>(() => {
     if (!projeto.data_inicio || !projeto.data_fim) return null;
     try {
@@ -176,12 +188,14 @@ export default function ConfiguracoesPage() {
     }
   }, [projeto.data_inicio, projeto.data_fim]);
 
-  // ── Validação do cronograma vs. dias úteis do projeto ────────────────────────
-  const scheduleValidation = useMemo(() => {
-    if (diasUteisTotal === null) return null;
-    const stepsDays = cronograma.etapas.map((e) => e.dias);
-    return validateScheduleTotal(stepsDays, diasUteisTotal);
-  }, [cronograma.etapas, diasUteisTotal]);
+  // Calcula dias corridos totais
+  const diasCorridosTotal = useMemo(() => {
+    if (!projeto.data_inicio || !projeto.data_fim) return null;
+    const start = new Date(projeto.data_inicio);
+    const end = new Date(projeto.data_fim);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  }, [projeto.data_inicio, projeto.data_fim]);
 
   // Acessos - inicializado como strings vazias para blindagem
   const [acessoRE, setAcessoRE] = useState("");
@@ -252,7 +266,7 @@ export default function ConfiguracoesPage() {
   const acessos = acessosData ?? [];
   const logs = logsResponse?.data ?? [];
 
-  // ── Sync projeto/cronograma form state from server data ────────────────────
+  // ── Sync projeto form state from server data ───────────────────────────────
   useEffect(() => {
     if (!projetoData) return;
     setProjeto({
@@ -271,25 +285,6 @@ export default function ConfiguracoesPage() {
           ? String(projetoData.ORCADO_SUPRIMENTOS)
           : "",
     });
-    if (projetoData.ETAPAS_PROJETO?.length) {
-      const novasEtapas = ETAPAS_DEFAULT.map((etapaDefault) => {
-        const salva = projetoData.ETAPAS_PROJETO.find(
-          (e) => e.nome === etapaDefault.nome,
-        );
-        return salva
-          ? {
-              ...etapaDefault,
-              dias: salva.duracaoDias,
-              concluida: salva.concluida ?? false,
-              percentual_concluido: salva.percentualConcluido ?? 0,
-              data_inicio: salva.dataInicio,
-              data_fim: salva.dataFim,
-            }
-          : { ...etapaDefault, concluida: false };
-      });
-      const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
-      setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
-    }
   }, [projetoData]);
 
   // --- Mutations ---
@@ -324,39 +319,6 @@ export default function ConfiguracoesPage() {
       toast.success("Configurações do projeto salvas!");
     },
     onError: () => toast.error("Erro ao salvar configurações do projeto"),
-  });
-
-  const cronogramaMutation = useMutation({
-    mutationFn: async (data: ConfigCronograma) => {
-      // Envia apenas as etapas — dados do projeto NÃO são incluídos
-      const payload = {
-        etapas: data.etapas.map((e) => ({
-          id: e.id,
-          nome: e.nome,
-          duracaoDias: e.dias,
-          concluida: e.concluida ?? false,
-          percentualConcluido: e.percentual_concluido ?? 0,
-          dataInicio: e.data_inicio || null,
-          dataFim: e.data_fim || null,
-        })),
-      };
-
-      const res = await fetch("/api/config/etapas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? "Falha ao salvar cronograma");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config"] });
-      toast.success("Cronograma atualizado com sucesso!");
-    },
-    onError: (err: Error) => toast.error(err.message),
   });
 
   const clinicaMutation = useMutation({
@@ -513,117 +475,6 @@ export default function ConfiguracoesPage() {
   });
 
   // --- Handlers ---
-  const updateEtapaDias = (id: number, dias: number) => {
-    const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, dias: Math.max(0, dias) } : e,
-    );
-    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
-    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
-  };
-
-  const updateEtapaConcluida = (id: number, concluida: boolean) => {
-    const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, concluida } : e,
-    );
-    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
-    const novoEstado: ConfigCronograma = { etapas: novasEtapas, dias_totais: totalDias };
-    setCronograma(novoEstado);
-    // Persiste imediatamente no banco ao alterar o switch
-    cronogramaMutation.mutate(novoEstado);
-  };
-
-  const updateEtapaPercentual = (id: number, pct: number) => {
-    const valor = Math.max(0, Math.min(100, pct || 0));
-    const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, percentual_concluido: valor } : e,
-    );
-    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
-    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
-  };
-
-  const updateEtapaDataInicio = (id: number, data: string) => {
-    const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, data_inicio: data } : e,
-    );
-    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
-    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
-  };
-
-  const updateEtapaDataFim = (id: number, data: string) => {
-    const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, data_fim: data } : e,
-    );
-    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
-    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
-  };
-
-  // ── Validação de datas das etapas ────────────────────────────────────────────
-  // Calcula erros de validação para cada etapa: data_inicio e data_fim
-  // devem estar dentro do intervalo [data_inicio_projeto, data_fim_projeto]
-  type EtapaDateError = {
-    id: number;
-    dataInicio: boolean;
-    dataFim: boolean;
-    dataStartGreaterThanEnd: boolean;
-  };
-
-  const etapasDateErrors = useMemo<EtapaDateError[]>(() => {
-    if (!projeto.data_inicio || !projeto.data_fim) return [];
-    return cronograma.etapas.map((etapa) => ({
-      id: etapa.id,
-      dataInicio: !!(
-        etapa.data_inicio &&
-        (etapa.data_inicio < projeto.data_inicio || etapa.data_inicio > projeto.data_fim)
-      ),
-      dataFim: !!(
-        etapa.data_fim &&
-        (etapa.data_fim < projeto.data_inicio || etapa.data_fim > projeto.data_fim)
-      ),
-      dataStartGreaterThanEnd: !!(
-        etapa.data_inicio &&
-        etapa.data_fim &&
-        etapa.data_inicio > etapa.data_fim
-      ),
-    }));
-  }, [cronograma.etapas, projeto.data_inicio, projeto.data_fim]);
-
-  // Verifica se há algum erro de validação de datas
-  const hasDateErrors = useMemo(
-    () => etapasDateErrors.some((e) => e.dataInicio || e.dataFim || e.dataStartGreaterThanEnd),
-    [etapasDateErrors],
-  );
-
-  // ── Pesos acumulados calculados dinamicamente pelos dias de cada etapa ──────
-  // Usado para exibir o intervalo percentual real (ex: "12% → 28% do cronograma")
-  // em vez dos valores hardcoded que existiam antes.
-  const etapasPesos = useMemo(() => {
-    const totalDias = cronograma.dias_totais || 1;
-    let acum = 0;
-    return cronograma.etapas.map((e) => {
-      const inicio = Math.round((acum / totalDias) * 100);
-      acum += e.dias;
-      const fim = Math.round((acum / totalDias) * 100);
-      return { id: e.id, inicio, fim };
-    });
-  }, [cronograma.etapas, cronograma.dias_totais]);
-
-  // ── Datas e métricas reais de cada etapa ─────────────────────────────────
-  // Calcula startDate / endDate de cada etapa em cadeia a partir de
-  // data_inicio do projeto, respeitando fins de semana e feriados nacionais.
-  // Retorna null quando a data de início do projeto não estiver configurada.
-  const etapasDatas = useMemo(() => {
-    if (!projeto.data_inicio) return null;
-    let cursor = projeto.data_inicio;
-    return cronograma.etapas.map((e) => {
-      const startDate = cursor;
-      // O último dia útil desta etapa: início + (dias - 1) dias úteis
-      const endDate = formatDateISO(addWorkingDays(startDate, Math.max(0, e.dias - 1)));
-      const { calendarDays, workingDays } = calculateWorkingDaysDetailed(startDate, endDate);
-      // Próxima etapa começa no dia útil seguinte
-      cursor = formatDateISO(addWorkingDays(endDate, 1));
-      return { id: e.id, startDate, endDate, calendarDays, workingDays };
-    });
-  }, [projeto.data_inicio, cronograma.etapas]);
 
   // ── Guard: aguarda auth resolver, depois verifica perfil admin ─────────────
   if (authLoading) return null;
@@ -668,13 +519,6 @@ export default function ConfiguracoesPage() {
                 >
                   <Building2 className="w-4 h-4 mr-2" />
                   Projeto
-                </TabsTrigger>
-                <TabsTrigger
-                  value="cronograma"
-                  className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
-                >
-                  <CalendarClock className="w-4 h-4 mr-2" />
-                  Cronograma
                 </TabsTrigger>
                 <TabsTrigger
                   value="acessos"
@@ -850,22 +694,91 @@ export default function ConfiguracoesPage() {
                     />
                   </div>
 
-                  {/* ── Indicador de Dias Úteis ── */}
-                  {diasUteisTotal !== null && (
-                    <div className="md:col-span-2 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          Total de Dias Úteis do Projeto
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Seg – Sex, excluindo sáb/dom e feriados nacionais
-                        </p>
+                </div>
+
+                {/* ── Calendário de Dias Trabalhados ── */}
+                <div className="border-t border-border/50 pt-8 space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
+                      <CalendarClock className="w-5 h-5 text-primary" />
+                      Dias Trabalhados do Projeto
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Marque manualmente os dias em que houve trabalho no projeto
+                    </p>
+                  </div>
+
+                  {projeto.data_inicio && projeto.data_fim ? (
+                    <div className="space-y-4">
+                      {/* Resumo estatístico */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
+                          <span className="text-xs text-muted-foreground">Dias Corridos</span>
+                          <span className="text-2xl font-bold text-primary tabular-nums">
+                            {diasCorridosTotal ?? 0}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
+                          <span className="text-xs text-muted-foreground">Dias Trabalhados</span>
+                          <span className="text-2xl font-bold text-primary tabular-nums">
+                            {diasTrabalhados.length}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
+                          <span className="text-xs text-muted-foreground">Percentual</span>
+                          <span className="text-2xl font-bold text-primary tabular-nums">
+                            {diasCorridosTotal
+                              ? Math.round((diasTrabalhados.length / diasCorridosTotal) * 100)
+                              : 0}
+                            %
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-3xl font-bold text-primary tabular-nums">
-                        {diasUteisTotal}
-                        <span className="ml-1 text-sm font-normal text-muted-foreground">
-                          dias
-                        </span>
+
+                      {/* Calendário */}
+                      <WorkingDaysCalendar
+                        year={calendarioAno}
+                        month={calendarioMes}
+                        workingDays={diasTrabalhados}
+                        onToggle={toggleDiaTrabalhado}
+                        minDate={projeto.data_inicio}
+                        maxDate={projeto.data_fim}
+                        onPrevMonth={() => {
+                          if (calendarioMes === 0) {
+                            setCalendarioMes(11);
+                            setCalendarioAno(calendarioAno - 1);
+                          } else {
+                            setCalendarioMes(calendarioMes - 1);
+                          }
+                        }}
+                        onNextMonth={() => {
+                          if (calendarioMes === 11) {
+                            setCalendarioMes(0);
+                            setCalendarioAno(calendarioAno + 1);
+                          } else {
+                            setCalendarioMes(calendarioMes + 1);
+                          }
+                        }}
+                      />
+
+                      {/* Botão salvar dias trabalhados */}
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => diasTrabalhadosMutation.mutate(diasTrabalhados)}
+                          disabled={diasTrabalhadosMutation.isPending}
+                          className="gap-2"
+                          variant="outline"
+                        >
+                          <Save className="w-4 h-4" />
+                          Salvar Dias Trabalhados
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-4 text-sm text-yellow-400">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>
+                        Configure as datas de início e término do projeto para habilitar o calendário de dias trabalhados.
                       </span>
                     </div>
                   )}
@@ -883,295 +796,6 @@ export default function ConfiguracoesPage() {
                   >
                     <Save className="w-4 h-4" />
                     Salvar Configurações
-                  </Button>
-                </div>
-              </TabsContent>
-
-              {/* Cronograma Tab */}
-              <TabsContent
-                value="cronograma"
-                className="w-full mt-10 space-y-8"
-              >
-                <div>
-                  <h2 className="text-xl font-semibold mb-1 flex items-center gap-2">
-                    <CalendarClock className="w-5 h-5 text-primary" />
-                    Cronograma do Projeto
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Defina a duração de cada etapa
-                  </p>
-                </div>
-
-                {/* ── Painel de totais e validação ── */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-4 bg-primary/10 rounded-lg border border-primary/20">
-                    <span className="font-medium">Soma das Etapas:</span>
-                    <span className="text-2xl font-bold text-primary tabular-nums">
-                      {cronograma.etapas.reduce((s, e) => s + e.dias, 0)} dias
-                      úteis
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex flex-col gap-0.5 p-3 bg-primary/5 rounded-lg border border-primary/15">
-                      <span className="text-xs text-muted-foreground">Total Dias Corridos</span>
-                      <span className="text-xl font-bold text-primary tabular-nums">
-                        {etapasDatas?.reduce((s, e) => s + e.calendarDays, 0) ?? 0}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-0.5 p-3 bg-primary/5 rounded-lg border border-primary/15">
-                      <span className="text-xs text-muted-foreground">Total Dias Úteis</span>
-                      <span className="text-xl font-bold text-primary tabular-nums">
-                        {etapasDatas?.reduce((s, e) => s + e.workingDays, 0) ?? 0}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Aviso de validação — aparece apenas quando as datas do projeto estão definidas */}
-                  {diasUteisTotal !== null &&
-                    scheduleValidation !== null &&
-                    (scheduleValidation.valid ? (
-                      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-400">
-                        <svg
-                          className="h-4 w-4 shrink-0"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        <span>
-                          Cronograma balanceado —{" "}
-                          {scheduleValidation.stepsDaysTotal} dias úteis
-                          alocados (meta: {diasUteisTotal} dias úteis do
-                          projeto).
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
-                        <svg
-                          className="h-4 w-4 shrink-0"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        <span>
-                          {scheduleValidation.difference > 0
-                            ? `As etapas excedem o projeto em ${scheduleValidation.difference} dia(s) útil(is). Reduza alguma etapa.`
-                            : `Faltam ${Math.abs(scheduleValidation.difference)} dia(s) útil(is) para cobrir o projeto. Aumente alguma etapa.`}{" "}
-                          <span className="opacity-70">
-                            (Etapas: {scheduleValidation.stepsDaysTotal} ·
-                            Projeto: {diasUteisTotal} dias úteis)
-                          </span>
-                        </span>
-                      </div>
-                    ))}
-
-                  {/* Aviso quando datas ainda não estão configuradas */}
-                  {diasUteisTotal === null && (
-                    <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-sm text-yellow-400">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span>
-                        Configure as datas de início e término na aba Projeto
-                        para validar o cronograma.
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                  {cronograma.etapas.map((etapa) => {
-                    const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
-                    return (
-                      <div
-                        key={etapa.id}
-                        className={`space-y-3 p-4 rounded-lg border transition-colors ${
-                          etapa.concluida
-                            ? "bg-emerald-500/10 border-emerald-500/30"
-                            : "bg-card/50 border-border/50"
-                        }`}
-                      >
-                        {/* Row 1: Nome, dias, percentual, conclusão */}
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
-                              etapa.concluida
-                                ? "bg-emerald-500/20 text-emerald-400"
-                                : "bg-primary/10 text-primary"
-                            }`}
-                          >
-                            {etapa.id}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium truncate flex items-center gap-2">
-                              <span className="truncate">{etapa.nome}</span>
-                              {etapa.concluida && (
-                                <Badge
-                                  variant="outline"
-                                  className="shrink-0 h-4 px-1.5 text-[10px] border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
-                                >
-                                  Concluído
-                                </Badge>
-                              )}
-                            </div>
-                            {/* Percentual dinâmico calculado a partir dos dias digitados */}
-                            <div className="text-xs text-muted-foreground">
-                              {(() => {
-                                const p = etapasPesos.find((x) => x.id === etapa.id);
-                                return p ? `${p.inicio}% – ${p.fim}% do cronograma` : "";
-                              })()}
-                            </div>
-                            {/* Dias corridos vs. dias úteis por etapa */}
-                            {etapasDatas && (() => {
-                              const d = etapasDatas.find((x) => x.id === etapa.id);
-                              return d ? (
-                                <div className="text-xs text-muted-foreground/70 mt-0.5 tabular-nums">
-                                  Corridos: {d.calendarDays}&nbsp;|&nbsp;Úteis: {d.workingDays}
-                                </div>
-                              ) : null;
-                            })()}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {/* Duração em dias úteis */}
-                            <Input
-                              type="number"
-                              min={0}
-                              value={etapa.dias}
-                              onChange={(e) =>
-                                updateEtapaDias(
-                                  etapa.id,
-                                  parseInt(e.target.value) || 0,
-                                )
-                              }
-                              className="w-20 glass-input text-center"
-                              title="Duração em dias úteis"
-                            />
-                            <span className="text-sm text-muted-foreground w-10 shrink-0">
-                              dias
-                            </span>
-                            {/* Avanço físico (percentual_concluido) */}
-                            <div className="flex flex-col items-center gap-0.5">
-                              <Input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={etapa.percentual_concluido}
-                                onChange={(e) =>
-                                  updateEtapaPercentual(
-                                    etapa.id,
-                                    parseInt(e.target.value),
-                                  )
-                                }
-                                className="w-16 glass-input text-center"
-                                title="Avanço físico desta etapa (0–100%)"
-                              />
-                              <span className="text-[10px] text-muted-foreground">
-                                % físico
-                              </span>
-                            </div>
-                            {/* Switch de conclusão */}
-                            <div className="flex flex-col items-center gap-0.5 ml-1">
-                              <Switch
-                                checked={etapa.concluida ?? false}
-                                onCheckedChange={(checked: boolean) =>
-                                  updateEtapaConcluida(etapa.id, checked)
-                                }
-                                disabled={cronogramaMutation.isPending}
-                              />
-                              <span className="text-[10px] text-muted-foreground">
-                                Concluída
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Row 2: Datas (data_inicio e data_fim) */}
-                        <div className="flex items-end gap-4 ml-12 pt-2 border-t border-border/30">
-                          <div className="flex-1 flex gap-4">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-xs font-medium text-muted-foreground">
-                                Data de Início
-                              </label>
-                              <Input
-                                type="date"
-                                value={etapa.data_inicio || ""}
-                                onChange={(e) =>
-                                  updateEtapaDataInicio(etapa.id, e.target.value)
-                                }
-                                disabled={!projeto.data_inicio || !projeto.data_fim}
-                                className={`glass-input ${
-                                  dateError?.dataInicio || dateError?.dataStartGreaterThanEnd
-                                    ? "border-red-500/50 bg-red-500/5"
-                                    : ""
-                                }`}
-                                title="Data de início da etapa"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <label className="text-xs font-medium text-muted-foreground">
-                                Data de Fim
-                              </label>
-                              <Input
-                                type="date"
-                                value={etapa.data_fim || ""}
-                                onChange={(e) =>
-                                  updateEtapaDataFim(etapa.id, e.target.value)
-                                }
-                                disabled={!projeto.data_inicio || !projeto.data_fim}
-                                className={`glass-input ${
-                                  dateError?.dataFim || dateError?.dataStartGreaterThanEnd
-                                    ? "border-red-500/50 bg-red-500/5"
-                                    : ""
-                                }`}
-                                title="Data de fim da etapa"
-                              />
-                            </div>
-                          </div>
-                          {/* Validação visual */}
-                          {dateError && (dateError.dataInicio || dateError.dataFim || dateError.dataStartGreaterThanEnd) && (
-                            <div className="flex items-center gap-1.5 text-xs text-red-400 pb-0.5">
-                              <X className="w-3.5 h-3.5" />
-                              <span>
-                                {dateError.dataStartGreaterThanEnd
-                                  ? "Início > Fim"
-                                  : dateError.dataInicio
-                                  ? "Início fora do intervalo"
-                                  : "Fim fora do intervalo"}
-                              </span>
-                            </div>
-                          )}
-                          {dateError && !(dateError.dataInicio || dateError.dataFim || dateError.dataStartGreaterThanEnd) && etapa.data_inicio && etapa.data_fim && (
-                            <div className="flex items-center gap-1.5 text-xs text-emerald-400 pb-0.5">
-                              <Check className="w-3.5 h-3.5" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="flex justify-end gap-3">
-                  {hasDateErrors && (
-                    <div className="flex items-center gap-2 text-sm text-red-400">
-                      <AlertCircle className="w-4 h-4" />
-                      Corrija os erros de data para salvar
-                    </div>
-                  )}
-                  <Button
-                    onClick={() => cronogramaMutation.mutate(cronograma)}
-                    disabled={cronogramaMutation.isPending || hasDateErrors}
-                    className="gap-2"
-                  >
-                    <Save className="w-4 h-4" />
-                    Salvar Cronograma
                   </Button>
                 </div>
               </TabsContent>
@@ -1699,7 +1323,7 @@ export default function ConfiguracoesPage() {
                         }}
                         disabled={resetProjetoMutation.isPending}
                         variant="destructive"
-                        className="gap-2 bg-red-600 hover:bg-red-700"
+                        className="gap-2 bg-red-600 hover:bg-red-700 text-white"
                       >
                         <Trash2 className="w-4 h-4" />
                         {resetProjetoMutation.isPending ? "Resetando..." : "Resetar Projeto"}

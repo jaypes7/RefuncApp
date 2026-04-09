@@ -144,13 +144,14 @@ const O_SIM_NAO = ["Sim", "Não"];
 const O_APTO = ["Apto", "Inapto", "Pendente"];
 const O_LIBERADO = ["Liberado", "Pendente", "Bloqueado"];
 const O_DOCS = ["Completo", "Incompleto", "Pendente"];
-const O_EXAME = ["Agendado", "Realizado", "Pendente", "Inapto"];
+const O_EXAME = ["Realizado", "Agendado", "Pendente"];
 const O_CARTA = ["Enviada", "Assinada", "Pendente"];
 const O_ADMISSAO = ["Concluída", "Em andamento", "Pendente"];
 const O_CONTRATO = ["Assinado", "Pendente", "Cancelado"];
 const O_PONTO = ["Cadastrado", "Pendente"];
-const O_TREINAMENTO = ["Concluído", "Em andamento", "Pendente", "Não aplica"];
-const O_PESSOA = ["CLT", "Temporário", "Terceiro", "Estagiário"];
+const O_TREINAMENTO = ["Concluído", "Em Andamento", "Pendente"];
+const O_PESSOA = ["Física", "Jurídica"];
+const O_PRE_ADMISSAO = ["Sim", "Não", "Pendente"];
 const O_UF = [
   "AC",
   "AL",
@@ -603,7 +604,7 @@ export default function EditarColaboradorPage() {
                   label="IND"
                   value={form.IND}
                   onChange={t("IND")}
-                  placeholder="Indicador"
+                  placeholder="Responsável pela indicação"
                 />
                 <F
                   label="REQ"
@@ -801,7 +802,7 @@ export default function EditarColaboradorPage() {
                   label="Pré-Admissão"
                   value={form.PRE_ADMISSAO}
                   onChange={s("PRE_ADMISSAO")}
-                  options={O_ADMISSAO}
+                  options={O_PRE_ADMISSAO}
                 />
               </div>
 
