@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 
 import { z } from "zod";
@@ -18,6 +18,7 @@ import {
   GraduationCap,
   CheckCircle,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { IMaskInput } from "react-imask";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -45,6 +46,20 @@ import {
 } from "@/components/ui/card";
 
 import { colaboradoresApi, clinicasApi } from "@/lib/axios";
+
+// ============================================================================
+// FUNÇÃO DEBOUNCE
+// ============================================================================
+function debounce<T extends (...args: Parameters<T>) => ReturnType<T>>(
+  fn: T,
+  delay: number
+) {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+}
 import { CargoCombobox } from "@/components/CargoCombobox";
 
 // ============================================================================
@@ -196,6 +211,9 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [cpfChecking, setCpfChecking] = useState(false);
+  const [cpfError, setCpfError] = useState<string | null>(null);
+  const cpfBeingChecked = useRef<string | null>(null);
   const totalSteps = 8;
   const router = useRouter();
 
@@ -284,6 +302,44 @@ export default function OnboardingPage() {
     },
   });
 
+  // ============================================================================
+  // VERIFICAÇÃO DE CPF EM TEMPO REAL
+  // ============================================================================
+  const checkCpfDuplicado = useCallback(
+    debounce(async (cpf: string) => {
+      if (cpf.length !== 14) return;
+
+      cpfBeingChecked.current = cpf;
+      setCpfChecking(true);
+
+      try {
+        const cpfNumerico = cpf.replace(/\D/g, "");
+        const response = await fetch(
+          `/api/colaboradores?search=${cpfNumerico}&limit=1`
+        );
+        const data = await response.json();
+
+        // Só atualiza se o CPF verificado ainda for o atual
+        if (cpfBeingChecked.current === cpf) {
+          if (data.data && data.data.length > 0) {
+            setCpfError(`CPF já cadastrado: ${data.data[0].NOME}`);
+          } else {
+            setCpfError(null);
+          }
+        }
+      } catch {
+        if (cpfBeingChecked.current === cpf) {
+          setCpfError(null);
+        }
+      } finally {
+        if (cpfBeingChecked.current === cpf) {
+          setCpfChecking(false);
+        }
+      }
+    }, 500),
+    []
+  );
+
   // Formulário unificado para todos os passos
   const {
     register,
@@ -367,6 +423,18 @@ export default function OnboardingPage() {
   const treinamentoValue = watch("treinamento");
   const realizarTreinamentoValue = watch("realizarTreinamento");
   const funcaoCltValue = watch("funcaoClt");
+  const cpfValue = watch("cpf");
+
+  // Verificar CPF duplicado em tempo real
+  useEffect(() => {
+    // Limpa o erro imediatamente quando CPF muda
+    if (cpfValue.length !== 14) {
+      setCpfError(null);
+      return;
+    }
+    // Só verifica se o CPF está completo
+    checkCpfDuplicado(cpfValue);
+  }, [cpfValue]);
 
   // Calcular idade automaticamente quando dtNascimento mudar
   useEffect(() => {
@@ -511,7 +579,8 @@ export default function OnboardingPage() {
     watch("telefone")?.length >= 14 &&
     watch("uf")?.length === 2 &&
     watch("pessoa") !== undefined &&
-    watch("ind") !== "";
+    watch("ind") !== "" &&
+    !cpfError;
 
   const isStep2Valid =
     watch("dataAdmissao") !== "" &&
@@ -640,28 +709,45 @@ export default function OnboardingPage() {
                         >
                           CPF <span className="text-destructive">*</span>
                         </label>
-                        <Controller
-                          name="cpf"
-                          control={control}
-                          render={({ field }) => (
-                            <IMaskInput
-                              id="cpf"
-                              mask="000.000.000-00"
-                              placeholder="000.000.000-00"
-                              value={field.value}
-                              onAccept={(value: string) =>
-                                field.onChange(value)
-                              }
-                              className={`flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 md:text-sm dark:bg-input/30 ${
-                                errors.cpf ? "border-destructive" : ""
-                              }`}
-                            />
+                        <div className="relative">
+                          <Controller
+                            name="cpf"
+                            control={control}
+                            render={({ field }) => (
+                              <IMaskInput
+                                id="cpf"
+                                mask="000.000.000-00"
+                                placeholder="000.000.000-00"
+                                value={field.value}
+                                onAccept={(value: string) =>
+                                  field.onChange(value)
+                                }
+                                className={`flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 md:text-sm dark:bg-input/30 ${
+                                  errors.cpf || cpfError
+                                    ? "border-destructive pr-10"
+                                    : ""
+                                } ${cpfChecking ? "pr-10" : ""}`}
+                              />
+                            )}
+                          />
+                          {cpfChecking && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </div>
                           )}
-                        />
+                          {!cpfChecking && cpfError && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <AlertCircle className="h-4 w-4 text-destructive" />
+                            </div>
+                          )}
+                        </div>
                         {errors.cpf && (
                           <p className="text-xs text-destructive">
                             {errors.cpf.message}
                           </p>
+                        )}
+                        {cpfError && (
+                          <p className="text-xs text-destructive">{cpfError}</p>
                         )}
                       </div>
 
@@ -863,7 +949,7 @@ export default function OnboardingPage() {
                         </label>
                         <Input
                           id="ind"
-                          placeholder="Digite o indicador"
+                          placeholder="Responsável pela indicação"
                           {...register("ind")}
                           className={errors.ind ? "border-destructive" : ""}
                         />
@@ -875,7 +961,14 @@ export default function OnboardingPage() {
                       </div>
                     </CardContent>
 
-                    <CardFooter className="flex justify-end border-t bg-muted/50 py-6">
+                    <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push("/central")}
+                      >
+                        Cancelar
+                      </Button>
                       <Button
                         type="submit"
                         disabled={!isStep1Valid}

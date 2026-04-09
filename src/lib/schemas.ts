@@ -48,6 +48,45 @@ const emptyStringToUndefined = (val: unknown) => {
   return val;
 };
 
+// Valores válidos para cada enum (usado no safeEnum)
+const STATUS_VALUES = ["Ativo", "Pendente", "Inativo", "Desligado"] as const;
+const SIM_NAO_PENDENTE_VALUES = ["Sim", "Não", "Pendente"] as const;
+const SIM_NAO_VALUES = ["Sim", "Não"] as const;
+const PESSOA_VALUES = ["Física", "Jurídica"] as const;
+const EXAME_VALUES = ["Realizado", "Agendado", "Pendente"] as const;
+const DOCS_VALUES = ["Completo", "Pendente", "Incompleto"] as const;
+const ASO_VALUES = ["Apto", "Inapto", "Pendente"] as const;
+const CONTRATO_VALUES = ["CLT", "PJ", "Temporário", "Estagiário"] as const;
+const PORTAL_VALUES = ["Liberado", "Pendente", "Bloqueado"] as const;
+const CRACHA_VALUES = ["Emitido", "Pendente"] as const;
+const PONTO_VALUES = ["Cadastrado", "Pendente"] as const;
+const TREINAMENTO_VALUES = ["Concluído", "Em Andamento", "Pendente"] as const;
+const VR_VALUES = ["Ativo", "Pendente"] as const;
+const UF_VALUES = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"] as const;
+
+/**
+ * Cria um schema seguro para enums no update que:
+ * - Aceita valores válidos do enum
+ * - Converte null/undefined/"" para undefined
+ * - Converte valores inválidos para undefined (não lança erro)
+ */
+function safeEnum<const T extends readonly string[]>(enumValues: T): z.ZodType<T[number] | undefined> {
+  return z.preprocess(
+    (val) => {
+      // Converte null/undefined/vazio para undefined
+      if (val === null || val === undefined) return undefined;
+      if (typeof val === "string" && val.trim() === "") return undefined;
+      
+      // Valida se está nos valores permitidos
+      if (typeof val === "string" && (enumValues as readonly string[]).includes(val)) return val;
+      
+      // Valor inválido - converte para undefined
+      return undefined;
+    },
+    z.any().optional()
+  ) as z.ZodType<T[number] | undefined>;
+}
+
 /**
  * Normaliza qualquer representação de data para "YYYY-MM-DD" ou undefined.
  *
@@ -167,36 +206,36 @@ export const TelefoneSchema = z
 export const ColaboradorSchema = z.object({
   // Colunas 1-5
   IND: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  STATUS: z.preprocess(emptyStringToUndefined, StatusEnum.optional()),
-  ENVIADO_RH: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
-  PESSOA: z.preprocess(emptyStringToUndefined, PessoaEnum.optional()),
+  STATUS: z.preprocess(emptyStringToUndefined, StatusEnum.optional().catch(undefined)),
+  ENVIADO_RH: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional().catch(undefined)),
+  PESSOA: z.preprocess(emptyStringToUndefined, PessoaEnum.optional().catch(undefined)),
   REQ: z.preprocess(emptyStringToUndefined, z.string().optional()),
 
   // Colunas 6-10
   VINCULADO: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  CARTA_OFERTA: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
-  COLAB_PEND: z.preprocess(emptyStringToUndefined, SimNaoEnum.optional()),
-  EXAME: z.preprocess(emptyStringToUndefined, ExameEnum.optional()),
+  CARTA_OFERTA: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional().catch(undefined)),
+  COLAB_PEND: z.preprocess(emptyStringToUndefined, SimNaoEnum.optional().catch(undefined)),
+  EXAME: z.preprocess(emptyStringToUndefined, ExameEnum.optional().catch(undefined)),
   CLINICA: z.preprocess(emptyStringToUndefined, z.string().optional()),
 
   // Colunas 11-15
-  DOCS: z.preprocess(emptyStringToUndefined, DocsEnum.optional()),
-  ASO: z.preprocess(emptyStringToUndefined, AsoEnum.optional()),
+  DOCS: z.preprocess(emptyStringToUndefined, DocsEnum.optional().catch(undefined)),
+  ASO: z.preprocess(emptyStringToUndefined, AsoEnum.optional().catch(undefined)),
   RPV: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  PRE_ADMISSAO: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
+  PRE_ADMISSAO: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional().catch(undefined)),
   MOB: z.preprocess(emptyStringToUndefined, z.string().optional()),
 
   // Colunas 16-20
   OP: z.preprocess(emptyStringToUndefined, z.string().optional()),
   DATA_ADMISSAO: DateSchema,
-  CONTRATO: z.preprocess(emptyStringToUndefined, ContratoEnum.optional()),
-  PORTAL: z.preprocess(emptyStringToUndefined, PortalEnum.optional()),
-  CRACHA: z.preprocess(emptyStringToUndefined, CrachaEnum.optional()),
+  CONTRATO: z.preprocess(emptyStringToUndefined, ContratoEnum.optional().catch(undefined)),
+  PORTAL: z.preprocess(emptyStringToUndefined, PortalEnum.optional().catch(undefined)),
+  CRACHA: z.preprocess(emptyStringToUndefined, CrachaEnum.optional().catch(undefined)),
 
   // Colunas 21-25
-  PONTO: z.preprocess(emptyStringToUndefined, PontoEnum.optional()),
-  TREINAMENTO: z.preprocess(emptyStringToUndefined, TreinamentoEnum.optional()),
-  REALIZAR_TREINAMENTO: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional()),
+  PONTO: z.preprocess(emptyStringToUndefined, PontoEnum.optional().catch(undefined)),
+  TREINAMENTO: z.preprocess(emptyStringToUndefined, TreinamentoEnum.optional().catch(undefined)),
+  REALIZAR_TREINAMENTO: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional().catch(undefined)),
   LOCAL_TREINAMENTO: z.preprocess(emptyStringToUndefined, z.string().optional()),
   RE: z.preprocess(emptyStringToUndefined, z.string().optional()),
 
@@ -209,14 +248,14 @@ export const ColaboradorSchema = z.object({
 
   // Colunas 31-35
   CPF: CPFSchema,
-  VR: z.preprocess(emptyStringToUndefined, VREnum.optional()),
+  VR: z.preprocess(emptyStringToUndefined, VREnum.optional().catch(undefined)),
   TERMINO: DateSchema,
   PRORROGACAO: DateSchema,
   DEMISSAO: DateSchema,
 
   // Colunas 36-38
   MUNICIPIO: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  UF: z.preprocess(emptyStringToUndefined, UFEnum.optional()),
+  UF: z.preprocess(emptyStringToUndefined, UFEnum.optional().catch(undefined)),
   TELEFONE: TelefoneSchema,
 
   // ── Campos extras (DB) — não presentes na planilha de importação ──────────
@@ -237,8 +276,66 @@ export const ColaboradorCreateSchema = ColaboradorSchema.refine(
 
 /**
  * Schema para atualização parcial de colaborador
+ * Schema explícito para garantir que o preprocess funcione corretamente em todos os campos
  */
-export const ColaboradorUpdateSchema = ColaboradorSchema.partial();
+export const ColaboradorUpdateSchema = z.object({
+  // Colunas 1-5
+  IND: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  STATUS: safeEnum(STATUS_VALUES),
+  ENVIADO_RH: safeEnum(SIM_NAO_PENDENTE_VALUES),
+  PESSOA: safeEnum(PESSOA_VALUES),
+  REQ: z.preprocess(emptyStringToUndefined, z.string().optional()),
+
+  // Colunas 6-10
+  VINCULADO: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  CARTA_OFERTA: safeEnum(SIM_NAO_PENDENTE_VALUES),
+  COLAB_PEND: safeEnum(SIM_NAO_VALUES),
+  EXAME: safeEnum(EXAME_VALUES),
+  CLINICA: z.preprocess(emptyStringToUndefined, z.string().optional()),
+
+  // Colunas 11-15
+  DOCS: safeEnum(DOCS_VALUES),
+  ASO: safeEnum(ASO_VALUES),
+  RPV: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  PRE_ADMISSAO: safeEnum(SIM_NAO_PENDENTE_VALUES),
+  MOB: z.preprocess(emptyStringToUndefined, z.string().optional()),
+
+  // Colunas 16-20
+  OP: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  DATA_ADMISSAO: DateSchema,
+  CONTRATO: safeEnum(CONTRATO_VALUES),
+  PORTAL: safeEnum(PORTAL_VALUES),
+  CRACHA: safeEnum(CRACHA_VALUES),
+
+  // Colunas 21-25
+  PONTO: safeEnum(PONTO_VALUES),
+  TREINAMENTO: safeEnum(TREINAMENTO_VALUES),
+  REALIZAR_TREINAMENTO: safeEnum(SIM_NAO_PENDENTE_VALUES),
+  LOCAL_TREINAMENTO: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  RE: z.preprocess(emptyStringToUndefined, z.string().optional()),
+
+  // Colunas 26-30
+  NOME: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").optional(),
+  FUNCAO_CLT: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  HISTOGRAMA: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  IDADE: z.coerce.number().min(16).max(99).optional().nullable(),
+  DT_NASCIMENTO: DateSchema,
+
+  // Colunas 31-35
+  CPF: CPFSchema.optional(),
+  VR: safeEnum(VR_VALUES),
+  TERMINO: DateSchema,
+  PRORROGACAO: DateSchema,
+  DEMISSAO: DateSchema,
+
+  // Colunas 36-38
+  MUNICIPIO: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  UF: safeEnum(UF_VALUES),
+  TELEFONE: TelefoneSchema,
+
+  // ── Campos extras (DB)
+  turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
+});
 
 // ============================================================================
 // SCHEMAS DE AUTENTICAÇÃO

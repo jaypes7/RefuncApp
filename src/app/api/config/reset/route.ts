@@ -26,19 +26,20 @@ export async function POST(request: NextRequest) {
 
     const db = createServerClient();
 
-    // Tabelas a serem limpas
+    // Tabelas a serem limpas com suas respectivas chaves primárias
     const tablesToClear = [
-      "colaboradores",
-      "logistica_controle",
-      "seguranca_fits",
-      "suprimentos_ordens",
-      "configuracoes_hoteis",
-      "configuracoes_clinicas",
+      { table: "colaboradores", pk: "cpf" },
+      { table: "logistica_controle", pk: "id" },
+      { table: "seguranca_fits", pk: "id" },
+      { table: "suprimentos_ordens", pk: "id" },
+      { table: "configuracoes_hoteis", pk: "id" },
+      { table: "configuracoes_clinicas", pk: "id" },
     ];
 
-    // Executa DELETE para cada tabela
-    for (const table of tablesToClear) {
-      const { error } = await db.from(table).delete().neq("id", "non-existent-value");
+    // Executa DELETE para cada tabela usando a chave primária correta
+    for (const { table, pk } of tablesToClear) {
+      // Deleta todas as linhas onde a PK não é nula (ou seja, todas as linhas)
+      const { error } = await db.from(table).delete().not(pk, "is", null);
 
       if (error) {
         console.error(`[/api/config/reset] Erro ao limpar tabela ${table}:`, error);
