@@ -342,7 +342,7 @@ export const ColaboradorUpdateSchema = z.object({
 // ============================================================================
 
 export const LoginSchema = z.object({
-  re: z.string().regex(/^\d+$/, "RE deve conter apenas números").min(1),
+  re: z.string().min(1, "RE é obrigatório"),
 });
 
 // ============================================================================
@@ -594,8 +594,8 @@ export const PerfilEnum = z.enum(["admin", "user", "guest"]);
 export const UsuariosPermitidosSchema = z.object({
   /** UUID gerado pelo Supabase — ausente no payload de criação */
   id: z.string().uuid().optional(),
-  /** Registro do Empregado — chave de login, somente dígitos */
-  re: z.string().regex(/^\d+$/, "RE deve conter apenas números").min(1, "RE é obrigatório"),
+  /** Registro do Empregado — chave de login */
+  re: z.string().min(1, "RE é obrigatório"),
   /** Nome completo do usuário */
   nome: z.string().min(1, "Nome é obrigatório"),
   /** Nível de acesso no sistema */
