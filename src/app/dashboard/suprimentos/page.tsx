@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback, useEffect } from "react";
+import { useMemo, useRef, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { dashboardSuprimentosApi } from "@/lib/axios";
 import { SheetUpload } from "@/components/sheet-upload";
+import { ExportPdfButton } from "@/components/export-pdf-button";
 import { toast } from "sonner";
 import { CanAccess } from "@/components/CanAccess";
 
@@ -137,6 +138,7 @@ function SuprimentosSkeleton() {
 // ============================================================================
 
 export default function DashboardSuprimentosPage() {
+  const contentRef = useRef<HTMLDivElement>(null);
   const router      = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -296,18 +298,23 @@ export default function DashboardSuprimentosPage() {
                 </p>
               </div>
             </div>
-            <SheetUpload
-              endpoint="/api/suprimentos/ordens"
-              label="Importar ordens"
-              headerDetectionKeys={["Descrição", "Ordem de Compra", "Valor OC", "Item"]}
-              onSuccess={() => {
-                queryClient.invalidateQueries({ queryKey: ["dashboard-suprimentos"] });
-                refetchOrdens();
-              }}
-              variant="outline"
-              size="sm"
-            />
+            <div className="flex items-center gap-3">
+              <ExportPdfButton targetRef={contentRef} filename="dashboard-suprimentos" />
+              <SheetUpload
+                endpoint="/api/suprimentos/ordens"
+                label="Importar ordens"
+                headerDetectionKeys={["Descrição", "Ordem de Compra", "Valor OC", "Item"]}
+                onSuccess={() => {
+                  queryClient.invalidateQueries({ queryKey: ["dashboard-suprimentos"] });
+                  refetchOrdens();
+                }}
+                variant="outline"
+                size="sm"
+              />
+            </div>
           </div>
+
+          <div ref={contentRef} className="space-y-8">
 
           {/* KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -583,6 +590,7 @@ export default function DashboardSuprimentosPage() {
             </CardContent>
           </Card>
 
+          </div>
         </div>
       </div>
     </ProtectedRoute>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -26,6 +26,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { SheetUpload } from "@/components/sheet-upload";
+import { ExportPdfButton } from "@/components/export-pdf-button";
 
 // ============================================================================
 // TIPOS
@@ -109,6 +110,7 @@ function SegurancaSkeleton() {
 // ============================================================================
 
 export default function DashboardSegurancaPage() {
+  const contentRef = useRef<HTMLDivElement>(null);
   const router      = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -232,15 +234,20 @@ export default function DashboardSegurancaPage() {
                 </p>
               </div>
             </div>
-            <SheetUpload
-              endpoint="/api/seguranca/fits"
-              label="Importar FITs"
-              headerDetectionKeys={["RE", "CPF", "NOME"]}
-              onSuccess={() => queryClient.invalidateQueries({ queryKey: ["seguranca-dashboard"] })}
-              variant="outline"
-              size="sm"
-            />
+            <div className="flex items-center gap-3">
+              <ExportPdfButton targetRef={contentRef} filename="dashboard-seguranca" />
+              <SheetUpload
+                endpoint="/api/seguranca/fits"
+                label="Importar FITs"
+                headerDetectionKeys={["RE", "CPF", "NOME"]}
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["seguranca-dashboard"] })}
+                variant="outline"
+                size="sm"
+              />
+            </div>
           </div>
+
+          <div ref={contentRef} className="space-y-8">
 
           {/* KPI Cards — 3 colunas: Total FITs | Treinamentos | Aprovados Portal */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -313,7 +320,11 @@ export default function DashboardSegurancaPage() {
                 ) : (
                   <>
                     <ChartContainer
-                      config={{ total: { label: "Colaboradores", color: "#5bc0ec" } }}
+                      config={{
+                        Aprovado: { label: "Aprovado", color: "#22c55e" },
+                        Pendente: { label: "Pendente", color: "#f59e0b" },
+                        "Aprovado - DEMITIDO": { label: "Aprovado - DEMITIDO", color: "#64748b" },
+                      }}
                       className="h-[300px] 2xl:h-[360px] w-full"
                     >
                       <PieChart>
@@ -385,7 +396,11 @@ export default function DashboardSegurancaPage() {
                 ) : (
                   <>
                     <ChartContainer
-                      config={{ value: { label: "Colaboradores", color: "#5bc0ec" } }}
+                      config={{
+                        OK: { label: "OK", color: "#22c55e" },
+                        Pendente: { label: "Pendente", color: "#f59e0b" },
+                        "N/A": { label: "N/A", color: "#64748b" },
+                      }}
                       className="h-[260px] 2xl:h-[320px] w-full"
                     >
                       <BarChart data={dadosRpv} margin={{ top: 16, right: 40, left: 10, bottom: 10 }}>
@@ -409,6 +424,7 @@ export default function DashboardSegurancaPage() {
                           allowDecimals={false}
                         />
                         <ChartTooltip content={<ChartTooltipContent />} />
+                        <ChartLegend content={<ChartLegendContent />} />
                         <Bar dataKey="value" name="Colaboradores" radius={[6, 6, 0, 0]}>
                           {dadosRpv.map((entry, i) => (
                             <Cell key={`rpv-${i}`} fill={entry.fill} />
@@ -450,7 +466,11 @@ export default function DashboardSegurancaPage() {
               </CardHeader>
               <CardContent>
                 <ChartContainer
-                  config={{ value: { label: "Colaboradores", color: "#5bc0ec" } }}
+                  config={{
+                    Concluído: { label: "Concluído", color: "#22c55e" },
+                    "Em Andamento": { label: "Em Andamento", color: "#5bc0ec" },
+                    Pendente: { label: "Pendente", color: "#f59e0b" },
+                  }}
                   className="h-[220px] 2xl:h-[280px] w-full"
                 >
                   <BarChart data={dadosTrein} margin={{ top: 16, right: 40, left: 10, bottom: 10 }}>
@@ -474,6 +494,7 @@ export default function DashboardSegurancaPage() {
                       allowDecimals={false}
                     />
                     <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
                     <Bar dataKey="value" name="Colaboradores" radius={[6, 6, 0, 0]}>
                       {dadosTrein.map((entry, i) => (
                         <Cell key={`trein-${i}`} fill={entry.fill} />
@@ -503,6 +524,7 @@ export default function DashboardSegurancaPage() {
             </Card>
           )}
 
+          </div>
         </div>
       </div>
     </ProtectedRoute>

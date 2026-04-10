@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dashboardPrincipalApi, configApi, ocorrenciasApi, type DashboardPrincipalData, type Ocorrencia } from "@/lib/axios";
+import { ExportPdfButton } from "@/components/export-pdf-button";
 
 // ============================================================================
 // CONFIGURAÇÃO DOS GRÁFICOS
@@ -99,8 +100,8 @@ function DashboardSkeleton() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
             <Card key={i} className="glass-card">
               <CardHeader className="pb-2">
                 <Skeleton className="h-5 w-32" />
@@ -142,6 +143,8 @@ function DashboardSkeleton() {
 // ============================================================================
 
 export default function DashboardPage() {
+  const contentRef = useRef<HTMLDivElement>(null);
+
   // Busca dados da API
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard-principal"],
@@ -291,7 +294,6 @@ export default function DashboardPage() {
     if (!dashboardData?.metricas) {
       return {
         total: 0,
-        mobPercentual: 0,
         asoPercentual: 0,
         pendenciasSetoriais: 0,
       };
@@ -299,11 +301,9 @@ export default function DashboardPage() {
 
     return {
       total: dashboardData.metricas.totalCadastrados,
-      mobPercentual: dashboardData.metricas.percentualMOB,
       asoPercentual: dashboardData.metricas.percentualASO,
       pendenciasSetoriais:
-        dashboardData.metricas.totalCadastrados -
-        dashboardData.metricas.totalAdmitidos,
+        dashboardData.pendencias?.filter((p) => p.status === "Atrasado").length ?? 0,
     };
   }, [dashboardData]);
 
@@ -358,12 +358,17 @@ export default function DashboardPage() {
         <div className="mx-auto max-w-7xl 2xl:max-w-[1800px]">
 
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground 2xl:text-lg">
-              Visão geral dos colaboradores e métricas
-            </p>
+          <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">Dashboard</h1>
+              <p className="text-muted-foreground 2xl:text-lg">
+                Visão geral dos colaboradores e métricas
+              </p>
+            </div>
+            <ExportPdfButton targetRef={contentRef} filename="dashboard-principal" />
           </div>
+
+          <div ref={contentRef}>
 
           {/* ── Card de Cabeçalho do Projeto ── */}
           {configData && (
@@ -428,7 +433,7 @@ export default function DashboardPage() {
           )}
 
           {/* ── Cards de KPIs ── */}
-          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Previsto vs Real */}
             {(() => {
               const previsto = dashboardData?.metricas?.colaboradoresPrevistos ?? 0;
@@ -474,47 +479,6 @@ export default function DashboardPage() {
               );
             })()}
 
-            {/* Mobilização (MOB) - Distribuição por Fase */}
-            <Card className="glass-card">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Mobilização
-                </CardTitle>
-                <Truck className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                {(() => {
-                  const distribuicaoMob = dashboardData?.agregacoes?.distribuicaoMob ?? [];
-                  
-                  if (distribuicaoMob.length === 0) {
-                    return (
-                      <>
-                        <div className="text-2xl 2xl:text-3xl font-bold text-foreground">
-                          {kpis.mobPercentual}%
-                        </div>
-                        <p className="text-xs text-muted-foreground">MOB Concluído</p>
-                      </>
-                    );
-                  }
-
-                  return (
-                    <div className="max-h-24 overflow-y-auto pr-1 space-y-1">
-                      {distribuicaoMob.map((item) => (
-                        <div key={item.mob} className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground truncate" title={item.mob}>
-                            {item.mob}
-                          </span>
-                          <span className="font-medium text-foreground ml-2">
-                            {item.total}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-
             {/* Saúde (ASO) */}
             <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -544,7 +508,7 @@ export default function DashboardPage() {
                   {kpis.pendenciasSetoriais}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Não enviados ao RH
+                  Etapas atrasadas
                 </p>
               </CardContent>
             </Card>
@@ -976,6 +940,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          </div>
         </div>
       </div>
     </ProtectedRoute>

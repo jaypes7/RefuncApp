@@ -1,36 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, ArrowRight, Loader2 } from "lucide-react";
+import { Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, error: authError, isLoading } = useAuth();
   const [re, setRe] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [localError, setLocalError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const trimmed = re.trim();
-    if (!trimmed) {
-      setError("Informe seu RE para continuar.");
+    const trimmedRE = re.trim();
+    const trimmedSenha = senha.trim();
+
+    if (!trimmedRE) {
+      setLocalError("Informe seu RE para continuar.");
       return;
     }
 
-    setError("");
-    setIsLoading(true);
-
-    try {
-      await login(trimmed);
-      // Redirect is handled inside login()
-    } catch {
-      setError("Ocorreu um erro ao tentar entrar. Tente novamente.");
-      setIsLoading(false);
+    if (!trimmedSenha) {
+      setLocalError("Informe sua senha para continuar.");
+      return;
     }
+
+    setLocalError("");
+    await login(trimmedRE, trimmedSenha);
   };
 
   return (
@@ -44,15 +44,15 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-sm px-6">
         {/* Logo + headline */}
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-linear-to-tr from-amber-500 to-yellow-300 shadow-lg shadow-amber-500/30">
-            <span className="text-3xl font-bold text-gray-900">R</span>
+          <div className="mb-4 flex h-18 w-20 items-center justify-center rounded-xl bg-linear-to-tr from-amber-500 to-yellow-300 shadow-lg shadow-amber-500/30">
+            <span className="text-3xl font-bold text-gray-900">GPI</span>
           </div>
 
           <h1 className="mb-1 text-3xl font-bold tracking-tight text-foreground">
             Acesso ao Sistema
           </h1>
           <p className="text-sm font-medium text-muted-foreground">
-            Insira seu RE para continuar
+            Insira seu RE e senha para continuar
           </p>
         </div>
 
@@ -82,7 +82,7 @@ export default function LoginPage() {
                   value={re}
                   onChange={(e) => {
                     setRe(e.target.value);
-                    if (error) setError("");
+                    if (localError) setLocalError("");
                   }}
                   disabled={isLoading}
                   className="h-12 border-white/10 bg-white/5 pl-10 text-base
@@ -94,10 +94,60 @@ export default function LoginPage() {
                   required
                 />
               </div>
+            </div>
+
+            {/* Senha field */}
+            <div className="space-y-2">
+              <label
+                htmlFor="senha"
+                className="block px-1 text-sm font-medium text-foreground/80"
+              >
+                Senha
+              </label>
+
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                </div>
+
+                <Input
+                  id="senha"
+                  type={mostrarSenha ? "text" : "password"}
+                  placeholder="Digite sua senha"
+                  value={senha}
+                  onChange={(e) => {
+                    setSenha(e.target.value);
+                    if (localError) setLocalError("");
+                  }}
+                  disabled={isLoading}
+                  className="h-12 border-white/10 bg-white/5 pl-10 pr-10 text-base
+                             placeholder:text-muted-foreground/60
+                             focus-visible:border-primary/60
+                             focus-visible:ring-primary/25
+                             disabled:opacity-50 disabled:cursor-not-allowed"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setMostrarSenha((v) => !v)}
+                  disabled={isLoading}
+                  className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed"
+                >
+                  {mostrarSenha ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
 
               {/* Inline error message */}
-              {error && (
-                <p className="px-1 text-xs text-destructive">{error}</p>
+              {(localError || authError) && (
+                <p className="px-1 text-xs text-destructive">
+                  {localError || authError}
+                </p>
               )}
             </div>
 
@@ -125,14 +175,8 @@ export default function LoginPage() {
               )}
             </Button>
 
-            {/* Bottom row – forgot / version */}
-            <div className="flex items-center justify-between border-t border-white/5 pt-4 text-xs text-muted-foreground">
-              <a
-                href="#"
-                className="transition-colors duration-150 hover:text-primary"
-              >
-                Esqueci meu acesso
-              </a>
+            {/* Bottom row – version */}
+            <div className="flex items-center justify-end border-t border-white/5 pt-4 text-xs text-muted-foreground">
               <span className="opacity-50">RefuncApp v2.4.0</span>
             </div>
           </form>
@@ -141,7 +185,7 @@ export default function LoginPage() {
         {/* Support link */}
         <div className="mt-6 text-center">
           <p className="text-sm text-muted-foreground">
-            Precisa de ajuda?{" "}
+            Esqueceu a senha?{" "}
             <a
               href="#"
               className="text-primary/80 underline underline-offset-4 transition-colors duration-150 hover:text-primary"

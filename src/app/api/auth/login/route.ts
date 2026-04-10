@@ -12,6 +12,7 @@ import { ZodError } from "zod";
 import { LoginSchema } from "@/lib/schemas";
 import { createServerClient } from "@/lib/supabase";
 import { generateToken, setAuthCookie } from "@/lib/auth";
+import { comparePassword } from "@/lib/password";
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,18 +25,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { re } = LoginSchema.parse(body);
+    const { re, senha } = LoginSchema.parse(body);
 
     const db = createServerClient();
     const { data: usuario, error } = await db
       .from("usuarios_permitidos")
-      .select("re, nome, perfil")
+      .select("re, nome, perfil, senha_hash, precisa_redefinir_senha")
       .eq("re", re)
       .single();
 
     if (error || !usuario) {
       return NextResponse.json(
-        { error: "Acesso não autorizado" },
+        { error: "RE ou senha incorretos" },
+        { status: 401 },
+      );
+    }
+
+    const senhaValida = await comparePassword(senha, usuario.senha_hash || "");
+    if (!senhaValida) {
+      return NextResponse.json(
+        { error: "RE ou senha incorretos" },
         { status: 401 },
       );
     }
@@ -54,6 +63,7 @@ export async function POST(request: NextRequest) {
         re: usuario.re,
         nome: usuario.nome ?? null,
         perfil: usuario.perfil ?? null,
+        precisaRedefinirSenha: usuario.precisa_redefinir_senha ?? false,
       },
     });
   } catch (error) {

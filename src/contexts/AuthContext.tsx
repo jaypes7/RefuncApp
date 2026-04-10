@@ -16,9 +16,10 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (re: string) => Promise<void>;
+  login: (re: string, senha: string) => Promise<void>;
   logout: () => void;
   error: string | null;
+  refreshUser: () => Promise<void>;
 }
 
 // ── Context ──────────────────────────────────────────────────────────────────
@@ -52,15 +53,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
-   * Login - valida RE contra a API/backend
+   * Login - valida RE e senha contra a API/backend
    */
   const login = useCallback(
-    async (re: string) => {
+    async (re: string, senha: string) => {
       setError(null);
       setIsLoading(true);
 
       try {
-        const { data } = await authApi.login(re);
+        const { data } = await authApi.login(re, senha);
 
         if (data.success && data.user) {
           setUser(data.user);
@@ -69,7 +70,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw new Error("Resposta inválida do servidor");
         }
       } catch (err: unknown) {
-        console.error("[AuthContext] Erro no login:", err);
         const e = err as {
           response?: { data?: { error?: string } };
           message?: string;
@@ -79,7 +79,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           e.message ||
           "Erro ao fazer login. Tente novamente.";
         setError(message);
-        throw new Error(message);
       } finally {
         setIsLoading(false);
       }
@@ -102,6 +101,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
+  /**
+   * Recarrega dados do usuário atual (útil após redefinir senha)
+   */
+  const refreshUser = useCallback(async () => {
+    try {
+      const { data } = await authApi.me();
+      if (data.user) {
+        setUser(data.user);
+      }
+    } catch {
+      // Ignora erro
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -111,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         error,
+        refreshUser,
       }}
     >
       {children}

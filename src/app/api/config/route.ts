@@ -36,6 +36,7 @@ interface ConfigResponse {
   CENTRO_CUSTO: string | null;
   COLABORADORES_PREVISTOS: number;
   ORCADO_SUPRIMENTOS: number;
+  FERIADOS_PROJETO: string[];
 }
 
 // ============================================================================
@@ -88,6 +89,7 @@ export async function GET() {
       CENTRO_CUSTO: configRow?.centro_custo ?? null,
       COLABORADORES_PREVISTOS: configRow?.colaboradores_previstos ?? 0,
       ORCADO_SUPRIMENTOS: configRow?.orcado_suprimentos ?? 0,
+      FERIADOS_PROJETO: (configRow?.feriados_projeto as string[]) || [],
     };
 
     return NextResponse.json({ data: config });

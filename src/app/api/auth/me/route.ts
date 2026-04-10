@@ -20,11 +20,21 @@ export async function GET() {
       );
     }
 
+    // Busca flag atualizada no banco
+    const { createServerClient } = await import("@/lib/supabase");
+    const db = createServerClient();
+    const { data: dbUser } = await db
+      .from("usuarios_permitidos")
+      .select("precisa_redefinir_senha")
+      .eq("re", user.re)
+      .single();
+
     return NextResponse.json({
       user: {
         re: user.re,
         nome: user.nome || null,
         perfil: user.perfil || null,
+        precisaRedefinirSenha: dbUser?.precisa_redefinir_senha ?? false,
       },
     });
   } catch (error) {

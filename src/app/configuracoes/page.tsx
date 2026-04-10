@@ -33,6 +33,7 @@ import {
   Pencil,
   Check,
   X,
+  Key,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -53,7 +54,7 @@ type ConfigProjeto = {
 
 type ConfigClinica = { id?: number; nome: string };
 type ConfigHotel = { id?: string; nome: string; qt_vagas: number; vagas_ocupadas: number; vagas_disponiveis: number };
-type ConfigAcesso = { id?: string; re: string; nome: string; perfil: string };
+type ConfigAcesso = { id?: string; re: string; nome: string; perfil: string; precisa_redefinir_senha?: boolean };
 
 type LogEntry = {
   id: string;
@@ -77,6 +78,7 @@ type ApiConfigResponse = {
   CENTRO_CUSTO: string | null;
   COLABORADORES_PREVISTOS: number;
   ORCADO_SUPRIMENTOS: number;
+  FERIADOS_PROJETO: string[];
 };
 
 
@@ -126,8 +128,10 @@ export default function ConfiguracoesPage() {
 
   // ── Dias trabalhados (calendário) ──────────────────────────────────────────
   const [diasTrabalhados, setDiasTrabalhados] = useState<string[]>([]);
+  const [feriados, setFeriados] = useState<string[]>([]);
   const [calendarioAno, setCalendarioAno] = useState(new Date().getFullYear());
   const [calendarioMes, setCalendarioMes] = useState(new Date().getMonth());
+  const [calendarioModo, setCalendarioModo] = useState<"working" | "holiday">("working");
 
   // Query para buscar dias trabalhados
   const { data: diasTrabalhadosData } = useQuery({
@@ -146,6 +150,55 @@ export default function ConfiguracoesPage() {
       setDiasTrabalhados(diasTrabalhadosData);
     }
   }, [diasTrabalhadosData]);
+
+  // Query para buscar feriados
+  const { data: feriadosData } = useQuery({
+    queryKey: ["config", "feriados"],
+    queryFn: async () => {
+      const res = await fetch("/api/config/feriados");
+      if (!res.ok) throw new Error("Falha ao carregar feriados");
+      const json = await res.json();
+      return json.feriados as string[];
+    },
+  });
+
+  // Sincroniza feriados do servidor
+  useEffect(() => {
+    if (feriadosData) {
+      setFeriados(feriadosData);
+    }
+  }, [feriadosData]);
+
+  // Mutation para salvar feriados
+  const feriadosMutation = useMutation({
+    mutationFn: async (lista: string[]) => {
+      const res = await fetch("/api/config/feriados", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feriados: lista }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar feriados");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config", "feriados"] });
+      toast.success("Feriados salvos com sucesso!");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Handler para toggle de feriado
+  const toggleFeriado = (date: string) => {
+    setFeriados((prev) => {
+      const newFeriados = prev.includes(date)
+        ? prev.filter((d) => d !== date)
+        : [...prev, date].sort();
+      return newFeriados;
+    });
+  };
 
   // Mutation para salvar dias trabalhados
   const diasTrabalhadosMutation = useMutation({
@@ -182,11 +235,11 @@ export default function ConfiguracoesPage() {
   const diasUteisTotal = useMemo<number | null>(() => {
     if (!projeto.data_inicio || !projeto.data_fim) return null;
     try {
-      return calculateWorkingDays(projeto.data_inicio, projeto.data_fim);
+      return calculateWorkingDays(projeto.data_inicio, projeto.data_fim, feriados);
     } catch {
       return null;
     }
-  }, [projeto.data_inicio, projeto.data_fim]);
+  }, [projeto.data_inicio, projeto.data_fim, feriados]);
 
   // Calcula dias corridos totais
   const diasCorridosTotal = useMemo(() => {
@@ -484,6 +537,25 @@ export default function ConfiguracoesPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const resetSenhaMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/config/acessos?id=${id}&resetPassword=true`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao redefinir senha");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config", "acessos"] });
+      toast.success("Senha redefinida para o padrão. O usuário deverá alterá-la no próximo login.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // Handler para iniciar edição de acesso
   const iniciarEdicaoAcesso = (acesso: ConfigAcesso) => {
     setEditingAcessoId(acesso.id || null);
@@ -751,14 +823,14 @@ export default function ConfiguracoesPage() {
                       Dias Trabalhados do Projeto
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Marque manualmente os dias em que houve trabalho no projeto
+                      Marque manualmente os dias em que houve trabalho no projeto e os feriados. É possível marcar um feriado também como dia trabalhado.
                     </p>
                   </div>
 
                   {projeto.data_inicio && projeto.data_fim ? (
                     <div className="space-y-4">
                       {/* Resumo estatístico */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
                           <span className="text-xs text-muted-foreground">Dias Corridos</span>
                           <span className="text-2xl font-bold text-primary tabular-nums">
@@ -766,9 +838,27 @@ export default function ConfiguracoesPage() {
                           </span>
                         </div>
                         <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
+                          <span className="text-xs text-muted-foreground">Dias Úteis</span>
+                          <span className="text-2xl font-bold text-primary tabular-nums">
+                            {diasUteisTotal ?? 0}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
                           <span className="text-xs text-muted-foreground">Dias Trabalhados</span>
                           <span className="text-2xl font-bold text-primary tabular-nums">
                             {diasTrabalhados.length}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1 p-4 bg-red-500/5 rounded-lg border border-red-500/15">
+                          <span className="text-xs text-muted-foreground">Feriados</span>
+                          <span className="text-2xl font-bold text-red-600 tabular-nums">
+                            {feriados.length}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1 p-4 bg-red-500/5 rounded-lg border border-red-500/15">
+                          <span className="text-xs text-muted-foreground">Feriados Trabalhados</span>
+                          <span className="text-2xl font-bold text-red-600 tabular-nums">
+                            {feriados.filter((d) => diasTrabalhados.includes(d)).length}
                           </span>
                         </div>
                         <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
@@ -787,7 +877,11 @@ export default function ConfiguracoesPage() {
                         year={calendarioAno}
                         month={calendarioMes}
                         workingDays={diasTrabalhados}
+                        holidays={feriados}
                         onToggle={toggleDiaTrabalhado}
+                        onToggleHoliday={toggleFeriado}
+                        editMode={calendarioModo}
+                        onChangeEditMode={setCalendarioModo}
                         minDate={projeto.data_inicio}
                         maxDate={projeto.data_fim}
                         onPrevMonth={() => {
@@ -808,8 +902,17 @@ export default function ConfiguracoesPage() {
                         }}
                       />
 
-                      {/* Botão salvar dias trabalhados */}
-                      <div className="flex justify-end">
+                      {/* Botões salvar */}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          onClick={() => feriadosMutation.mutate(feriados)}
+                          disabled={feriadosMutation.isPending}
+                          className="gap-2"
+                          variant="outline"
+                        >
+                          <Save className="w-4 h-4" />
+                          Salvar Feriados
+                        </Button>
                         <Button
                           onClick={() => diasTrabalhadosMutation.mutate(diasTrabalhados)}
                           disabled={diasTrabalhadosMutation.isPending}
@@ -1044,6 +1147,19 @@ export default function ConfiguracoesPage() {
                                       className="text-muted-foreground hover:text-primary"
                                     >
                                       <Pencil className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        acesso.id &&
+                                        resetSenhaMutation.mutate(acesso.id)
+                                      }
+                                      disabled={resetSenhaMutation.isPending}
+                                      className="text-amber-500 hover:text-amber-500 hover:bg-amber-500/10"
+                                      title="Redefinir senha para o padrão"
+                                    >
+                                      <Key className="w-4 h-4" />
                                     </Button>
                                     <Button
                                       variant="ghost"

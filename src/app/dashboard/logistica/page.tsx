@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { dashboardLogisticaApi } from "@/lib/axios";
 import { SheetUpload } from "@/components/sheet-upload";
+import { ExportPdfButton } from "@/components/export-pdf-button";
 import { useQueryClient } from "@tanstack/react-query";
 
 // ============================================================================
@@ -151,6 +152,7 @@ function LogisticaSkeleton() {
 // ============================================================================
 
 export default function DashboardLogisticaPage() {
+  const contentRef = useRef<HTMLDivElement>(null);
   const router      = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -274,15 +276,20 @@ export default function DashboardLogisticaPage() {
                 </p>
               </div>
             </div>
-            <SheetUpload
-              endpoint="/api/logistica/controle"
-              label="Importar controle logístico"
-              headerDetectionKeys={["CPF", "RE", "NOME"]}
-              onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-logistica"] })}
-              variant="outline"
-              size="sm"
-            />
+            <div className="flex items-center gap-3">
+              <ExportPdfButton targetRef={contentRef} filename="dashboard-logistica" />
+              <SheetUpload
+                endpoint="/api/logistica/controle"
+                label="Importar controle logístico"
+                headerDetectionKeys={["CPF", "RE", "NOME"]}
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-logistica"] })}
+                variant="outline"
+                size="sm"
+              />
+            </div>
           </div>
+
+          <div ref={contentRef} className="space-y-8">
 
           {/* KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -514,6 +521,7 @@ export default function DashboardLogisticaPage() {
             </Card>
           )}
 
+          </div>
         </div>
       </div>
     </ProtectedRoute>

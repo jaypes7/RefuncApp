@@ -10,7 +10,11 @@ interface WorkingDaysCalendarProps {
   year: number;
   month: number; // 0-11
   workingDays: string[]; // ['2024-01-15', '2024-01-16', ...]
+  holidays: string[];
   onToggle: (date: string) => void;
+  onToggleHoliday: (date: string) => void;
+  editMode: "working" | "holiday";
+  onChangeEditMode: (mode: "working" | "holiday") => void;
   minDate?: string; // data_inicio do projeto (YYYY-MM-DD)
   maxDate?: string; // data_fim do projeto (YYYY-MM-DD)
   onPrevMonth?: () => void;
@@ -28,16 +32,18 @@ export function WorkingDaysCalendar({
   year,
   month,
   workingDays,
+  holidays,
   onToggle,
+  onToggleHoliday,
+  editMode,
+  onChangeEditMode,
   minDate,
   maxDate,
   onPrevMonth,
   onNextMonth,
 }: WorkingDaysCalendarProps) {
-  const workingDaysSet = useMemo(
-    () => new Set(workingDays),
-    [workingDays]
-  );
+  const workingDaysSet = useMemo(() => new Set(workingDays), [workingDays]);
+  const holidaysSet = useMemo(() => new Set(holidays), [holidays]);
 
   const calendarDays = useMemo(() => {
     const firstDayOfMonth = new Date(year, month, 1);
@@ -69,7 +75,7 @@ export function WorkingDaysCalendar({
       const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       const dateObj = new Date(year, month, day);
       const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-      
+
       // Apenas verifica se está fora do período do projeto
       let isDisabled = false;
       if (minDate && date < minDate) isDisabled = true;
@@ -94,11 +100,42 @@ export function WorkingDaysCalendar({
       const date = new Date(d);
       return date.getFullYear() === year && date.getMonth() === month;
     }).length;
-    return { totalWorkingDays, currentMonthDays };
-  }, [workingDays, year, month]);
+
+    const totalHolidays = holidays.length;
+    const currentMonthHolidays = holidays.filter((d) => {
+      const date = new Date(d);
+      return date.getFullYear() === year && date.getMonth() === month;
+    }).length;
+
+    const workedHolidays = holidays.filter((d) => workingDaysSet.has(d)).length;
+
+    return { totalWorkingDays, currentMonthDays, totalHolidays, currentMonthHolidays, workedHolidays };
+  }, [workingDays, holidays, workingDaysSet, year, month]);
 
   return (
     <div className="space-y-4">
+      {/* Toggle de modo */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant={editMode === "working" ? "default" : "outline"}
+          size="sm"
+          onClick={() => onChangeEditMode("working")}
+          className="gap-2"
+        >
+          <span className="w-3 h-3 rounded-sm bg-primary" />
+          Dias trabalhados
+        </Button>
+        <Button
+          variant={editMode === "holiday" ? "default" : "outline"}
+          size="sm"
+          onClick={() => onChangeEditMode("holiday")}
+          className="gap-2"
+        >
+          <span className="w-3 h-3 rounded-sm bg-red-500" />
+          Feriados
+        </Button>
+      </div>
+
       {/* Header com navegação */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -129,6 +166,14 @@ export function WorkingDaysCalendar({
               (<span className="font-medium text-foreground">{stats.currentMonthDays}</span> neste mês)
             </span>
           )}
+          <span className="ml-3">
+            <span className="font-medium text-foreground">{stats.totalHolidays}</span> feriados
+            {stats.currentMonthHolidays > 0 && (
+              <span className="ml-1">
+                (<span className="font-medium text-foreground">{stats.currentMonthHolidays}</span> neste mês)
+              </span>
+            )}
+          </span>
         </div>
       </div>
 
@@ -159,36 +204,54 @@ export function WorkingDaysCalendar({
             }
 
             const isWorking = workingDaysSet.has(dayInfo.date);
+            const isHoliday = holidaysSet.has(dayInfo.date);
             const isToday = dayInfo.date === new Date().toISOString().split("T")[0];
+
+            const handleClick = () => {
+              if (dayInfo.isDisabled) return;
+              if (editMode === "holiday") {
+                onToggleHoliday(dayInfo.date);
+              } else {
+                onToggle(dayInfo.date);
+              }
+            };
 
             return (
               <button
                 key={dayInfo.date}
-                onClick={() => !dayInfo.isDisabled && onToggle(dayInfo.date)}
+                onClick={handleClick}
                 disabled={dayInfo.isDisabled}
                 className={cn(
-                  "h-10 rounded-md text-sm font-medium transition-all",
+                  "h-10 rounded-md text-sm font-medium transition-all relative",
                   "flex items-center justify-center",
                   dayInfo.isDisabled && "opacity-30 cursor-not-allowed",
                   !dayInfo.isDisabled && "cursor-pointer hover:scale-105",
-                  isWorking
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : dayInfo.isWeekend
-                    ? "bg-accent/50 text-foreground hover:bg-accent"
-                    : "bg-transparent text-foreground hover:bg-accent",
-                  isToday && !isWorking && "border-2 border-primary/50",
-                  isToday && isWorking && "ring-2 ring-primary-foreground"
+                  isWorking && !isHoliday && "bg-primary text-primary-foreground shadow-sm",
+                  !isWorking && isHoliday && "bg-red-500/20 text-red-700",
+                  isWorking && isHoliday && "bg-primary text-primary-foreground shadow-sm ring-2 ring-red-500/50",
+                  !isWorking && !isHoliday && dayInfo.isWeekend && "bg-accent/50 text-foreground hover:bg-accent",
+                  !isWorking && !isHoliday && !dayInfo.isWeekend && "bg-transparent text-foreground hover:bg-accent",
+                  isToday && !isWorking && !isHoliday && "border-2 border-primary/50",
+                  isToday && (isWorking || isHoliday) && "ring-2 ring-primary-foreground"
                 )}
-                title={dayInfo.isDisabled 
-                  ? "Fora do período do projeto"
-                  : isWorking 
+                title={
+                  dayInfo.isDisabled
+                    ? "Fora do período do projeto"
+                    : isWorking && isHoliday
+                    ? "Feriado trabalhado - Clique para editar"
+                    : isWorking
                     ? "Dia trabalhado - Clique para remover"
+                    : isHoliday
+                    ? "Feriado - Clique para remover"
                     : dayInfo.isWeekend
                     ? "Fim de semana - Clique para marcar"
-                    : "Clique para marcar como dia trabalhado"
+                    : "Clique para marcar"
                 }
               >
                 {dayInfo.dayOfMonth}
+                {isHoliday && isWorking && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
+                )}
               </button>
             );
           })}
@@ -200,6 +263,16 @@ export function WorkingDaysCalendar({
         <div className="flex items-center gap-1.5">
           <div className="w-4 h-4 rounded bg-primary" />
           <span>Dia trabalhado</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-4 h-4 rounded bg-red-500/20 border border-red-500/30" />
+          <span>Feriado</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-4 h-4 rounded bg-primary ring-2 ring-red-500/50 relative">
+            <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-red-500" />
+          </div>
+          <span>Feriado trabalhado</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-4 h-4 rounded border-2 border-primary/50" />

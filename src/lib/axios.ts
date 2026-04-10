@@ -145,14 +145,15 @@ export interface User {
   re: string;
   nome: string | null;
   perfil: string | null;
+  precisaRedefinirSenha?: boolean;
 }
 
 export const authApi = {
-  login: (re: string) =>
+  login: (re: string, senha: string) =>
     api.post<{
       success: boolean;
       user: User;
-    }>("/auth/login", { re }),
+    }>("/auth/login", { re, senha }),
 
   logout: () => api.post("/auth/logout"),
 
@@ -160,6 +161,9 @@ export const authApi = {
     api.get<{
       user: User;
     }>("/auth/me"),
+
+  resetPassword: (novaSenha: string) =>
+    api.post("/auth/reset-password", { novaSenha }),
 };
 
 // ============================================================================

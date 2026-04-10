@@ -12,7 +12,7 @@
 // ============================================================================
 
 /**
- * Nomes das 12 etapas do processo de admissão / integração de colaboradores.
+ * Nomes das etapas do processo de admissão / integração de colaboradores.
  *
  * A ordem do array é significativa e representa a sequência cronológica
  * real do processo de RH.
@@ -20,8 +20,11 @@
  * Usar `as const` garante:
  *   - Tipo literal de cada elemento (em vez de `string` genérico)
  *   - Array readonly, prevenindo mutações acidentais em runtime
+ *
+ *  A ordem reflete a sequência real do processo de RH.
  */
 export const ETAPAS_BASE = [
+  "PGR E PCMSO",
   "Seleção",
   "Exames",
   "ASO",
@@ -38,7 +41,7 @@ export const ETAPAS_BASE = [
 export type NomeEtapa = (typeof ETAPAS_BASE)[number];
 
 /** Número total de etapas do projeto (constante derivada do array) */
-export const TOTAL_ETAPAS = ETAPAS_BASE.length; // 12
+export const TOTAL_ETAPAS = ETAPAS_BASE.length; // 11
 
 // ============================================================================
 // TIPOS

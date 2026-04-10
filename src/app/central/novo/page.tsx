@@ -70,70 +70,70 @@ import { CargoCombobox } from "@/components/CargoCombobox";
 const step1Schema = z.object({
   cpf: z.string().min(14, "CPF inválido"),
   nome: z.string().min(3, "Nome completo é obrigatório"),
-  dtNascimento: z.string().min(1, "Data de nascimento é obrigatória"),
+  dtNascimento: z.string().optional(),
   idade: z.number().min(16).max(99).optional(),
-  municipio: z.string().min(1, "Município é obrigatório"),
-  telefone: z.string().min(14, "Telefone inválido"),
-  uf: z.string().length(2, "UF é obrigatória"),
-  pessoa: z.enum(["Física", "Jurídica"]),
-  ind: z.string().min(1, "IND é obrigatório"),
+  municipio: z.string().optional(),
+  telefone: z.string().optional(),
+  uf: z.string().optional(),
+  pessoa: z.enum(["Física", "Jurídica"]).optional(),
+  ind: z.string().optional(),
 });
 
 // Etapa 2: Contratual/Admissão (RH)
 const step2Schema = z.object({
-  dataAdmissao: z.string().min(1, "Data de admissão é obrigatória"),
-  re: z.string().min(1, "RE é obrigatório"),
-  funcaoClt: z.string().min(1, "Função CLT é obrigatória"),
-  histograma: z.string().min(1, "Histograma é obrigatório"),
-  cartaOferta: z.enum(["Sim", "Não", "Pendente"]),
-  contrato: z.enum(["CLT", "PJ", "Temporário", "Estagiário"]),
-  status: z.enum(["Ativo", "Pendente", "Inativo", "Desligado"]),
-  enviadoRh: z.enum(["Sim", "Não", "Pendente"]),
-  vinculado: z.string().min(1, "Vinculado é obrigatório"),
+  dataAdmissao: z.string().optional(),
+  re: z.string().optional(),
+  funcaoClt: z.string().optional(),
+  histograma: z.string().optional(),
+  cartaOferta: z.enum(["Sim", "Não", "Pendente"]).optional(),
+  contrato: z.enum(["CLT", "PJ", "Temporário", "Estagiário"]).optional(),
+  status: z.enum(["Ativo", "Pendente", "Inativo", "Desligado"]).optional(),
+  enviadoRh: z.enum(["Sim", "Não", "Pendente"]).optional(),
+  vinculado: z.string().optional(),
   termino: z.string().optional(),
   prorrogacao: z.string().optional(),
   demissao: z.string().optional(),
-  preAdmissao: z.enum(["Sim", "Não", "Pendente"]),
+  preAdmissao: z.enum(["Sim", "Não", "Pendente"]).optional(),
 });
 
 // Etapa 3: Benefícios (RH)
 const step3Schema = z.object({
-  docs: z.enum(["Completo", "Pendente", "Incompleto"]),
-  cracha: z.enum(["Emitido", "Pendente"]),
-  ponto: z.enum(["Cadastrado", "Pendente"]),
-  vr: z.enum(["Ativo", "Pendente"]),
+  docs: z.enum(["Completo", "Pendente", "Incompleto"]).optional(),
+  cracha: z.enum(["Emitido", "Pendente"]).optional(),
+  ponto: z.enum(["Cadastrado", "Pendente"]).optional(),
+  vr: z.enum(["Ativo", "Pendente"]).optional(),
 });
 
 // Etapa 4: Logística/Mobilização
 const step4Schema = z.object({
-  mob: z.enum(["Sim", "Não", "Pendente"]),
+  mob: z.enum(["Sim", "Não", "Pendente"]).optional(),
 });
 
 // Etapa 5: Dados Operacionais (Logística)
 const step5Schema = z.object({
-  op: z.string().min(1, "OP é obrigatória"),
-  req: z.string().min(1, "REQ é obrigatória"),
-  colabPend: z.enum(["Sim", "Não"]),
+  op: z.string().optional(),
+  req: z.string().optional(),
+  colabPend: z.enum(["Sim", "Não"]).optional(),
 });
 
 // Etapa 6: Sistemas (Logística)
 const step6Schema = z.object({
-  portal: z.enum(["Liberado", "Pendente", "Bloqueado"]),
+  portal: z.enum(["Liberado", "Pendente", "Bloqueado"]).optional(),
 });
 
 // Etapa 7: Saúde Ocupacional (Segurança)
 const step7Schema = z.object({
-  exame: z.enum(["Realizado", "Agendado", "Pendente"]),
-  aso: z.enum(["Apto", "Inapto", "Pendente"]),
-  clinica: z.string().min(1, "Clínica é obrigatória"),
-  rpv: z.string().min(1, "RPV é obrigatório"),
+  exame: z.enum(["Realizado", "Agendado", "Pendente"]).optional(),
+  aso: z.enum(["Apto", "Inapto", "Pendente"]).optional(),
+  clinica: z.string().optional(),
+  rpv: z.string().optional(),
 });
 
 // Etapa 8: Treinamentos (Segurança)
 const step8Schema = z.object({
-  treinamento: z.enum(["Concluído", "Em Andamento", "Pendente"]),
-  realizarTreinamento: z.enum(["Sim", "Não", "Pendente"]),
-  localTreinamento: z.string().min(1, "Local do treinamento é obrigatório"),
+  treinamento: z.enum(["Concluído", "Em Andamento", "Pendente"]).optional(),
+  realizarTreinamento: z.enum(["Sim", "Não", "Pendente"]).optional(),
+  localTreinamento: z.string().optional(),
 });
 
 // Schema completo combinado (todas as 38 colunas)
@@ -191,7 +191,7 @@ const ufs = [
 ];
 
 // Calcular idade baseado na data de nascimento
-function calcularIdade(dataNascimento: string): number | undefined {
+function calcularIdade(dataNascimento: string | undefined): number | undefined {
   if (!dataNascimento) return undefined;
   const hoje = new Date();
   const nascimento = new Date(dataNascimento);
@@ -448,66 +448,10 @@ export default function OnboardingPage() {
 
   const handleNext = async () => {
     if (step === 1) {
-      const isValid = await trigger([
-        "cpf",
-        "nome",
-        "dtNascimento",
-        "municipio",
-        "telefone",
-        "uf",
-        "pessoa",
-        "ind",
-      ]);
-      if (isValid) {
+      const isValid = await trigger(["cpf", "nome"]);
+      if (isValid && !cpfError) {
         setDirection(1);
         setStep(2);
-      }
-    } else if (step === 2) {
-      const isValid = await trigger([
-        "dataAdmissao",
-        "re",
-        "funcaoClt",
-        "histograma",
-        "cartaOferta",
-        "contrato",
-        "status",
-        "enviadoRh",
-        "vinculado",
-        "preAdmissao",
-      ]);
-      if (isValid) {
-        setDirection(1);
-        setStep(3);
-      }
-    } else if (step === 3) {
-      const isValid = await trigger(["docs", "cracha", "ponto", "vr"]);
-      if (isValid) {
-        setDirection(1);
-        setStep(4);
-      }
-    } else if (step === 4) {
-      const isValid = await trigger(["mob"]);
-      if (isValid) {
-        setDirection(1);
-        setStep(5);
-      }
-    } else if (step === 5) {
-      const isValid = await trigger(["op", "req", "colabPend"]);
-      if (isValid) {
-        setDirection(1);
-        setStep(6);
-      }
-    } else if (step === 6) {
-      const isValid = await trigger(["portal"]);
-      if (isValid) {
-        setDirection(1);
-        setStep(7);
-      }
-    } else if (step === 7) {
-      const isValid = await trigger(["exame", "aso", "clinica", "rpv"]);
-      if (isValid) {
-        setDirection(1);
-        setStep(8);
       }
     } else if (step < totalSteps) {
       setDirection(1);
@@ -574,42 +518,15 @@ export default function OnboardingPage() {
   const isStep1Valid =
     watch("cpf")?.length === 14 &&
     watch("nome")?.length >= 3 &&
-    watch("dtNascimento") !== "" &&
-    watch("municipio") !== "" &&
-    watch("telefone")?.length >= 14 &&
-    watch("uf")?.length === 2 &&
-    watch("pessoa") !== undefined &&
-    watch("ind") !== "" &&
     !cpfError;
 
-  const isStep2Valid =
-    watch("dataAdmissao") !== "" &&
-    watch("re") !== "" &&
-    watch("funcaoClt") !== "" &&
-    watch("histograma") !== "" &&
-    watch("cartaOferta") !== undefined &&
-    watch("contrato") !== undefined &&
-    watch("status") !== undefined &&
-    watch("enviadoRh") !== undefined &&
-    watch("vinculado") !== "" &&
-    watch("preAdmissao") !== undefined;
-
+  const isStep2Valid = true;
   const isStep3Valid = true;
-  const isStep4Valid = watch("mob") !== undefined;
-  const isStep5Valid =
-    watch("op") !== "" &&
-    watch("req") !== "" &&
-    watch("colabPend") !== undefined;
-  const isStep6Valid = watch("portal") !== undefined;
-  const isStep7Valid =
-    watch("exame") !== undefined &&
-    watch("aso") !== undefined &&
-    watch("clinica") !== "" &&
-    watch("rpv") !== "";
-  const isStep8Valid =
-    watch("treinamento") !== undefined &&
-    watch("realizarTreinamento") !== undefined &&
-    watch("localTreinamento") !== "";
+  const isStep4Valid = true;
+  const isStep5Valid = true;
+  const isStep6Valid = true;
+  const isStep7Valid = true;
+  const isStep8Valid = true;
 
   return (
     <ProtectedRoute>
@@ -778,8 +695,7 @@ export default function OnboardingPage() {
                             htmlFor="dtNascimento"
                             className="text-sm font-medium text-foreground"
                           >
-                            Data de Nascimento{" "}
-                            <span className="text-destructive">*</span>
+                            Data de Nascimento
                           </label>
                           <Input
                             id="dtNascimento"
@@ -789,11 +705,6 @@ export default function OnboardingPage() {
                               errors.dtNascimento ? "border-destructive" : ""
                             }
                           />
-                          {errors.dtNascimento && (
-                            <p className="text-xs text-destructive">
-                              {errors.dtNascimento.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -822,7 +733,7 @@ export default function OnboardingPage() {
                           htmlFor="municipio"
                           className="text-sm font-medium text-foreground"
                         >
-                          Município <span className="text-destructive">*</span>
+                          Município
                         </label>
                         <Input
                           id="municipio"
@@ -832,11 +743,6 @@ export default function OnboardingPage() {
                             errors.municipio ? "border-destructive" : ""
                           }
                         />
-                        {errors.municipio && (
-                          <p className="text-xs text-destructive">
-                            {errors.municipio.message}
-                          </p>
-                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -844,7 +750,7 @@ export default function OnboardingPage() {
                           htmlFor="telefone"
                           className="text-sm font-medium text-foreground"
                         >
-                          Telefone <span className="text-destructive">*</span>
+                          Telefone
                         </label>
                         <Controller
                           name="telefone"
@@ -864,11 +770,6 @@ export default function OnboardingPage() {
                             />
                           )}
                         />
-                        {errors.telefone && (
-                          <p className="text-xs text-destructive">
-                            {errors.telefone.message}
-                          </p>
-                        )}
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -877,7 +778,7 @@ export default function OnboardingPage() {
                             htmlFor="uf"
                             className="text-sm font-medium text-foreground"
                           >
-                            UF <span className="text-destructive">*</span>
+                            UF
                           </label>
                           <Select
                             value={ufValue}
@@ -898,11 +799,6 @@ export default function OnboardingPage() {
                               ))}
                             </SelectContent>
                           </Select>
-                          {errors.uf && (
-                            <p className="text-xs text-destructive">
-                              {errors.uf.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -910,7 +806,7 @@ export default function OnboardingPage() {
                             htmlFor="pessoa"
                             className="text-sm font-medium text-foreground"
                           >
-                            Pessoa <span className="text-destructive">*</span>
+                            Pessoa
                           </label>
                           <Select
                             value={pessoaValue}
@@ -932,11 +828,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Jurídica">Jurídica</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.pessoa && (
-                            <p className="text-xs text-destructive">
-                              {errors.pessoa.message}
-                            </p>
-                          )}
                         </div>
                       </div>
 
@@ -945,7 +836,7 @@ export default function OnboardingPage() {
                           htmlFor="ind"
                           className="text-sm font-medium text-foreground"
                         >
-                          IND <span className="text-destructive">*</span>
+                          IND
                         </label>
                         <Input
                           id="ind"
@@ -953,11 +844,6 @@ export default function OnboardingPage() {
                           {...register("ind")}
                           className={errors.ind ? "border-destructive" : ""}
                         />
-                        {errors.ind && (
-                          <p className="text-xs text-destructive">
-                            {errors.ind.message}
-                          </p>
-                        )}
                       </div>
                     </CardContent>
 
@@ -1016,8 +902,7 @@ export default function OnboardingPage() {
                           htmlFor="dataAdmissao"
                           className="text-sm font-medium text-foreground"
                         >
-                          Data de Admissão{" "}
-                          <span className="text-destructive">*</span>
+                          Data de Admissão
                         </label>
                         <Input
                           id="dataAdmissao"
@@ -1027,11 +912,6 @@ export default function OnboardingPage() {
                             errors.dataAdmissao ? "border-destructive" : ""
                           }
                         />
-                        {errors.dataAdmissao && (
-                          <p className="text-xs text-destructive">
-                            {errors.dataAdmissao.message}
-                          </p>
-                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -1039,7 +919,7 @@ export default function OnboardingPage() {
                           htmlFor="re"
                           className="text-sm font-medium text-foreground"
                         >
-                          RE <span className="text-destructive">*</span>
+                          RE
                         </label>
                         <Input
                           id="re"
@@ -1047,11 +927,6 @@ export default function OnboardingPage() {
                           {...register("re")}
                           className={errors.re ? "border-destructive" : ""}
                         />
-                        {errors.re && (
-                          <p className="text-xs text-destructive">
-                            {errors.re.message}
-                          </p>
-                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -1059,7 +934,7 @@ export default function OnboardingPage() {
                           htmlFor="funcaoClt"
                           className="text-sm font-medium text-foreground"
                         >
-                          Função CLT <span className="text-destructive">*</span>
+                          Função CLT
                         </label>
                         <CargoCombobox
                           value={funcaoCltValue}
@@ -1070,11 +945,6 @@ export default function OnboardingPage() {
                           }
                           placeholder="Selecione o cargo..."
                         />
-                        {errors.funcaoClt && (
-                          <p className="text-xs text-destructive">
-                            {errors.funcaoClt.message}
-                          </p>
-                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -1082,7 +952,7 @@ export default function OnboardingPage() {
                           htmlFor="histograma"
                           className="text-sm font-medium text-foreground"
                         >
-                          Histograma <span className="text-destructive">*</span>
+                          Histograma
                         </label>
                         <Input
                           id="histograma"
@@ -1092,11 +962,6 @@ export default function OnboardingPage() {
                             errors.histograma ? "border-destructive" : ""
                           }
                         />
-                        {errors.histograma && (
-                          <p className="text-xs text-destructive">
-                            {errors.histograma.message}
-                          </p>
-                        )}
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1105,8 +970,7 @@ export default function OnboardingPage() {
                             htmlFor="cartaOferta"
                             className="text-sm font-medium text-foreground"
                           >
-                            Carta Oferta{" "}
-                            <span className="text-destructive">*</span>
+                            Carta Oferta
                           </label>
                           <Select
                             value={cartaOfertaValue}
@@ -1131,11 +995,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.cartaOferta && (
-                            <p className="text-xs text-destructive">
-                              {errors.cartaOferta.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -1143,7 +1002,7 @@ export default function OnboardingPage() {
                             htmlFor="contrato"
                             className="text-sm font-medium text-foreground"
                           >
-                            Contrato <span className="text-destructive">*</span>
+                            Contrato
                           </label>
                           <Select
                             value={contratoValue}
@@ -1173,11 +1032,6 @@ export default function OnboardingPage() {
                               </SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.contrato && (
-                            <p className="text-xs text-destructive">
-                              {errors.contrato.message}
-                            </p>
-                          )}
                         </div>
                       </div>
 
@@ -1187,7 +1041,7 @@ export default function OnboardingPage() {
                             htmlFor="status"
                             className="text-sm font-medium text-foreground"
                           >
-                            Status <span className="text-destructive">*</span>
+                            Status
                           </label>
                           <Select
                             value={statusValue}
@@ -1219,11 +1073,6 @@ export default function OnboardingPage() {
                               </SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.status && (
-                            <p className="text-xs text-destructive">
-                              {errors.status.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -1231,8 +1080,7 @@ export default function OnboardingPage() {
                             htmlFor="enviadoRh"
                             className="text-sm font-medium text-foreground"
                           >
-                            Enviado RH{" "}
-                            <span className="text-destructive">*</span>
+                            Enviado RH
                           </label>
                           <Select
                             value={enviadoRhValue}
@@ -1257,11 +1105,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.enviadoRh && (
-                            <p className="text-xs text-destructive">
-                              {errors.enviadoRh.message}
-                            </p>
-                          )}
                         </div>
                       </div>
 
@@ -1270,7 +1113,7 @@ export default function OnboardingPage() {
                           htmlFor="vinculado"
                           className="text-sm font-medium text-foreground"
                         >
-                          Vinculado <span className="text-destructive">*</span>
+                          Vinculado
                         </label>
                         <Input
                           id="vinculado"
@@ -1280,11 +1123,6 @@ export default function OnboardingPage() {
                             errors.vinculado ? "border-destructive" : ""
                           }
                         />
-                        {errors.vinculado && (
-                          <p className="text-xs text-destructive">
-                            {errors.vinculado.message}
-                          </p>
-                        )}
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -1345,8 +1183,7 @@ export default function OnboardingPage() {
                           htmlFor="preAdmissao"
                           className="text-sm font-medium text-foreground"
                         >
-                          Pré-Admissão{" "}
-                          <span className="text-destructive">*</span>
+                          Pré-Admissão
                         </label>
                         <Select
                           value={preAdmissaoValue}
@@ -1369,11 +1206,6 @@ export default function OnboardingPage() {
                             <SelectItem value="Pendente">Pendente</SelectItem>
                           </SelectContent>
                         </Select>
-                        {errors.preAdmissao && (
-                          <p className="text-xs text-destructive">
-                            {errors.preAdmissao.message}
-                          </p>
-                        )}
                       </div>
                     </CardContent>
 
@@ -1434,8 +1266,7 @@ export default function OnboardingPage() {
                             htmlFor="docs"
                             className="text-sm font-medium text-foreground"
                           >
-                            Documentação{" "}
-                            <span className="text-destructive">*</span>
+                            Documentação
                           </label>
                           <Select
                             value={docsValue}
@@ -1460,11 +1291,6 @@ export default function OnboardingPage() {
                               </SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.docs && (
-                            <p className="text-xs text-destructive">
-                              {errors.docs.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -1472,7 +1298,7 @@ export default function OnboardingPage() {
                             htmlFor="cracha"
                             className="text-sm font-medium text-foreground"
                           >
-                            Crachá <span className="text-destructive">*</span>
+                            Crachá
                           </label>
                           <Select
                             value={crachaValue}
@@ -1494,11 +1320,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.cracha && (
-                            <p className="text-xs text-destructive">
-                              {errors.cracha.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -1506,7 +1327,7 @@ export default function OnboardingPage() {
                             htmlFor="ponto"
                             className="text-sm font-medium text-foreground"
                           >
-                            Ponto <span className="text-destructive">*</span>
+                            Ponto
                           </label>
                           <Select
                             value={pontoValue}
@@ -1528,11 +1349,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.ponto && (
-                            <p className="text-xs text-destructive">
-                              {errors.ponto.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -1540,7 +1356,7 @@ export default function OnboardingPage() {
                             htmlFor="vr"
                             className="text-sm font-medium text-foreground"
                           >
-                            VR <span className="text-destructive">*</span>
+                            VR
                           </label>
                           <Select
                             value={vrValue}
@@ -1558,11 +1374,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.vr && (
-                            <p className="text-xs text-destructive">
-                              {errors.vr.message}
-                            </p>
-                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1624,7 +1435,7 @@ export default function OnboardingPage() {
                             htmlFor="mob"
                             className="text-sm font-medium text-foreground"
                           >
-                            MOB <span className="text-destructive">*</span>
+                            MOB
                           </label>
                           <Select
                             value={mobValue}
@@ -1645,11 +1456,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.mob && (
-                            <p className="text-xs text-destructive">
-                              {errors.mob.message}
-                            </p>
-                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1711,7 +1517,7 @@ export default function OnboardingPage() {
                             htmlFor="op"
                             className="text-sm font-medium text-foreground"
                           >
-                            OP <span className="text-destructive">*</span>
+                            OP
                           </label>
                           <Input
                             id="op"
@@ -1719,11 +1525,6 @@ export default function OnboardingPage() {
                             {...register("op")}
                             className={errors.op ? "border-destructive" : ""}
                           />
-                          {errors.op && (
-                            <p className="text-xs text-destructive">
-                              {errors.op.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -1731,7 +1532,7 @@ export default function OnboardingPage() {
                             htmlFor="req"
                             className="text-sm font-medium text-foreground"
                           >
-                            REQ <span className="text-destructive">*</span>
+                            REQ
                           </label>
                           <Input
                             id="req"
@@ -1739,11 +1540,6 @@ export default function OnboardingPage() {
                             {...register("req")}
                             className={errors.req ? "border-destructive" : ""}
                           />
-                          {errors.req && (
-                            <p className="text-xs text-destructive">
-                              {errors.req.message}
-                            </p>
-                          )}
                         </div>
                       </div>
 
@@ -1753,8 +1549,7 @@ export default function OnboardingPage() {
                             htmlFor="colabPend"
                             className="text-sm font-medium text-foreground"
                           >
-                            Colaborador Pendente{" "}
-                            <span className="text-destructive">*</span>
+                            Colaborador Pendente
                           </label>
                           <Select
                             value={colabPendValue}
@@ -1776,11 +1571,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Não">Não</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.colabPend && (
-                            <p className="text-xs text-destructive">
-                              {errors.colabPend.message}
-                            </p>
-                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1842,7 +1632,7 @@ export default function OnboardingPage() {
                             htmlFor="portal"
                             className="text-sm font-medium text-foreground"
                           >
-                            Portal <span className="text-destructive">*</span>
+                            Portal
                           </label>
                           <Select
                             value={portalValue}
@@ -1869,11 +1659,6 @@ export default function OnboardingPage() {
                               </SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.portal && (
-                            <p className="text-xs text-destructive">
-                              {errors.portal.message}
-                            </p>
-                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1935,7 +1720,7 @@ export default function OnboardingPage() {
                             htmlFor="exame"
                             className="text-sm font-medium text-foreground"
                           >
-                            Exame <span className="text-destructive">*</span>
+                            Exame
                           </label>
                           <Select
                             value={exameValue}
@@ -1960,11 +1745,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.exame && (
-                            <p className="text-xs text-destructive">
-                              {errors.exame.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -1972,7 +1752,7 @@ export default function OnboardingPage() {
                             htmlFor="aso"
                             className="text-sm font-medium text-foreground"
                           >
-                            ASO <span className="text-destructive">*</span>
+                            ASO
                           </label>
                           <Select
                             value={asoValue}
@@ -1993,11 +1773,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.aso && (
-                            <p className="text-xs text-destructive">
-                              {errors.aso.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -2005,7 +1780,7 @@ export default function OnboardingPage() {
                             htmlFor="clinica"
                             className="text-sm font-medium text-foreground"
                           >
-                            Clínica <span className="text-destructive">*</span>
+                            Clínica
                           </label>
                           <Select
                             value={clinicaValue}
@@ -2043,11 +1818,6 @@ export default function OnboardingPage() {
                               )}
                             </SelectContent>
                           </Select>
-                          {errors.clinica && (
-                            <p className="text-xs text-destructive">
-                              {errors.clinica.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -2055,7 +1825,7 @@ export default function OnboardingPage() {
                             htmlFor="rpv"
                             className="text-sm font-medium text-foreground"
                           >
-                            RPV <span className="text-destructive">*</span>
+                            RPV
                           </label>
                           <Input
                             id="rpv"
@@ -2063,11 +1833,6 @@ export default function OnboardingPage() {
                             {...register("rpv")}
                             className={errors.rpv ? "border-destructive" : ""}
                           />
-                          {errors.rpv && (
-                            <p className="text-xs text-destructive">
-                              {errors.rpv.message}
-                            </p>
-                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -2129,8 +1894,7 @@ export default function OnboardingPage() {
                             htmlFor="treinamento"
                             className="text-sm font-medium text-foreground"
                           >
-                            Treinamento{" "}
-                            <span className="text-destructive">*</span>
+                            Treinamento
                           </label>
                           <Select
                             value={treinamentoValue}
@@ -2159,11 +1923,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.treinamento && (
-                            <p className="text-xs text-destructive">
-                              {errors.treinamento.message}
-                            </p>
-                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -2171,8 +1930,7 @@ export default function OnboardingPage() {
                             htmlFor="realizarTreinamento"
                             className="text-sm font-medium text-foreground"
                           >
-                            Realizar Treinamento{" "}
-                            <span className="text-destructive">*</span>
+                            Realizar Treinamento
                           </label>
                           <Select
                             value={realizarTreinamentoValue}
@@ -2199,11 +1957,6 @@ export default function OnboardingPage() {
                               <SelectItem value="Pendente">Pendente</SelectItem>
                             </SelectContent>
                           </Select>
-                          {errors.realizarTreinamento && (
-                            <p className="text-xs text-destructive">
-                              {errors.realizarTreinamento.message}
-                            </p>
-                          )}
                         </div>
                       </div>
 
@@ -2212,8 +1965,7 @@ export default function OnboardingPage() {
                           htmlFor="localTreinamento"
                           className="text-sm font-medium text-foreground"
                         >
-                          Local do Treinamento{" "}
-                          <span className="text-destructive">*</span>
+                          Local do Treinamento
                         </label>
                         <Input
                           id="localTreinamento"
@@ -2223,11 +1975,6 @@ export default function OnboardingPage() {
                             errors.localTreinamento ? "border-destructive" : ""
                           }
                         />
-                        {errors.localTreinamento && (
-                          <p className="text-xs text-destructive">
-                            {errors.localTreinamento.message}
-                          </p>
-                        )}
                       </div>
                     </CardContent>
 
@@ -2290,8 +2037,7 @@ export default function OnboardingPage() {
           {/* Informações Adicionais */}
           <div className="mt-6 text-center">
             <p className="text-xs text-muted-foreground">
-              Todos os campos marcados com{" "}
-              <span className="text-destructive">*</span> são obrigatórios.
+              CPF e Nome são obrigatórios. Demais campos são opcionais.
             </p>
           </div>
         </div>
