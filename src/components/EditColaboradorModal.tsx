@@ -247,7 +247,7 @@ export function EditColaboradorModal({
         allowed.includes(val as T) ? (val as T) : undefined;
 
       reset({
-        NOME: colaborador.NOME,
+        NOME: colaborador.NOME || "",
         RE: colaborador.RE || "",
         IDADE: colaborador.IDADE || undefined,
         DT_NASCIMENTO: formatDataSegura(colaborador.DT_NASCIMENTO) ?? "",

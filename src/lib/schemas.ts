@@ -179,12 +179,19 @@ export const DateRequiredSchema = z.preprocess(
 
 /**
  * Schema para telefone
+ * Aceita: formato válido, string vazia (converte para undefined), null, undefined
  */
-export const TelefoneSchema = z
-  .string()
-  .regex(/^\(\d{2}\)\s?\d{4,5}-?\d{4}$|^\d{10,11}$/, "Telefone inválido")
-  .optional()
-  .nullable();
+export const TelefoneSchema = z.preprocess(
+  (val) => {
+    if (val === null || val === undefined) return undefined;
+    if (typeof val === "string" && val.trim() === "") return undefined;
+    return val;
+  },
+  z
+    .string()
+    .regex(/^\(\d{2}\)\s?\d{4,5}-?\d{4}$|^\d{10,11}$/, "Telefone inválido")
+    .optional()
+);
 
 // ============================================================================
 // SCHEMA PRINCIPAL - COLABORADOR
@@ -265,6 +272,7 @@ export const ColaboradorSchema = z.object({
 
 /**
  * Schema para criação de colaborador (campos obrigatórios)
+ * CPF e NOME são obrigatórios para cadastrar um colaborador
  */
 export const ColaboradorCreateSchema = ColaboradorSchema.refine(
   (data) => data.CPF && data.NOME,
@@ -343,6 +351,7 @@ export const ColaboradorUpdateSchema = z.object({
 
 export const LoginSchema = z.object({
   re: z.string().min(1, "RE é obrigatório"),
+  senha: z.string().min(1, "Senha é obrigatória"),
 });
 
 // ============================================================================
@@ -353,7 +362,7 @@ export const ConfigSchema = z.object({
   DIAS_TOTAIS_PROJETO: z.coerce.number().positive().optional(),
   DATA_INICIO_PROJETO: DateSchema,
   DATA_FIM_PROJETO: DateSchema,
-  ETAPA_ATUAL: z.coerce.number().min(1).max(12).optional(),
+  ETAPA_ATUAL: z.coerce.number().min(1).max(20).optional(),
   META_ADMISSOES: z.coerce.number().positive().optional(),
   ETAPAS_PROJETO: z.string().optional(), // JSON string com array de etapas
   DURACAO_ETAPAS: z.string().optional(), // JSON string com array de durações

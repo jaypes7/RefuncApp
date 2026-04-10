@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ConditionalLayout } from "@/components/conditional-layout";
+import { AuthGlobalUI } from "@/components/auth-global-ui";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -26,6 +27,7 @@ export default function RootLayout({
         <Providers>
           <AuthProvider>
             <ConditionalLayout>{children}</ConditionalLayout>
+            <AuthGlobalUI />
             <Toaster position="top-right" richColors />
             <Analytics />
             <SpeedInsights />

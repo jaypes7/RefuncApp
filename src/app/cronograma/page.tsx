@@ -64,16 +64,17 @@ type ApiConfigResponse = {
 };
 
 const ETAPAS_DEFAULT: EtapaCronograma[] = [
-  { id: 1,  nome: "Seleção de Mão de Obra",    dias: 3,  percentual_concluido: 0 },
-  { id: 2,  nome: "Realização de Exames",       dias: 4,  percentual_concluido: 0 },
-  { id: 3,  nome: "Liberação de ASO",           dias: 2,  percentual_concluido: 0 },
-  { id: 4,  nome: "e-Social",                   dias: 4,  percentual_concluido: 0 },
-  { id: 5,  nome: "Assinatura de contrato",     dias: 3,  percentual_concluido: 0 },
-  { id: 6,  nome: "Treinamentos Normativos",    dias: 8,  percentual_concluido: 0 },
-  { id: 7,  nome: "Portal do Colaborador",      dias: 3,  percentual_concluido: 0 },
-  { id: 8,  nome: "Liberação de Credencial",    dias: 4,  percentual_concluido: 0 },
-  { id: 9,  nome: "Liberação de EPIs",          dias: 3,  percentual_concluido: 0 },
-  { id: 10, nome: "Início de Campo",            dias: 3,  percentual_concluido: 0 },
+  { id: 1,  nome: "PGR E PCMSO",                dias: 3,  percentual_concluido: 0 },
+  { id: 2,  nome: "Seleção de Mão de Obra",     dias: 3,  percentual_concluido: 0 },
+  { id: 3,  nome: "Realização de Exames",       dias: 4,  percentual_concluido: 0 },
+  { id: 4,  nome: "Liberação de ASO",           dias: 2,  percentual_concluido: 0 },
+  { id: 5,  nome: "e-Social",                   dias: 4,  percentual_concluido: 0 },
+  { id: 6,  nome: "Assinatura de contrato",     dias: 3,  percentual_concluido: 0 },
+  { id: 7,  nome: "Treinamentos Normativos",    dias: 8,  percentual_concluido: 0 },
+  { id: 8,  nome: "Portal do Colaborador",      dias: 3,  percentual_concluido: 0 },
+  { id: 9,  nome: "Liberação de Credencial",    dias: 4,  percentual_concluido: 0 },
+  { id: 10, nome: "Liberação de EPIs",          dias: 3,  percentual_concluido: 0 },
+  { id: 11, nome: "Início de Campo",            dias: 3,  percentual_concluido: 0 },
 ];
 
 export default function CronogramaPage() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { dashboardRhApi } from "@/lib/axios";
 import { SheetUpload } from "@/components/sheet-upload";
+import { ExportPdfButton } from "@/components/export-pdf-button";
 import { useQueryClient } from "@tanstack/react-query";
 
 // ============================================================================
@@ -166,6 +167,7 @@ function RhSkeleton() {
 // ============================================================================
 
 export default function DashboardRhPage() {
+  const contentRef = useRef<HTMLDivElement>(null);
   const router      = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -344,14 +346,19 @@ export default function DashboardRhPage() {
                 </p>
               </div>
             </div>
-            <SheetUpload
-              endpoint="/api/rh/colaboradores"
-              label="Importar planilha RH"
-              onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-rh"] })}
-              variant="outline"
-              size="sm"
-            />
+            <div className="flex items-center gap-3">
+              <ExportPdfButton targetRef={contentRef} filename="dashboard-rh" />
+              <SheetUpload
+                endpoint="/api/rh/colaboradores"
+                label="Importar planilha RH"
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-rh"] })}
+                variant="outline"
+                size="sm"
+              />
+            </div>
           </div>
+
+          <div ref={contentRef} className="space-y-8">
 
           {/* KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -493,6 +500,7 @@ export default function DashboardRhPage() {
                       allowDecimals={false}
                     />
                     <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
                     <Bar
                       dataKey="total"
                       name="Colaboradores"
@@ -665,6 +673,7 @@ export default function DashboardRhPage() {
             </div>
           )}
 
+          </div>
         </div>
       </div>
     </ProtectedRoute>

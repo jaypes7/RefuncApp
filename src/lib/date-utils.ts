@@ -139,17 +139,16 @@ export function getNationalHolidays(year: number): string[] {
  * entre as duas datas. Feriados extras opcionais são incluídos também.
  */
 function buildHolidaySet(
-  start: Date,
-  end: Date,
+  _start: Date,
+  _end: Date,
   extra: (string | Date)[] = [],
 ): Set<number> {
   const all: string[] = [...extra.map((h) =>
     h instanceof Date ? formatDateISO(h) : String(h)
   )];
 
-  for (let y = start.getFullYear(); y <= end.getFullYear(); y++) {
-    all.push(...getNationalHolidays(y));
-  }
+  // Apenas feriados manuais do projeto são considerados;
+  // feriados nacionais foram removidos do cálculo automático.
 
   return new Set<number>(
     all.map((h) => toMidnightLocal(h).getTime()),
