@@ -8,7 +8,7 @@
 
 import bcrypt from "bcryptjs";
 
-export const DEFAULT_PASSWORD = "manserv@2026";
+export const DEFAULT_PASSWORD = "123456";
 
 const SALT_ROUNDS = 10;
 

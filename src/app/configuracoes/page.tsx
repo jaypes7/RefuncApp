@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { calculateWorkingDays } from "@/lib/date-utils";
+import { calculateWorkingDays, getNationalHolidays } from "@/lib/date-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -190,8 +190,12 @@ export default function ConfiguracoesPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Handler para toggle de feriado
+  // Handler para toggle de feriado (protege feriados nacionais)
   const toggleFeriado = (date: string) => {
+    if (feriadosNacionais.includes(date)) {
+      toast.error("Feriados nacionais não podem ser removidos manualmente.");
+      return;
+    }
     setFeriados((prev) => {
       const newFeriados = prev.includes(date)
         ? prev.filter((d) => d !== date)
@@ -231,15 +235,28 @@ export default function ConfiguracoesPage() {
     });
   };
 
-  // ── Dias úteis calculados a partir das datas do projeto ─────────────────────
-  const diasUteisTotal = useMemo<number | null>(() => {
-    if (!projeto.data_inicio || !projeto.data_fim) return null;
-    try {
-      return calculateWorkingDays(projeto.data_inicio, projeto.data_fim, feriados);
-    } catch {
-      return null;
+  // ── Feriados nacionais computados automaticamente ───────────────────────────
+  const feriadosNacionais = useMemo<string[]>(() => {
+    if (!projeto.data_inicio || !projeto.data_fim) return [];
+    const start = new Date(projeto.data_inicio);
+    const end = new Date(projeto.data_fim);
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+    const all: string[] = [];
+    for (let year = startYear; year <= endYear; year++) {
+      all.push(...getNationalHolidays(year));
     }
-  }, [projeto.data_inicio, projeto.data_fim, feriados]);
+    // Filtra apenas os que estão dentro do intervalo do projeto
+    return all.filter((d) => d >= projeto.data_inicio! && d <= projeto.data_fim!).sort();
+  }, [projeto.data_inicio, projeto.data_fim]);
+
+  // Feriados exibidos = nacionais (automáticos) + regionais (manuais)
+  const feriadosParaExibir = useMemo<string[]>(() => {
+    const set = new Set([...feriadosNacionais, ...feriados]);
+    return Array.from(set).sort();
+  }, [feriadosNacionais, feriados]);
+
+  // (dias úteis não são mais exibidos em card; permanecem implícitos nos cálculos)
 
   // Calcula dias corridos totais
   const diasCorridosTotal = useMemo(() => {
@@ -823,24 +840,18 @@ export default function ConfiguracoesPage() {
                       Dias Trabalhados do Projeto
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      Marque manualmente os dias em que houve trabalho no projeto e os feriados. É possível marcar um feriado também como dia trabalhado.
+                      Feriados nacionais são preenchidos automaticamente. Marque manualmente os dias em que houve trabalho no projeto e os feriados regionais. É possível marcar um feriado também como dia trabalhado.
                     </p>
                   </div>
 
                   {projeto.data_inicio && projeto.data_fim ? (
                     <div className="space-y-4">
                       {/* Resumo estatístico */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                         <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
                           <span className="text-xs text-muted-foreground">Dias Corridos</span>
                           <span className="text-2xl font-bold text-primary tabular-nums">
                             {diasCorridosTotal ?? 0}
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
-                          <span className="text-xs text-muted-foreground">Dias Úteis</span>
-                          <span className="text-2xl font-bold text-primary tabular-nums">
-                            {diasUteisTotal ?? 0}
                           </span>
                         </div>
                         <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
@@ -852,13 +863,13 @@ export default function ConfiguracoesPage() {
                         <div className="flex flex-col gap-1 p-4 bg-red-500/5 rounded-lg border border-red-500/15">
                           <span className="text-xs text-muted-foreground">Feriados</span>
                           <span className="text-2xl font-bold text-red-600 tabular-nums">
-                            {feriados.length}
+                            {feriadosParaExibir.length}
                           </span>
                         </div>
                         <div className="flex flex-col gap-1 p-4 bg-red-500/5 rounded-lg border border-red-500/15">
                           <span className="text-xs text-muted-foreground">Feriados Trabalhados</span>
                           <span className="text-2xl font-bold text-red-600 tabular-nums">
-                            {feriados.filter((d) => diasTrabalhados.includes(d)).length}
+                            {feriadosParaExibir.filter((d) => diasTrabalhados.includes(d)).length}
                           </span>
                         </div>
                         <div className="flex flex-col gap-1 p-4 bg-primary/5 rounded-lg border border-primary/15">
@@ -877,13 +888,14 @@ export default function ConfiguracoesPage() {
                         year={calendarioAno}
                         month={calendarioMes}
                         workingDays={diasTrabalhados}
-                        holidays={feriados}
+                        holidays={feriadosParaExibir}
                         onToggle={toggleDiaTrabalhado}
                         onToggleHoliday={toggleFeriado}
                         editMode={calendarioModo}
                         onChangeEditMode={setCalendarioModo}
                         minDate={projeto.data_inicio}
                         maxDate={projeto.data_fim}
+                        nationalHolidays={feriadosNacionais}
                         onPrevMonth={() => {
                           if (calendarioMes === 0) {
                             setCalendarioMes(11);

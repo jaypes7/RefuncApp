@@ -19,6 +19,7 @@ interface WorkingDaysCalendarProps {
   maxDate?: string; // data_fim do projeto (YYYY-MM-DD)
   onPrevMonth?: () => void;
   onNextMonth?: () => void;
+  nationalHolidays?: string[]; // feriados nacionais (não-editáveis)
 }
 
 const MONTH_NAMES = [
@@ -41,9 +42,11 @@ export function WorkingDaysCalendar({
   maxDate,
   onPrevMonth,
   onNextMonth,
+  nationalHolidays = [],
 }: WorkingDaysCalendarProps) {
   const workingDaysSet = useMemo(() => new Set(workingDays), [workingDays]);
   const holidaysSet = useMemo(() => new Set(holidays), [holidays]);
+  const nationalHolidaysSet = useMemo(() => new Set(nationalHolidays), [nationalHolidays]);
 
   const calendarDays = useMemo(() => {
     const firstDayOfMonth = new Date(year, month, 1);
@@ -205,11 +208,13 @@ export function WorkingDaysCalendar({
 
             const isWorking = workingDaysSet.has(dayInfo.date);
             const isHoliday = holidaysSet.has(dayInfo.date);
+            const isNationalHoliday = nationalHolidaysSet.has(dayInfo.date);
             const isToday = dayInfo.date === new Date().toISOString().split("T")[0];
 
             const handleClick = () => {
               if (dayInfo.isDisabled) return;
               if (editMode === "holiday") {
+                if (isNationalHoliday) return; // não permite editar feriado nacional
                 onToggleHoliday(dayInfo.date);
               } else {
                 onToggle(dayInfo.date);
@@ -226,23 +231,29 @@ export function WorkingDaysCalendar({
                   "flex items-center justify-center",
                   dayInfo.isDisabled && "opacity-30 cursor-not-allowed",
                   !dayInfo.isDisabled && "cursor-pointer hover:scale-105",
-                  isWorking && !isHoliday && "bg-primary text-primary-foreground shadow-sm",
-                  !isWorking && isHoliday && "bg-red-500/20 text-red-700",
-                  isWorking && isHoliday && "bg-primary text-primary-foreground shadow-sm ring-2 ring-red-500/50",
-                  !isWorking && !isHoliday && dayInfo.isWeekend && "bg-accent/50 text-foreground hover:bg-accent",
-                  !isWorking && !isHoliday && !dayInfo.isWeekend && "bg-transparent text-foreground hover:bg-accent",
-                  isToday && !isWorking && !isHoliday && "border-2 border-primary/50",
-                  isToday && (isWorking || isHoliday) && "ring-2 ring-primary-foreground"
+                  isWorking && !isHoliday && !isNationalHoliday && "bg-primary text-primary-foreground shadow-sm",
+                  !isWorking && isHoliday && !isNationalHoliday && "bg-red-500/20 text-red-700",
+                  !isWorking && isNationalHoliday && "bg-red-400/20 text-red-800 border border-dashed border-red-400",
+                  isWorking && isHoliday && !isNationalHoliday && "bg-primary text-primary-foreground shadow-sm ring-2 ring-red-500/50",
+                  isWorking && isNationalHoliday && "bg-primary text-primary-foreground shadow-sm ring-2 ring-red-400/60",
+                  !isWorking && !isHoliday && !isNationalHoliday && dayInfo.isWeekend && "bg-accent/50 text-foreground hover:bg-accent",
+                  !isWorking && !isHoliday && !isNationalHoliday && !dayInfo.isWeekend && "bg-transparent text-foreground hover:bg-accent",
+                  isToday && !isWorking && !isHoliday && !isNationalHoliday && "border-2 border-primary/50",
+                  isToday && (isWorking || isHoliday || isNationalHoliday) && "ring-2 ring-primary-foreground"
                 )}
                 title={
                   dayInfo.isDisabled
                     ? "Fora do período do projeto"
+                    : isNationalHoliday && isWorking
+                    ? "Feriado Nacional trabalhado - Clique para editar dia trabalhado"
+                    : isNationalHoliday
+                    ? "Feriado Nacional (automático)"
                     : isWorking && isHoliday
                     ? "Feriado trabalhado - Clique para editar"
                     : isWorking
                     ? "Dia trabalhado - Clique para remover"
                     : isHoliday
-                    ? "Feriado - Clique para remover"
+                    ? "Feriado regional - Clique para remover"
                     : dayInfo.isWeekend
                     ? "Fim de semana - Clique para marcar"
                     : "Clique para marcar"
@@ -266,7 +277,11 @@ export function WorkingDaysCalendar({
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-4 h-4 rounded bg-red-500/20 border border-red-500/30" />
-          <span>Feriado</span>
+          <span>Feriado regional</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-4 h-4 rounded bg-red-400/20 border border-dashed border-red-400" />
+          <span>Feriado Nacional</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-4 h-4 rounded bg-primary ring-2 ring-red-500/50 relative">

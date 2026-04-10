@@ -301,6 +301,13 @@ export type DashboardPrincipalData = {
     } | null;
   };
   etapasCount: number;
+  etapas: Array<{
+    id: number;
+    nome: string;
+    duracaoDias: number;
+    percentualConcluido: number;
+    concluida: boolean;
+  }>;
   agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes" | "distribuicaoMob">;
 };
 
@@ -508,4 +515,28 @@ export const ocorrenciasApi = {
     api.put<{ data: Ocorrencia }>(`/ocorrencias/${id}`, body),
 
   deletar: (id: number) => api.delete(`/ocorrencias/${id}`),
+};
+
+// ============================================================================
+// FUNÇÕES DE API - COMENTÁRIOS DO CLIENTE
+// ============================================================================
+
+export interface ComentarioCliente {
+  id: number;
+  texto: string;
+  /** ISO date string YYYY-MM-DD */
+  data: string;
+  created_at: string;
+}
+
+export const comentariosClienteApi = {
+  listar: () => api.get<{ data: ComentarioCliente[] }>("/comentarios-cliente"),
+
+  criar: (body: { texto: string; data: string }) =>
+    api.post<{ data: ComentarioCliente }>("/comentarios-cliente", body),
+
+  atualizar: (id: number, body: { texto: string; data: string }) =>
+    api.put<{ data: ComentarioCliente }>(`/comentarios-cliente/${id}`, body),
+
+  deletar: (id: number) => api.delete(`/comentarios-cliente/${id}`),
 };

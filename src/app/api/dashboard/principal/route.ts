@@ -367,6 +367,13 @@ export async function GET() {
         status: statusProjeto,
       },
       etapasCount: etapas.length,
+      etapas: etapas.map((e) => ({
+        id: e.id,
+        nome: e.nome,
+        duracaoDias: e.duracaoDias,
+        percentualConcluido: e.percentualConcluido ?? 0,
+        concluida: e.concluida ?? false,
+      })),
       pendencias: pendencias.slice(0, 10),
       graficos: {
         curvaS,
