@@ -136,19 +136,30 @@ export function getNationalHolidays(year: number): string[] {
 /**
  * Constrói um Set de timestamps (ms) com todos os feriados nacionais
  * que caem dentro do intervalo [start, end], cobrindo todos os anos
- * entre as duas datas. Feriados extras opcionais são incluídos também.
+ * entre as duas datas. Feriados extras opcionais (regionais/manuais)
+ * são incluídos também.
  */
 function buildHolidaySet(
-  _start: Date,
-  _end: Date,
+  start: Date,
+  end: Date,
   extra: (string | Date)[] = [],
 ): Set<number> {
   const all: string[] = [...extra.map((h) =>
     h instanceof Date ? formatDateISO(h) : String(h)
   )];
 
-  // Apenas feriados manuais do projeto são considerados;
-  // feriados nacionais foram removidos do cálculo automático.
+  // Inclui feriados nacionais brasileiros para todos os anos do intervalo
+  const startYear = start.getFullYear();
+  const endYear = end.getFullYear();
+  for (let year = startYear; year <= endYear; year++) {
+    const nationals = getNationalHolidays(year);
+    for (const h of nationals) {
+      const hDate = toMidnightLocal(h);
+      if (hDate.getTime() >= start.getTime() && hDate.getTime() <= end.getTime()) {
+        all.push(h);
+      }
+    }
+  }
 
   return new Set<number>(
     all.map((h) => toMidnightLocal(h).getTime()),

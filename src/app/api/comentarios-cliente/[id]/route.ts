@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * API: /api/ocorrencias/[id]
+ * API: /api/comentarios-cliente/[id]
  * ============================================================================
- * PUT    → atualiza uma ocorrência pelo ID numérico
- * DELETE → remove uma ocorrência pelo ID numérico
+ * PUT    → atualiza um comentário pelo ID numérico (todos os perfis autenticados)
+ * DELETE → remove um comentário pelo ID numérico (todos os perfis autenticados)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,7 +15,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth("user");
+    await requireAuth();
 
     const { id } = await params;
     const numId = parseInt(id, 10);
@@ -35,7 +35,7 @@ export async function PUT(
 
     const db = createServerClient();
     const { data: updated, error } = await db
-      .from("ocorrencias")
+      .from("comentarios_cliente")
       .update({ texto: texto.trim(), data })
       .eq("id", numId)
       .select()
@@ -48,10 +48,7 @@ export async function PUT(
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
-    if (error instanceof Error && error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
-    }
-    console.error("[PUT /api/ocorrencias/[id]]", error);
+    console.error("[PUT /api/comentarios-cliente/[id]]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
@@ -61,7 +58,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth("user");
+    await requireAuth();
 
     const { id } = await params;
     const numId = parseInt(id, 10);
@@ -70,7 +67,7 @@ export async function DELETE(
     }
 
     const db = createServerClient();
-    const { error } = await db.from("ocorrencias").delete().eq("id", numId);
+    const { error } = await db.from("comentarios_cliente").delete().eq("id", numId);
 
     if (error) throw error;
 
@@ -79,10 +76,7 @@ export async function DELETE(
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
-    if (error instanceof Error && error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
-    }
-    console.error("[DELETE /api/ocorrencias/[id]]", error);
+    console.error("[DELETE /api/comentarios-cliente/[id]]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }

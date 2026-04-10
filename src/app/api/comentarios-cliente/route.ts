@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * API: /api/ocorrencias
+ * API: /api/comentarios-cliente
  * ============================================================================
- * GET  → lista todas as ocorrências (order: data DESC, created_at DESC)
- * POST → cria uma ocorrência nova
+ * GET  → lista todos os comentários do cliente (order: data DESC, created_at DESC)
+ * POST → cria um comentário novo (todos os perfis autenticados)
  */
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ import { z, ZodError } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
 
-const OcorrenciaCreateSchema = z.object({
+const ComentarioCreateSchema = z.object({
   texto: z.string().trim().min(1, "Texto obrigatório"),
   data: z
     .string()
@@ -27,7 +27,7 @@ export async function GET() {
     const db = createServerClient();
 
     const { data, error } = await db
-      .from("ocorrencias")
+      .from("comentarios_cliente")
       .select("id, texto, data, created_at")
       .order("data", { ascending: false })
       .order("created_at", { ascending: false });
@@ -39,20 +39,20 @@ export async function GET() {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
-    console.error("[GET /api/ocorrencias]", error);
+    console.error("[GET /api/comentarios-cliente]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth("user");
+    await requireAuth();
     const body = await request.json();
-    const { texto, data } = OcorrenciaCreateSchema.parse(body);
+    const { texto, data } = ComentarioCreateSchema.parse(body);
 
     const db = createServerClient();
     const { data: row, error } = await db
-      .from("ocorrencias")
+      .from("comentarios_cliente")
       .insert({ texto, data })
       .select("id, texto, data, created_at")
       .single();
@@ -64,16 +64,13 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
-    if (error instanceof Error && error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
-    }
     if (error instanceof ZodError) {
       return NextResponse.json(
         { error: "Dados inválidos", details: error.issues },
         { status: 400 },
       );
     }
-    console.error("[POST /api/ocorrencias]", error);
+    console.error("[POST /api/comentarios-cliente]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
