@@ -14,7 +14,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import {
@@ -199,20 +199,31 @@ function agruparPorMob(cols: ColabRow[]) {
 // GET /api/dashboard/principal
 // ============================================================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const currentUser = await requireAuth();
+
+    const { searchParams } = new URL(request.url);
+    const ccParam = searchParams.get("centro_custo") || undefined;
+    // Guests: usa o centro_custo do JWT; admin/user: usa o param enviado
+    const centroCusto =
+      currentUser.perfil === "guest" && currentUser.centro_custo
+        ? currentUser.centro_custo
+        : ccParam;
 
     const db = createServerClient();
+
+    let colabQuery = db
+      .from("colaboradores")
+      .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao");
+    if (centroCusto) colabQuery = colabQuery.eq("centro_custo", centroCusto);
 
     const [
       { data: colabData, error: colabErr },
       { data: configRow, error: configErr },
       { data: etapasRows, error: etapasErr },
     ] = await Promise.all([
-      db
-        .from("colaboradores")
-        .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao"),
+      colabQuery,
       db.from("configuracoes").select("*").single(),
       db.from("etapas").select("*").order("ordem", { ascending: true }),
     ]);

@@ -45,6 +45,7 @@ export interface JWTPayload {
   re: string;
   nome?: string;
   perfil?: string;
+  centro_custo?: string;
   iat?: number;
   exp?: number;
 }

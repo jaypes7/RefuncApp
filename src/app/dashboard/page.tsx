@@ -41,8 +41,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente } from "@/lib/axios";
+import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 import { ExportPdfButton } from "@/components/export-pdf-button";
+import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 
 // ============================================================================
 // CONFIGURAÇÃO DOS GRÁFICOS
@@ -51,42 +53,39 @@ import { ExportPdfButton } from "@/components/export-pdf-button";
 const chartConfigStatus = {
   ativo: {
     label: "Ativo",
-    color: "#5bc0ec",
+    color: MANSERV_CHART.primary,
   },
   inativo: {
     label: "Inativo",
-    color: "#64748b",
+    color: MANSERV_CHART.gray,
   },
   pendente: {
     label: "Pendente",
-    color: "#f59e0b",
+    color: MANSERV_STATUS.warning,
   },
   desligado: {
     label: "Desligado",
-    color: "#ef4444",
+    color: MANSERV_STATUS.danger,
   },
 };
 
 const chartConfigCurvaS = {
   previsto: {
     label: "Planejado",
-    color: "#94a3b8",
+    color: MANSERV_CHART.gray,
   },
   realizado: {
     label: "Realizado",
-    color: "#ef4444",
+    color: MANSERV_STATUS.danger,
   },
 };
 
 const chartConfigFuncoes = {
-  total: { label: "Colaboradores", color: "#5bc0ec" },
+  total: { label: "Colaboradores", color: MANSERV_CHART.primary },
 };
 
 // Paleta de cores para o pie de funções
-const PIE_COLORS = [
-  "#5bc0ec", "#22c55e", "#f59e0b", "#a78bfa", "#f43f5e",
-  "#34d399", "#fb923c", "#818cf8", "#4ade80", "#60a5fa",
-];
+const PIE_COLORS = MANSERV_PIE_COLORS;
 
 // ============================================================================
 // LOADING SKELETON
@@ -148,12 +147,13 @@ function DashboardSkeleton() {
 export default function DashboardPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const evolucaoTimelineRef = useRef<HTMLDivElement>(null);
+  const { centroCusto } = useFilter();
 
   // Busca dados da API
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["dashboard-principal"],
+    queryKey: ["dashboard-principal", centroCusto],
     queryFn: async () => {
-      const response = await dashboardPrincipalApi.get();
+      const response = await dashboardPrincipalApi.get(centroCusto);
       return response.data;
     },
     retry: 2,
@@ -322,10 +322,10 @@ export default function DashboardPage() {
     const { Ativo, Inativo, Pendente, Desligado } = dashboardData.graficos.statusCount;
 
     return [
-      { name: "Ativo", value: Ativo || 0, color: "#5bc0ec" },
-      { name: "Inativo", value: Inativo || 0, color: "#64748b" },
-      { name: "Pendente", value: Pendente || 0, color: "#f59e0b" },
-      { name: "Desligado", value: Desligado || 0, color: "#ef4444" },
+      { name: "Ativo", value: Ativo || 0, color: "#ff460a" },
+      { name: "Inativo", value: Inativo || 0, color: "#e2e2e2" },
+      { name: "Pendente", value: Pendente || 0, color: "#E5CF61" },
+      { name: "Desligado", value: Desligado || 0, color: "#DA291B" },
     ];
   }, [dashboardData]);
 
@@ -340,7 +340,7 @@ export default function DashboardPage() {
       value: f.total,
       fill: PIE_COLORS[i % PIE_COLORS.length],
     }));
-    if (outrosTotal > 0) result.push({ name: "Outros", value: outrosTotal, fill: "#64748b" });
+    if (outrosTotal > 0) result.push({ name: "Outros", value: outrosTotal, fill: "#e2e2e2" });
     return result;
   }, [dashboardData]);
 
@@ -415,8 +415,8 @@ export default function DashboardPage() {
           {/* Header */}
           <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">Gestão a vista</h1>
-              <p className="text-muted-foreground 2xl:text-lg">
+              <h1 className="page-title">Gestão a vista</h1>
+              <p className="page-subtitle">
                 Visão geral do projeto e métricas
               </p>
             </div>
@@ -511,7 +511,7 @@ export default function DashboardPage() {
                     <Users className="h-4 w-4 text-primary" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl 2xl:text-3xl font-bold text-foreground">
+                    <div className="big-number text-[40px]">
                       {kpis.total}
                       {previsto > 0 && (
                         <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -550,7 +550,7 @@ export default function DashboardPage() {
                 <ShieldCheck className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-foreground">
+                <div className="big-number text-[40px]">
                   {kpis.asoPercentual}%
                 </div>
                 <p className="text-xs text-muted-foreground">ASO Apto</p>
@@ -566,7 +566,7 @@ export default function DashboardPage() {
                 <AlertCircle className="h-4 w-4 text-destructive" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-destructive">
+                <div className="big-number text-[40px] text-destructive">
                   {kpis.pendenciasSetoriais}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -636,8 +636,8 @@ export default function DashboardPage() {
                           style={{
                             color:
                               indicadorCurvaS.realizado >= indicadorCurvaS.previsto
-                                ? "#22c55e"
-                                : "#ef4444",
+                                ? "#337246"
+                                : "#DA291B",
                           }}
                         >
                           {indicadorCurvaS.realizado.toFixed(1)}%
@@ -679,33 +679,33 @@ export default function DashboardPage() {
                           id="gradientAdmitidos"
                           x1="0" y1="0" x2="0" y2="1"
                         >
-                          <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                          <stop offset="5%"  stopColor="#DA291B" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#DA291B" stopOpacity={0} />
                         </linearGradient>
                         <linearGradient
                           id="gradientMeta"
                           x1="0" y1="0" x2="0" y2="1"
                         >
-                          <stop offset="5%"  stopColor="#94a3b8" stopOpacity={0.12} />
-                          <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
+                          <stop offset="5%"  stopColor="#e2e2e2" stopOpacity={0.12} />
+                          <stop offset="95%" stopColor="#e2e2e2" stopOpacity={0} />
                         </linearGradient>
                       </defs>
 
                       <CartesianGrid
                         strokeDasharray="3 3"
-                        stroke="rgba(255,255,255,0.07)"
+                        stroke={CHART_GRID_COLOR}
                         vertical={false}
                       />
 
                       <XAxis
                         dataKey="mes"
-                        tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                        tick={CHART_AXIS_TICK}
                         tickLine={false}
                         axisLine={false}
                         interval={Math.max(0, Math.floor(curveData.length / 10) - 1)}
                       />
                       <YAxis
-                        tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                        tick={CHART_AXIS_TICK}
                         tickLine={false}
                         axisLine={false}
                         domain={[0, 100]}
@@ -715,7 +715,7 @@ export default function DashboardPage() {
                           angle: -90,
                           position: "insideLeft",
                           offset: 10,
-                          style: { fill: "hsl(var(--muted-foreground))", fontSize: 11 },
+                          style: { fill: CHART_AXIS_TICK.fill, fontSize: CHART_AXIS_TICK.fontSize },
                         }}
                       />
 
@@ -734,23 +734,23 @@ export default function DashboardPage() {
                       <Area
                         type="monotone"
                         dataKey="previsto"
-                        stroke="#94a3b8"
+                        stroke={MANSERV_CHART.gray}
                         strokeWidth={2}
                         strokeDasharray="6 3"
                         fill="url(#gradientMeta)"
                         dot={false}
-                        activeDot={{ r: 5, fill: "#94a3b8" }}
+                        activeDot={{ r: 5, fill: "#e2e2e2" }}
                       />
 
                       {temProgressoReal && (
                         <Area
                           type="monotone"
                           dataKey="realizado"
-                          stroke="#ef4444"
+                          stroke={MANSERV_STATUS.danger}
                           strokeWidth={3}
                           fill="url(#gradientAdmitidos)"
                           dot={false}
-                          activeDot={{ r: 7, fill: "#ef4444", stroke: "#fff", strokeWidth: 2 }}
+                          activeDot={{ r: 7, fill: "#DA291B", stroke: "#fff", strokeWidth: 2 }}
                         />
                       )}
                     </AreaChart>
@@ -760,17 +760,19 @@ export default function DashboardPage() {
               </Card>
 
               {/* Ocorrências — 1/3 da largura */}
-              <Card className="glass-card lg:col-span-1">
+              <Card className="glass-card lg:col-span-1 flex flex-col h-[460px] 2xl:h-[590px] overflow-hidden">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-destructive" />
                     Linha do tempo do Contrato
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {/* Formulário — somente admin/user */}
-                  <CanAccess role="user">
-                    <div className="flex gap-2 mb-4">
+                <CardContent className="flex-1 flex flex-col overflow-hidden">
+                  {/* Seção Ocorrências */}
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                    {/* Formulário — somente admin/user */}
+                    <CanAccess role="user">
+                      <div className="flex gap-2 mb-4 shrink-0">
                       <Input
                         className="glass-input flex-1 min-w-0"
                         placeholder="Descreva a ocorrência..."
@@ -804,16 +806,16 @@ export default function DashboardPage() {
                     </div>
                   </CanAccess>
 
-                  <div className="border-t border-white/10 mb-3" />
+                    <div className="border-t border-white/10 mb-3 shrink-0" />
 
-                  {/* Lista */}
-                  {ocorrencias.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
-                      <AlertTriangle className="h-8 w-8 opacity-20" />
-                      <p className="text-sm">Nenhuma ocorrência registrada</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-[26rem] 2xl:max-h-[34rem] overflow-y-auto pr-1">
+                    {/* Lista */}
+                    {ocorrencias.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+                        <AlertTriangle className="h-8 w-8 opacity-20" />
+                        <p className="text-sm">Nenhuma ocorrência registrada</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
                       {ocorrencias.map((o) => (
                         <div
                           key={o.id}
@@ -913,19 +915,22 @@ export default function DashboardPage() {
                           )}
                         </div>
                       ))}
-                    </div>
-                  )}
-
-                  {/* ── Comentários do Cliente ── */}
-                  <div className="border-t border-white/10 my-4" />
-
-                  <div className="flex items-center gap-2 mb-3">
-                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">Comentários do Cliente</span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Formulário — todos os perfis autenticados */}
-                  <div className="flex gap-2 mb-4">
+                  {/* ── Comentários do Cliente ── */}
+                  <div className="border-t border-white/10 my-4 shrink-0" />
+
+                  {/* Seção Comentários do Cliente */}
+                  <div className="shrink-0 max-h-[45%] flex flex-col overflow-hidden">
+                    <div className="flex items-center gap-2 mb-3 shrink-0">
+                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">Comentários do Cliente</span>
+                    </div>
+
+                    {/* Formulário — todos os perfis autenticados */}
+                    <div className="flex gap-2 mb-4 shrink-0">
                     <Input
                       className="glass-input flex-1 min-w-0"
                       placeholder="Adicionar comentário do cliente..."
@@ -958,14 +963,14 @@ export default function DashboardPage() {
                     </Button>
                   </div>
 
-                  {/* Lista de comentários */}
-                  {comentarios.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-2 py-6 text-center text-muted-foreground">
-                      <MessageSquare className="h-6 w-6 opacity-20" />
-                      <p className="text-sm">Nenhum comentário registrado</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {/* Lista de comentários */}
+                    {comentarios.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-2 py-6 text-center text-muted-foreground">
+                        <MessageSquare className="h-6 w-6 opacity-20" />
+                        <p className="text-sm">Nenhum comentário registrado</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
                       {comentarios.map((c) => (
                         <div
                           key={c.id}
@@ -1063,6 +1068,7 @@ export default function DashboardPage() {
                       ))}
                     </div>
                   )}
+                </div>
                 </CardContent>
               </Card>
               </div>
@@ -1103,7 +1109,7 @@ export default function DashboardPage() {
                       className="flex flex-col items-center rounded-lg border border-white/5 bg-white/5 px-3 py-3"
                     >
                       <span
-                        className="text-2xl 2xl:text-3xl font-bold"
+                        className="big-number text-[40px]"
                         style={{ color: s.color }}
                       >
                         {s.value}

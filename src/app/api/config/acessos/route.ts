@@ -21,7 +21,7 @@ export async function GET() {
     const db = createServerClient();
     const { data, error } = await db
       .from("usuarios_permitidos")
-      .select("id, re, nome, perfil, autorizado_em, precisa_redefinir_senha")
+      .select("id, re, nome, perfil, centro_custo, autorizado_em, precisa_redefinir_senha")
       .order("nome", { ascending: true });
 
     if (error) throw error;
@@ -111,7 +111,7 @@ export async function PATCH(request: NextRequest) {
           precisa_redefinir_senha: true,
         })
         .eq("id", id)
-        .select("id, re, nome, perfil, autorizado_em, precisa_redefinir_senha")
+        .select("id, re, nome, perfil, centro_custo, autorizado_em, precisa_redefinir_senha")
         .single();
 
       if (error) {

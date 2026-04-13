@@ -268,6 +268,8 @@ export const ColaboradorSchema = z.object({
   // ── Campos extras (DB) — não presentes na planilha de importação ──────────
   // Ignorados durante o parse de planilhas (strip); persistidos via Supabase.
   turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
+  NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
 });
 
 /**
@@ -343,6 +345,8 @@ export const ColaboradorUpdateSchema = z.object({
 
   // ── Campos extras (DB)
   turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
+  NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
 });
 
 // ============================================================================
@@ -585,7 +589,8 @@ export const ColaboradoresQuerySchema = z.object({
   limit: z.coerce.number().positive().max(100).default(20),
   search: z.string().optional(),
   status: StatusEnum.optional(),
-  setor: z.enum(["RH", "LOGISTICA", "SEGURANCA"]).optional(),
+  cargo: z.string().optional(),
+  centro_custo: z.string().optional(),
 });
 
 // ============================================================================
@@ -609,6 +614,8 @@ export const UsuariosPermitidosSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   /** Nível de acesso no sistema */
   perfil: PerfilEnum.default("user"),
+  /** Centro de custo vinculado (obrigatório para perfil guest) */
+  centro_custo: z.string().optional().nullable(),
   /** Timestamp ISO da autorização (preenchido automaticamente pelo banco) */
   autorizado_em: z.string().datetime().optional(),
 });
@@ -681,6 +688,7 @@ export const RhSchema = z.object({
   termino: DateSchema,
   prorrogacao: DateSchema,
   demissao: DateSchema,
+  numero_oracle: z.preprocess(emptyStringToUndefined, z.string().optional()),
   created_at: z.string().datetime().optional(),
 });
 
@@ -725,6 +733,7 @@ export const LogisticaSchema = z.object({
   data_nascimento: DateSchema,
   telefone: z.preprocess(emptyStringToUndefined, z.string().optional()),
   uf: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  numero_oracle: z.preprocess(emptyStringToUndefined, z.string().optional()),
   created_at: z.string().datetime().optional(),
 });
 
@@ -745,6 +754,7 @@ export const SegurancaSchema = z.object({
   num_fit: z.preprocess(emptyStringToUndefined, z.string().optional()),
   aso: z.preprocess(emptyStringToUndefined, AsoEnum.optional()),
   rpv: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  numero_oracle: z.preprocess(emptyStringToUndefined, z.string().optional()),
   status_portal: z.preprocess(
     emptyStringToUndefined,
     z.enum(["Aprovado", "Pendente", "Aprovado - DEMITIDO"]).optional(),

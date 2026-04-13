@@ -94,6 +94,9 @@ export interface Colaborador {
   MUNICIPIO?: string | null;
   UF?: string | null;
   TELEFONE?: string | null;
+  NUMERO_ORACLE?: string | null;
+  CENTRO_CUSTO?: string | null;
+  turno_trabalho?: string | null;
   progresso?: {
     rh: number;
     logistica: number;
@@ -108,7 +111,8 @@ export interface ListarColaboradoresParams {
   limit?: number;
   search?: string;
   status?: string;
-  setor?: "RH" | "LOGISTICA" | "SEGURANCA";
+  cargo?: string;
+  centro_custo?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -145,6 +149,7 @@ export interface User {
   re: string;
   nome: string | null;
   perfil: string | null;
+  centro_custo?: string | null;
   precisaRedefinirSenha?: boolean;
 }
 
@@ -338,15 +343,24 @@ export type DashboardSuprimentosData = {
 // ============================================================================
 
 export const dashboardPrincipalApi = {
-  get: () => api.get<DashboardPrincipalData>("/dashboard/principal"),
+  get: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<DashboardPrincipalData>(`/dashboard/principal${params}`);
+  },
 };
 
 export const dashboardRhApi = {
-  get: () => api.get<DashboardRhData>("/dashboard/rh"),
+  get: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<DashboardRhData>(`/dashboard/rh${params}`);
+  },
 };
 
 export const dashboardLogisticaApi = {
-  get: () => api.get<DashboardLogisticaData>("/dashboard/logistica"),
+  get: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<DashboardLogisticaData>(`/dashboard/logistica${params}`);
+  },
 };
 
 export const dashboardSuprimentosApi = {
@@ -480,7 +494,7 @@ export const usuariosPermitidosApi = {
 export interface ExportParams {
   search?: string;
   status?: string;
-  setor?: string;
+  cargo?: string;
 }
 
 export interface ExportResponse {

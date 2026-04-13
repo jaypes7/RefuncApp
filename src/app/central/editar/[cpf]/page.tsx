@@ -133,6 +133,7 @@ const EMPTY: FormData = {
   TREINAMENTO: "",
   REALIZAR_TREINAMENTO: "",
   LOCAL_TREINAMENTO: "",
+  NUMERO_ORACLE: "",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -440,7 +441,7 @@ export default function EditarColaboradorPage() {
             onClick={handleSave}
             disabled={saving || saved}
             className="gap-2"
-            style={{ backgroundColor: "#5bc0ec", borderColor: "#5bc0ec" }}
+            style={{ backgroundColor: "#ff460a", borderColor: "#ff460a" }}
           >
             {saved ? (
               <>
@@ -484,14 +485,14 @@ export default function EditarColaboradorPage() {
               </TabsTrigger>
               <TabsTrigger
                 value="saude"
-                className="data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-400"
+                className="data-[state=active]:bg-[#337246]/10 data-[state=active]:text-[#337246]"
               >
                 <Stethoscope className="w-4 h-4 mr-2" />
                 Saúde &amp; Treinamentos
               </TabsTrigger>
               <TabsTrigger
                 value="suprimentos"
-                className="data-[state=active]:bg-violet-500/10 data-[state=active]:text-violet-400"
+                className="data-[state=active]:bg-[#19365b]/10 data-[state=active]:text-[#19365b]"
               >
                 <Package className="w-4 h-4 mr-2" />
                 Suprimentos
@@ -546,6 +547,12 @@ export default function EditarColaboradorPage() {
                   value={form.HISTOGRAMA}
                   onChange={t("HISTOGRAMA")}
                   placeholder="Ex: Mecânico / Caldeireiro"
+                />
+                <F
+                  label="Nº Oracle"
+                  value={form.NUMERO_ORACLE}
+                  onChange={t("NUMERO_ORACLE")}
+                  placeholder="Número Oracle"
                 />
               </div>
 
@@ -675,7 +682,7 @@ export default function EditarColaboradorPage() {
                   onClick={handleSave}
                   disabled={saving || saved}
                   className="gap-2"
-                  style={{ backgroundColor: "#5bc0ec", borderColor: "#5bc0ec" }}
+                  style={{ backgroundColor: "#ff460a", borderColor: "#ff460a" }}
                 >
                   <Save className="w-4 h-4" />
                   Salvar Alterações
@@ -750,7 +757,7 @@ export default function EditarColaboradorPage() {
                   onClick={handleSave}
                   disabled={saving || saved}
                   className="gap-2"
-                  style={{ backgroundColor: "#5bc0ec", borderColor: "#5bc0ec" }}
+                  style={{ backgroundColor: "#ff460a", borderColor: "#ff460a" }}
                 >
                   <Save className="w-4 h-4" />
                   Salvar Alterações
@@ -763,7 +770,7 @@ export default function EditarColaboradorPage() {
             ════════════════════════════════════════════════════════════ */}
             <TabsContent value="saude" className="w-full mt-10 space-y-8">
               <SectionTitle
-                icon={<Stethoscope className="w-5 h-5 text-emerald-400" />}
+                icon={<Stethoscope className="w-5 h-5 text-[#337246]" />}
                 title="Exames & Documentação Médica"
                 description="Acompanhamento de exames admissionais e documentação de saúde"
               />
@@ -807,7 +814,7 @@ export default function EditarColaboradorPage() {
               </div>
 
               <SectionTitle
-                icon={<GraduationCap className="w-5 h-5 text-emerald-400" />}
+                icon={<GraduationCap className="w-5 h-5 text-[#337246]" />}
                 title="Treinamentos Normativos"
                 description="Status e localização dos treinamentos obrigatórios"
               />
@@ -837,7 +844,7 @@ export default function EditarColaboradorPage() {
                   onClick={handleSave}
                   disabled={saving || saved}
                   className="gap-2"
-                  style={{ backgroundColor: "#5bc0ec", borderColor: "#5bc0ec" }}
+                  style={{ backgroundColor: "#ff460a", borderColor: "#ff460a" }}
                 >
                   <Save className="w-4 h-4" />
                   Salvar Alterações
@@ -850,13 +857,13 @@ export default function EditarColaboradorPage() {
             ════════════════════════════════════════════════════════════ */}
             <TabsContent value="suprimentos" className="w-full mt-10 space-y-8">
               <SectionTitle
-                icon={<Package className="w-5 h-5 text-violet-400" />}
+                icon={<Package className="w-5 h-5 text-[#19365b]" />}
                 title="Suprimentos"
                 description="EPIs, uniforme e equipamentos do colaborador"
               />
               <div className="flex flex-col items-center justify-center gap-5 py-16 text-center rounded-xl border border-dashed border-border/60">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/10 ring-1 ring-violet-500/20">
-                  <Package className="h-8 w-8 text-violet-400" />
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#19365b]/10 ring-1 ring-[#19365b]/20">
+                  <Package className="h-8 w-8 text-[#19365b]" />
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">
@@ -879,7 +886,7 @@ export default function EditarColaboradorPage() {
                   ].map((item) => (
                     <span
                       key={item}
-                      className="rounded-full border border-violet-500/20 bg-violet-500/5 px-3 py-1 text-xs text-violet-400"
+                      className="rounded-full border border-[#19365b]/20 bg-[#19365b]/5 px-3 py-1 text-xs text-[#19365b]"
                     >
                       {item}
                     </span>

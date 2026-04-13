@@ -12,7 +12,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 
@@ -20,14 +20,23 @@ import { requireAuth } from "@/lib/auth";
 // GET /api/dashboard/rh
 // ============================================================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requireAuth("user");
+    const currentUser = await requireAuth("user");
+
+    const { searchParams } = new URL(request.url);
+    const ccParam = searchParams.get("centro_custo") || undefined;
+    const centroCusto =
+      currentUser.perfil === "guest" && currentUser.centro_custo
+        ? currentUser.centro_custo
+        : ccParam;
 
     const db = createServerClient();
-    const { data, error } = await db
+    let query = db
       .from("colaboradores")
       .select("cpf,nome,funcao_clt,idade,status,data_admissao,termino,aso,uf");
+    if (centroCusto) query = query.eq("centro_custo", centroCusto);
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
 

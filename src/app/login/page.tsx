@@ -37,15 +37,15 @@ export default function LoginPage() {
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background">
       {/* ── Decorative background orbs ── */}
       <div className="orb h-96 w-96 bg-primary/10 -top-20 -left-20" />
-      <div className="orb h-80 w-80 bg-blue-500/5 bottom-20 right-10" />
+      <div className="orb h-80 w-80 bg-[#19365b]/5 bottom-20 right-10" />
       <div className="orb h-64 w-64 bg-primary/5 top-1/2 left-1/3" />
 
       {/* ── Main content ── */}
       <div className="relative z-10 w-full max-w-sm px-6">
         {/* Logo + headline */}
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-18 w-20 items-center justify-center rounded-xl bg-linear-to-tr from-amber-500 to-yellow-300 shadow-lg shadow-amber-500/30">
-            <span className="text-3xl font-bold text-gray-900">GPI</span>
+          <div className="mb-4 flex h-18 w-20 items-center justify-center rounded-xl bg-[#ff460a] shadow-lg shadow-[#ff460a]/30">
+            <span className="text-3xl font-bold text-white">GPI</span>
           </div>
 
           <h1 className="mb-1 text-3xl font-bold tracking-tight text-foreground">
@@ -85,7 +85,7 @@ export default function LoginPage() {
                     if (localError) setLocalError("");
                   }}
                   disabled={isLoading}
-                  className="h-12 border-white/10 bg-white/5 pl-10 text-base
+                  className="h-12 border-border bg-muted/30 pl-10 text-base
                              placeholder:text-muted-foreground/60
                              focus-visible:border-primary/60
                              focus-visible:ring-primary/25
@@ -120,7 +120,7 @@ export default function LoginPage() {
                     if (localError) setLocalError("");
                   }}
                   disabled={isLoading}
-                  className="h-12 border-white/10 bg-white/5 pl-10 pr-10 text-base
+                  className="h-12 border-border bg-muted/30 pl-10 pr-10 text-base
                              placeholder:text-muted-foreground/60
                              focus-visible:border-primary/60
                              focus-visible:ring-primary/25
@@ -176,7 +176,7 @@ export default function LoginPage() {
             </Button>
 
             {/* Bottom row – version */}
-            <div className="flex items-center justify-end border-t border-white/5 pt-4 text-xs text-muted-foreground">
+            <div className="flex items-center justify-end border-t border-border pt-4 text-xs text-muted-foreground">
               <span className="opacity-50">RefuncApp v2.4.0</span>
             </div>
           </form>

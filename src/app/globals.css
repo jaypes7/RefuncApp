@@ -36,73 +36,97 @@
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
+
+    /* Manserv extended palette */
+    --color-manserv-orange: hsl(var(--manserv-orange));
+    --color-manserv-dark: hsl(var(--manserv-dark));
+    --color-manserv-navy: hsl(var(--manserv-navy));
+    --color-manserv-teal: hsl(var(--manserv-teal));
+    --color-manserv-cream: hsl(var(--manserv-cream));
+    --color-manserv-mauve: hsl(var(--manserv-mauve));
+    --color-manserv-gray: hsl(var(--manserv-gray));
 }
 
-/* ─── Paleta Light Enterprise (padrão) ───────────────────────────────────── */
+/* ─── Paleta Light — Guia Manserv ────────────────────────────────────────── */
 @layer base {
     :root {
-        --background: 210 20% 98%;      /* slate-50  #f8fafc */
-        --foreground: 222 47% 11%;      /* slate-900 #0f172a */
+        --background: 0 0% 96%;          /* #f5f5f5 cinza claro */
+        --foreground: 0 0% 14%;          /* #232323 */
 
         --card: 0 0% 100%;
-        --card-foreground: 222 47% 11%;
+        --card-foreground: 0 0% 14%;
 
         --popover: 0 0% 100%;
-        --popover-foreground: 222 47% 11%;
+        --popover-foreground: 0 0% 14%;
 
-        /* Destaque único: Azul Marinho Profundo */
-        --primary: 221 83% 35%;         /* #1a40ae */
+        /* Destaque: Laranja Manserv */
+        --primary: 14 100% 52%;          /* #ff460a */
         --primary-foreground: 0 0% 100%;
 
-        --secondary: 210 20% 96%;       /* slate-100 */
-        --secondary-foreground: 222 47% 11%;
+        --secondary: 213 53% 23%;        /* #19365b azul marinho */
+        --secondary-foreground: 0 0% 100%;
 
-        --muted: 210 20% 96%;
-        --muted-foreground: 215 16% 47%;/* slate-500 */
+        --muted: 0 0% 89%;               /* #e2e2e2 */
+        --muted-foreground: 0 0% 45%;    /* #737373 */
 
-        --accent: 210 20% 96%;
-        --accent-foreground: 222 47% 11%;
+        --accent: 14 100% 83%;           /* #ffd7cc laranja 25% */
+        --accent-foreground: 0 0% 14%;
 
-        --destructive: 0 72% 51%;
+        --destructive: 4 77% 48%;        /* #DA291B */
         --destructive-foreground: 0 0% 100%;
 
-        --border: 214 32% 91%;          /* slate-200 — bordas de cards/dividers */
-        --input: 213 27% 84%;           /* slate-300 — bordas de form elements */
-        --ring: 221 83% 35%;
+        --border: 0 0% 89%;              /* #e2e2e2 */
+        --input: 0 0% 82%;               /* #d1d1d1 */
+        --ring: 14 100% 52%;             /* #ff460a */
 
         --radius: 0.375rem;
+
+        /* Paleta estendida Manserv */
+        --manserv-orange: 14 100% 52%;   /* #ff460a */
+        --manserv-dark: 0 0% 14%;        /* #232323 */
+        --manserv-navy: 213 53% 23%;     /* #19365b */
+        --manserv-teal: 193 31% 37%;     /* #416e7d */
+        --manserv-cream: 49 47% 76%;     /* #e3d9a3 */
+        --manserv-mauve: 323 15% 53%;    /* #9e708b */
+        --manserv-gray: 0 0% 89%;        /* #e2e2e2 */
+
+        /* Cores de status */
+        --status-danger: 4 77% 48%;      /* #DA291B */
+        --status-warning: 47 73% 64%;    /* #E5CF61 */
+        --status-success: 144 37% 33%;   /* #337246 */
+        --status-na: 0 0% 89%;           /* #e2e2e2 */
     }
 
-    /* ─── Paleta Dark Enterprise ──────────────────────────────────────────── */
+    /* ─── Paleta Dark — Guia Manserv ─────────────────────────────────────── */
     .dark {
-        --background: 222 47% 5%;       /* slate-950 #020817 */
-        --foreground: 210 40% 96%;      /* slate-100 #f1f5f9 — texto principal */
+        --background: 0 0% 10%;          /* #1a1a1a */
+        --foreground: 0 0% 93%;          /* #ededed */
 
-        --card: 222 40% 8%;             /* slate-900 #0f172a */
-        --card-foreground: 210 40% 96%;
+        --card: 0 0% 14%;               /* #232323 */
+        --card-foreground: 0 0% 93%;
 
-        --popover: 222 40% 10%;
-        --popover-foreground: 210 40% 96%;
+        --popover: 0 0% 16%;
+        --popover-foreground: 0 0% 93%;
 
-        /* Primary mais claro no escuro para manter legibilidade */
-        --primary: 213 94% 68%;         /* blue-400 #60a5fa */
-        --primary-foreground: 222 47% 5%;
+        /* Primary mais claro no escuro para contraste */
+        --primary: 14 100% 60%;          /* #ff6e3a */
+        --primary-foreground: 0 0% 5%;
 
-        --secondary: 217 33% 13%;       /* slate-800 */
-        --secondary-foreground: 210 40% 96%;
+        --secondary: 213 53% 18%;        /* navy escuro */
+        --secondary-foreground: 0 0% 93%;
 
-        --muted: 217 33% 13%;
-        --muted-foreground: 215 16% 57%;/* slate-400 #94a3b8 — texto secundário */
+        --muted: 0 0% 20%;
+        --muted-foreground: 0 0% 60%;    /* #999 */
 
-        --accent: 217 33% 15%;
-        --accent-foreground: 210 40% 96%;
+        --accent: 14 60% 20%;
+        --accent-foreground: 0 0% 93%;
 
-        --destructive: 0 63% 42%;
-        --destructive-foreground: 210 40% 96%;
+        --destructive: 4 77% 48%;        /* #DA291B */
+        --destructive-foreground: 0 0% 93%;
 
-        --border: 217 33% 17%;          /* slate-800 */
-        --input: 217 33% 17%;
-        --ring: 213 94% 68%;
+        --border: 0 0% 22%;              /* #383838 */
+        --input: 0 0% 22%;
+        --ring: 14 100% 60%;
     }
 }
 
@@ -149,8 +173,8 @@
     /* Scrollbar discreta */
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { @apply bg-transparent; }
-    ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-sm dark:bg-slate-700; }
-    ::-webkit-scrollbar-thumb:hover { @apply bg-slate-400 dark:bg-slate-600; }
+    ::-webkit-scrollbar-thumb { @apply bg-[#c0c0c0] rounded-sm dark:bg-[#444]; }
+    ::-webkit-scrollbar-thumb:hover { @apply bg-[#999] dark:bg-[#555]; }
 }
 
 /* ─── Componentes enterprise — tema-aware ────────────────────────────────── */
@@ -204,23 +228,23 @@
     }
 
     .badge-status-active {
-        @apply bg-emerald-50 border-emerald-200 text-emerald-700
-               dark:bg-emerald-950/30 dark:border-emerald-800/50 dark:text-emerald-400;
+        @apply bg-[#337246]/10 border-[#337246]/30 text-[#337246]
+               dark:bg-[#337246]/20 dark:border-[#337246]/40 dark:text-[#4a9960];
     }
 
     .badge-status-warning {
-        @apply bg-amber-50 border-amber-200 text-amber-700
-               dark:bg-amber-950/30 dark:border-amber-800/50 dark:text-amber-400;
+        @apply bg-[#E5CF61]/15 border-[#E5CF61]/40 text-[#8a7a1a]
+               dark:bg-[#E5CF61]/15 dark:border-[#E5CF61]/30 dark:text-[#E5CF61];
     }
 
     .badge-status-danger {
-        @apply bg-red-50 border-red-200 text-red-700
-               dark:bg-red-950/30 dark:border-red-800/50 dark:text-red-400;
+        @apply bg-[#DA291B]/10 border-[#DA291B]/30 text-[#DA291B]
+               dark:bg-[#DA291B]/20 dark:border-[#DA291B]/40 dark:text-[#e85a4f];
     }
 
     .badge-status-info {
-        @apply bg-blue-50 border-blue-200 text-blue-700
-               dark:bg-blue-950/30 dark:border-blue-800/50 dark:text-blue-400;
+        @apply bg-[#19365b]/10 border-[#19365b]/30 text-[#19365b]
+               dark:bg-[#416e7d]/20 dark:border-[#416e7d]/40 dark:text-[#7ab0c4];
     }
 
     /* ── Inputs ─────────────────────────────────────────────────────────── */
@@ -257,10 +281,32 @@
     }
 
     .page-title {
-        @apply text-lg font-semibold text-foreground tracking-tight;
+        @apply text-[28px] font-bold text-primary tracking-tight;
     }
 
     .page-subtitle {
-        @apply text-xs text-muted-foreground mt-0.5;
+        @apply text-[14px] font-medium text-muted-foreground mt-0.5;
+    }
+
+    /* ── Tipografia Manserv — guia de estilos ────────────────────────────── */
+    .big-number {
+        font-family: Arial, Helvetica, sans-serif;
+        @apply text-primary font-normal;
+    }
+
+    .chart-title {
+        @apply text-[12px] font-medium;
+    }
+
+    .chart-axis-label {
+        @apply text-[10px] font-light uppercase;
+    }
+
+    .chart-legend-text {
+        @apply text-[10px] font-light;
+    }
+
+    .manserv-footer {
+        @apply text-[8px] font-normal text-muted-foreground;
     }
 }

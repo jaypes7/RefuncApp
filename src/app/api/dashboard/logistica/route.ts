@@ -26,7 +26,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import { normalizeTurno } from "@/lib/import-utils";
@@ -35,17 +35,43 @@ import { normalizeTurno } from "@/lib/import-utils";
 // GET /api/dashboard/logistica
 // ============================================================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requireAuth("user");
+    const currentUser = await requireAuth("user");
+
+    const { searchParams } = new URL(request.url);
+    const ccParam = searchParams.get("centro_custo") || undefined;
+    const centroCusto =
+      currentUser.perfil === "guest" && currentUser.centro_custo
+        ? currentUser.centro_custo
+        : ccParam;
 
     const db = createServerClient();
+
+    // Se há filtro de centro de custo, busca os CPFs vinculados primeiro
+    let cpfFilter: string[] | null = null;
+    if (centroCusto) {
+      const { data: colabRows } = await db
+        .from("colaboradores")
+        .select("cpf")
+        .eq("centro_custo", centroCusto);
+      cpfFilter = (colabRows ?? []).map((r) => r.cpf as string).filter(Boolean);
+    }
+
+    let logisticaQuery = db.from("logistica_controle").select("hotel,turno_trabalho,cpf");
+    if (cpfFilter !== null) {
+      if (cpfFilter.length === 0) {
+        logisticaQuery = logisticaQuery.in("cpf", ["__no_match__"]);
+      } else {
+        logisticaQuery = logisticaQuery.in("cpf", cpfFilter);
+      }
+    }
 
     const [
       { data: logisticaData, error: logErr },
       { data: hoteisData,    error: hoteisErr },
     ] = await Promise.all([
-      db.from("logistica_controle").select("hotel,turno_trabalho"),
+      logisticaQuery,
       db.from("configuracoes_hoteis").select("nome, qt_vagas"),
     ]);
 

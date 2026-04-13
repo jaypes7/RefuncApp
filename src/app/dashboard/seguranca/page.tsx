@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
+import { useFilter } from "@/contexts/FilterContext";
+import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 
 // ============================================================================
 // TIPOS
@@ -46,24 +48,24 @@ interface SegurancaDashboardData {
 // ============================================================================
 
 const RPV_COLORS: Record<string, string> = {
-  "OK":      "#22c55e",
-  "Pendente":"#f59e0b",
-  "N/A":     "#64748b",
+  "OK":      "#337246",
+  "Pendente":"#E5CF61",
+  "N/A":     "#e2e2e2",
 };
 
 const PORTAL_COLORS: Record<string, string> = {
-  "Aprovado":           "#22c55e",
-  "Pendente":           "#f59e0b",
-  "Aprovado - DEMITIDO":"#64748b",
+  "Aprovado":           "#337246",
+  "Pendente":           "#E5CF61",
+  "Aprovado - DEMITIDO":"#e2e2e2",
 };
 
 const TREIN_COLORS: Record<string, string> = {
-  "Concluído":    "#22c55e",
-  "Em Andamento": "#5bc0ec",
-  "Pendente":     "#f59e0b",
+  "Concluído":    "#337246",
+  "Em Andamento": "#ff460a",
+  "Pendente":     "#E5CF61",
 };
 
-const FALLBACK_COLORS = ["#5bc0ec", "#a78bfa", "#fb923c", "#34d399", "#f43f5e", "#64748b"];
+const FALLBACK_COLORS = ["#ff460a", "#19365b", "#416e7d", "#9c3022", "#ffa78b", "#9e708b"];
 
 function colorFor(label: string, map: Record<string, string>, idx: number): string {
   return map[label] ?? FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
@@ -122,10 +124,13 @@ export default function DashboardSegurancaPage() {
     }
   }, [authLoading, user, router]);
 
+  const { centroCusto } = useFilter();
+
   const { data, isLoading, isError, error, refetch } = useQuery<SegurancaDashboardData>({
-    queryKey: ["seguranca-dashboard"],
+    queryKey: ["seguranca-dashboard", centroCusto],
     queryFn:  async () => {
-      const res = await fetch("/api/seguranca/dashboard");
+      const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+      const res = await fetch(`/api/seguranca/dashboard${params}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? `Erro ${res.status}`);
@@ -226,7 +231,7 @@ export default function DashboardSegurancaPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div>
-                <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">
+                <h1 className="page-title">
                   Dashboard Segurança
                 </h1>
                 <p className="text-muted-foreground 2xl:text-lg">
@@ -259,7 +264,7 @@ export default function DashboardSegurancaPage() {
                 <ClipboardList className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold">{kpis?.total ?? "—"}</div>
+                <div className="big-number text-[40px]">{kpis?.total ?? "—"}</div>
                 <p className="text-xs text-muted-foreground">Fichas cadastradas</p>
               </CardContent>
             </Card>
@@ -269,10 +274,10 @@ export default function DashboardSegurancaPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Treinamentos Concluídos
                 </CardTitle>
-                <GraduationCap className="h-4 w-4 text-violet-400" />
+                <GraduationCap className="h-4 w-4 text-[#19365b]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-violet-400">
+                <div className="big-number text-[40px] text-[#19365b]">
                   {kpis?.concl ?? "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -288,10 +293,10 @@ export default function DashboardSegurancaPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Aprovados Portal
                 </CardTitle>
-                <FileCheck2 className="h-4 w-4 text-emerald-400" />
+                <FileCheck2 className="h-4 w-4 text-[#337246]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-emerald-400">
+                <div className="big-number text-[40px] text-[#337246]">
                   {kpis?.aprovados ?? "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -321,9 +326,9 @@ export default function DashboardSegurancaPage() {
                   <>
                     <ChartContainer
                       config={{
-                        Aprovado: { label: "Aprovado", color: "#22c55e" },
-                        Pendente: { label: "Pendente", color: "#f59e0b" },
-                        "Aprovado - DEMITIDO": { label: "Aprovado - DEMITIDO", color: "#64748b" },
+                        Aprovado: { label: "Aprovado", color: "#337246" },
+                        Pendente: { label: "Pendente", color: "#E5CF61" },
+                        "Aprovado - DEMITIDO": { label: "Aprovado - DEMITIDO", color: "#e2e2e2" },
                       }}
                       className="h-[300px] 2xl:h-[360px] w-full"
                     >
@@ -397,28 +402,28 @@ export default function DashboardSegurancaPage() {
                   <>
                     <ChartContainer
                       config={{
-                        OK: { label: "OK", color: "#22c55e" },
-                        Pendente: { label: "Pendente", color: "#f59e0b" },
-                        "N/A": { label: "N/A", color: "#64748b" },
+                        OK: { label: "OK", color: "#337246" },
+                        Pendente: { label: "Pendente", color: "#E5CF61" },
+                        "N/A": { label: "N/A", color: "#e2e2e2" },
                       }}
                       className="h-[260px] 2xl:h-[320px] w-full"
                     >
                       <BarChart data={dadosRpv} margin={{ top: 16, right: 40, left: 10, bottom: 10 }}>
                         <CartesianGrid
                           strokeDasharray="3 3"
-                          stroke="rgba(255,255,255,0.08)"
+                          stroke="#e2e2e2"
                           vertical={false}
                         />
                         <XAxis
                           dataKey="name"
-                          stroke="rgba(255,255,255,0.5)"
-                          fontSize={13}
+                          stroke="#e2e2e2"
+                          tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
                           tickLine={false}
                           axisLine={false}
                         />
                         <YAxis
-                          stroke="rgba(255,255,255,0.5)"
-                          fontSize={13}
+                          stroke="#e2e2e2"
+                          tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
                           tickLine={false}
                           axisLine={false}
                           allowDecimals={false}
@@ -440,7 +445,7 @@ export default function DashboardSegurancaPage() {
                           className="flex flex-col items-center rounded-lg border border-white/5 bg-white/5 px-2 py-3"
                         >
                           <span
-                            className="text-2xl 2xl:text-3xl font-bold"
+                            className="big-number text-[40px]"
                             style={{ color: d.fill }}
                           >
                             {d.value}
@@ -467,28 +472,28 @@ export default function DashboardSegurancaPage() {
               <CardContent>
                 <ChartContainer
                   config={{
-                    Concluído: { label: "Concluído", color: "#22c55e" },
-                    "Em Andamento": { label: "Em Andamento", color: "#5bc0ec" },
-                    Pendente: { label: "Pendente", color: "#f59e0b" },
+                    Concluído: { label: "Concluído", color: "#337246" },
+                    "Em Andamento": { label: "Em Andamento", color: "#ff460a" },
+                    Pendente: { label: "Pendente", color: "#E5CF61" },
                   }}
                   className="h-[220px] 2xl:h-[280px] w-full"
                 >
                   <BarChart data={dadosTrein} margin={{ top: 16, right: 40, left: 10, bottom: 10 }}>
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.08)"
+                      stroke="#e2e2e2"
                       vertical={false}
                     />
                     <XAxis
                       dataKey="name"
-                      stroke="rgba(255,255,255,0.5)"
-                      fontSize={12}
+                      stroke="#e2e2e2"
+                      tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
                       tickLine={false}
                       axisLine={false}
                     />
                     <YAxis
-                      stroke="rgba(255,255,255,0.5)"
-                      fontSize={12}
+                      stroke="#e2e2e2"
+                      tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
                       tickLine={false}
                       axisLine={false}
                       allowDecimals={false}

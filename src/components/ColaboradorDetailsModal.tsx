@@ -248,14 +248,14 @@ export function ColaboradorDetailsModal({
 
             {statusGeral.ok.length > 0 && (
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-xs font-medium text-emerald-400 shrink-0">
+                <span className="text-xs font-medium text-[#337246] shrink-0">
                   Concluído:
                 </span>
                 {statusGeral.ok.slice(0, 3).map((o, i) => (
                   <Badge
                     key={i}
                     variant="outline"
-                    className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    className="gap-1 border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
                   >
                     <CheckCircle className="h-3 w-3" />
                     {o}
@@ -264,7 +264,7 @@ export function ColaboradorDetailsModal({
                 {statusGeral.ok.length > 3 && (
                   <Badge
                     variant="outline"
-                    className="border-emerald-500/30 text-emerald-400"
+                    className="border-[#337246]/30 text-[#337246]"
                   >
                     +{statusGeral.ok.length - 3}
                   </Badge>
@@ -329,7 +329,7 @@ export function ColaboradorDetailsModal({
                   variant="outline"
                   className={`${
                     colaborador.PORTAL === "Liberado"
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      ? "border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
                       : colaborador.PORTAL === "Bloqueado"
                         ? "border-red-500/30 bg-red-500/10 text-red-400"
                         : "border-amber-500/30 bg-amber-500/10 text-amber-400"
@@ -344,7 +344,7 @@ export function ColaboradorDetailsModal({
                   variant="outline"
                   className={`${
                     colaborador.CRACHA === "Emitido"
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      ? "border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
                       : "border-amber-500/30 bg-amber-500/10 text-amber-400"
                   }`}
                 >
@@ -357,7 +357,7 @@ export function ColaboradorDetailsModal({
                   variant="outline"
                   className={`${
                     colaborador.PONTO === "Cadastrado"
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      ? "border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
                       : "border-amber-500/30 bg-amber-500/10 text-amber-400"
                   }`}
                 >
@@ -377,7 +377,7 @@ export function ColaboradorDetailsModal({
                     variant="outline"
                     className={`${
                       colaborador.MOB?.trim()
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        ? "border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
                         : "border-amber-500/30 bg-amber-500/10 text-amber-400"
                     }`}
                   >
@@ -403,7 +403,7 @@ export function ColaboradorDetailsModal({
                   variant="outline"
                   className={`${
                     colaborador.EXAME === "Realizado"
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      ? "border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
                       : colaborador.EXAME === "Agendado"
                         ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
                         : "border-amber-500/30 bg-amber-500/10 text-amber-400"
@@ -418,7 +418,7 @@ export function ColaboradorDetailsModal({
                   variant="outline"
                   className={`${
                     colaborador.ASO === "Apto"
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      ? "border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
                       : colaborador.ASO === "Inapto"
                         ? "border-red-500/30 bg-red-500/10 text-red-400"
                         : "border-amber-500/30 bg-amber-500/10 text-amber-400"
@@ -452,7 +452,7 @@ export function ColaboradorDetailsModal({
                     variant="outline"
                     className={`${
                       colaborador.TREINAMENTO === "Concluído"
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        ? "border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
                         : colaborador.TREINAMENTO === "Em Andamento"
                           ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
                           : "border-amber-500/30 bg-amber-500/10 text-amber-400"
