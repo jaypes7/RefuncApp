@@ -85,6 +85,7 @@ const step2Schema = z.object({
   re: z.string().optional(),
   funcaoClt: z.string().optional(),
   histograma: z.string().optional(),
+  numeroOracle: z.string().optional(),
   cartaOferta: z.enum(["Sim", "Não", "Pendente"]).optional(),
   contrato: z.enum(["CLT", "PJ", "Temporário", "Estagiário"]).optional(),
   status: z.enum(["Ativo", "Pendente", "Inativo", "Desligado"]).optional(),
@@ -267,6 +268,7 @@ export default function OnboardingPage() {
         NOME: data.nome,
         FUNCAO_CLT: data.funcaoClt,
         HISTOGRAMA: data.histograma,
+        NUMERO_ORACLE: data.numeroOracle,
         IDADE: data.idade,
         DT_NASCIMENTO: data.dtNascimento,
         // Colunas 31-35
@@ -367,6 +369,7 @@ export default function OnboardingPage() {
       re: "",
       funcaoClt: "",
       histograma: "",
+      numeroOracle: "",
       cartaOferta: undefined,
       contrato: undefined,
       status: undefined,
@@ -960,6 +963,23 @@ export default function OnboardingPage() {
                           {...register("histograma")}
                           className={
                             errors.histograma ? "border-destructive" : ""
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="numeroOracle"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Nº Oracle
+                        </label>
+                        <Input
+                          id="numeroOracle"
+                          placeholder="Número Oracle"
+                          {...register("numeroOracle")}
+                          className={
+                            errors.numeroOracle ? "border-destructive" : ""
                           }
                         />
                       </div>

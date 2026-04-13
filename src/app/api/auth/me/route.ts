@@ -25,7 +25,7 @@ export async function GET() {
     const db = createServerClient();
     const { data: dbUser } = await db
       .from("usuarios_permitidos")
-      .select("precisa_redefinir_senha")
+      .select("precisa_redefinir_senha, centro_custo")
       .eq("re", user.re)
       .single();
 
@@ -34,6 +34,7 @@ export async function GET() {
         re: user.re,
         nome: user.nome || null,
         perfil: user.perfil || null,
+        centro_custo: dbUser?.centro_custo ?? user.centro_custo ?? null,
         precisaRedefinirSenha: dbUser?.precisa_redefinir_senha ?? false,
       },
     });

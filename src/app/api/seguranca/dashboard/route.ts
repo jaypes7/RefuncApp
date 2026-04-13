@@ -15,7 +15,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 
@@ -51,14 +51,41 @@ function contagem(
 // GET /api/seguranca/dashboard
 // ============================================================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const currentUser = await requireAuth();
+
+    const { searchParams } = new URL(request.url);
+    const ccParam = searchParams.get("centro_custo") || undefined;
+    const centroCusto =
+      currentUser.perfil === "guest" && currentUser.centro_custo
+        ? currentUser.centro_custo
+        : ccParam;
 
     const db = createServerClient();
-    const { data, error, count } = await db
+
+    // Se há filtro de centro de custo, busca os CPFs vinculados primeiro
+    let cpfFilter: string[] | null = null;
+    if (centroCusto) {
+      const { data: colabRows } = await db
+        .from("colaboradores")
+        .select("cpf")
+        .eq("centro_custo", centroCusto);
+      cpfFilter = (colabRows ?? []).map((r) => r.cpf as string).filter(Boolean);
+    }
+
+    let fitsQuery = db
       .from("seguranca_fits")
-      .select("rpv,treinamento,status_portal", { count: "exact" });
+      .select("rpv,treinamento,status_portal,cpf", { count: "exact" });
+    if (cpfFilter !== null) {
+      if (cpfFilter.length === 0) {
+        fitsQuery = fitsQuery.in("cpf", ["__no_match__"]);
+      } else {
+        fitsQuery = fitsQuery.in("cpf", cpfFilter);
+      }
+    }
+
+    const { data, error, count } = await fitsQuery;
 
     if (error) throw new Error(error.message);
 

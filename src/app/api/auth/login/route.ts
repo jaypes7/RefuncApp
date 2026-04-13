@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const db = createServerClient();
     const { data: usuario, error } = await db
       .from("usuarios_permitidos")
-      .select("re, nome, perfil, senha_hash, precisa_redefinir_senha")
+      .select("re, nome, perfil, senha_hash, precisa_redefinir_senha, centro_custo")
       .eq("re", re)
       .single();
 
@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
       re: usuario.re,
       nome: usuario.nome ?? undefined,
       perfil: usuario.perfil ?? undefined,
+      centro_custo: usuario.centro_custo ?? undefined,
     });
 
     await setAuthCookie(token);
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
         re: usuario.re,
         nome: usuario.nome ?? null,
         perfil: usuario.perfil ?? null,
+        centro_custo: usuario.centro_custo ?? null,
         precisaRedefinirSenha: usuario.precisa_redefinir_senha ?? false,
       },
     });

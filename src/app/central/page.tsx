@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFilter } from "@/contexts/FilterContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -37,7 +38,10 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -52,6 +56,7 @@ import { EditColaboradorModal } from "@/components/EditColaboradorModal";
 import { CanAccess } from "@/components/CanAccess";
 import * as XLSX from "xlsx";
 import { useDebounce } from "@/hooks/use-debounce";
+import { CARGOS, CARGOS_AGRUPADOS } from "@/constants/cargos";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -65,8 +70,8 @@ const STATUS_CONFIG: Record<
   { dot: string; pill: string; label: string }
 > = {
   Ativo: {
-    dot: "bg-emerald-500",
-    pill: "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+    dot: "bg-[#337246]",
+    pill: "bg-[#337246]/10 text-[#337246] border border-[#337246]/30 dark:bg-[#337246]/15 dark:text-[#4a9960] dark:border-[#337246]/20",
     label: "Ativo",
   },
   Pendente: {
@@ -89,14 +94,14 @@ const STATUS_CONFIG: Record<
 const SETOR_CONFIG: Record<Setor, { color: string; bg: string }> = {
   RH: { color: "text-primary", bg: "bg-primary/10" },
   Logística: { color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
-  Segurança: { color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+  Segurança: { color: "text-[#337246] dark:text-[#4a9960]", bg: "bg-[#337246]/10 dark:bg-[#337246]/15" },
 };
 
 const AVATAR_COLORS = [
   "bg-primary/10 text-primary",
   "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
   "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
-  "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400",
+  "bg-[#337246]/15 text-[#337246] dark:bg-[#337246]/20 dark:text-[#4a9960]",
   "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400",
 ];
 
@@ -206,6 +211,7 @@ export default function CentralPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  const { centroCusto, setCentroCusto, isLocked } = useFilter();
 
   // Redireciona guests para o Dashboard Geral (única página permitida)
   useEffect(() => {
@@ -216,7 +222,7 @@ export default function CentralPage() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 500);
   const [statusFilter, setStatusFilter] = useState<string>("todos");
-  const [setorFilter, setSetorFilter] = useState<string>("todos");
+  const [cargoFilter, setCargoFilter] = useState<string>("todos");
   const [page, setPage] = useState(1);
 
   // Estado do modal de importação
@@ -231,6 +237,17 @@ export default function CentralPage() {
 
   const limit = 20;
 
+  // Busca os centros de custo disponíveis para o dropdown
+  const { data: centrosDisponiveisData } = useQuery({
+    queryKey: ["centros-custo"],
+    queryFn: async () => {
+      const response = await fetch("/api/colaboradores/centros-custo");
+      if (!response.ok) return [];
+      return response.json() as Promise<string[]>;
+    },
+  });
+  const centrosDisponiveis: string[] = centrosDisponiveisData ?? [];
+
   // Função para exportar colaboradores para XLSX
   const handleExport = async () => {
     try {
@@ -238,7 +255,9 @@ export default function CentralPage() {
       toast.info("Preparando exportação...");
 
       // Buscar todos os colaboradores usando a API de exportação (sem paginação)
-      const response = await exportApi.exportar();
+      const exportParams: { cargo?: string } = {};
+      if (cargoFilter !== "todos") exportParams.cargo = cargoFilter;
+      const response = await exportApi.exportar(exportParams);
       const allColaboradores = response.data.data || [];
 
       if (allColaboradores.length === 0) {
@@ -366,13 +385,15 @@ export default function CentralPage() {
       limit,
       debouncedSearch,
       statusFilter,
-      setorFilter,
+      cargoFilter,
+      centroCusto,
     ],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter !== "todos") params.status = statusFilter;
-      if (setorFilter !== "todos") params.setor = setorFilter.toUpperCase();
+      if (cargoFilter !== "todos") params.cargo = cargoFilter;
+      if (centroCusto) params.centro_custo = centroCusto;
 
       const response = await colaboradoresApi.listar(params);
       return response.data;
@@ -520,24 +541,85 @@ export default function CentralPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Setor filter */}
+                {/* Cargo filter */}
                 <Select
-                  value={setorFilter}
+                  value={cargoFilter}
                   onValueChange={(value) => {
-                    setSetorFilter(value);
+                    setCargoFilter(value);
                     setPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-9 w-full text-sm sm:w-44 border-slate-300 bg-white dark:border-input dark:bg-input/30">
-                    <SelectValue placeholder="Todos os Setores" />
+                  <SelectTrigger className="h-9 w-full text-sm sm:w-56 border-slate-300 bg-white dark:border-input dark:bg-input/30">
+                    <SelectValue placeholder="Todos os Cargos" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os Setores</SelectItem>
-                    <SelectItem value="RH">RH</SelectItem>
-                    <SelectItem value="Logística">Logística</SelectItem>
-                    <SelectItem value="Segurança">Segurança</SelectItem>
+                  <SelectContent className="max-h-80">
+                    <SelectItem value="todos">Todos os Cargos</SelectItem>
+                    {Object.entries(CARGOS_AGRUPADOS).map(([grupo, cargos], idx) => (
+                      <SelectGroup key={grupo}>
+                        {idx > 0 && <SelectSeparator />}
+                        <SelectItem value={grupo} className="font-medium">
+                          {grupo} (todos)
+                        </SelectItem>
+                        {cargos.map((c) => (
+                          <SelectItem
+                            key={c}
+                            value={c}
+                            className="pl-6 text-muted-foreground"
+                          >
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                    {(() => {
+                      const todosAgrupados = new Set<string>(
+                        Object.values(CARGOS_AGRUPADOS).flat(),
+                      );
+                      const orfaos = CARGOS.filter(
+                        (c) => !todosAgrupados.has(c),
+                      );
+                      if (orfaos.length === 0) return null;
+                      return (
+                        <SelectGroup>
+                          <SelectSeparator />
+                          {orfaos.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      );
+                    })()}
                   </SelectContent>
                 </Select>
+
+                {/* Centro de Custo filter */}
+                {isLocked ? (
+                  <div className="flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-input dark:bg-input/30 sm:w-44">
+                    <span className="text-muted-foreground">C.C.:</span>
+                    <span className="font-medium">{centroCusto}</span>
+                  </div>
+                ) : (
+                  <Select
+                    value={centroCusto ?? "todos"}
+                    onValueChange={(value) => {
+                      setCentroCusto(value === "todos" ? null : value);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 w-full text-sm sm:w-44 border-slate-300 bg-white dark:border-input dark:bg-input/30">
+                      <SelectValue placeholder="Centro de Custo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os C.C.</SelectItem>
+                      {centrosDisponiveis.map((cc) => (
+                        <SelectItem key={cc} value={cc}>
+                          {cc}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
 

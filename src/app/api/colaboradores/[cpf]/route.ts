@@ -64,6 +64,7 @@ function mapRow(row: Record<string, any>): Colaborador {
     MUNICIPIO:            row.municipio         ?? null,
     UF:                   row.uf                ?? null,
     TELEFONE:             row.telefone          ?? null,
+    NUMERO_ORACLE:        row.numero_oracle     ?? null,
     turno_trabalho:       row.turno_trabalho    ?? null,
   };
 }
@@ -112,6 +113,7 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
   if (data.MUNICIPIO         !== undefined) row.municipio          = data.MUNICIPIO;
   if (data.UF                !== undefined) row.uf                 = data.UF;
   if (data.TELEFONE          !== undefined) row.telefone           = data.TELEFONE;
+  if (data.NUMERO_ORACLE     !== undefined) row.numero_oracle      = data.NUMERO_ORACLE;
   if (data.turno_trabalho    !== undefined) row.turno_trabalho     = data.turno_trabalho;
 
   return row;

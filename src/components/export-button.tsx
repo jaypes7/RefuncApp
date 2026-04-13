@@ -28,7 +28,7 @@ import * as XLSX from "xlsx";
 export interface ExportFilters {
   search?: string;
   status?: string;
-  setor?: string;
+  cargo?: string;
 }
 
 interface ColaboradorRow {
@@ -142,7 +142,7 @@ export function ExportButton({
       const params = new URLSearchParams();
       if (filters.search) params.set("search", filters.search);
       if (filters.status) params.set("status", filters.status);
-      if (filters.setor)  params.set("setor", filters.setor);
+      if (filters.cargo)  params.set("cargo", filters.cargo);
       const qs = params.toString();
 
       const res = await fetch(`/api/export${qs ? `?${qs}` : ""}`);

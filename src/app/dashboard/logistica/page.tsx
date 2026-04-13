@@ -44,25 +44,27 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { dashboardLogisticaApi } from "@/lib/axios";
+import { useFilter } from "@/contexts/FilterContext";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { useQueryClient } from "@tanstack/react-query";
+import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 
 // ============================================================================
 // CONFIG DO CHART
 // ============================================================================
 
 const chartConfig = {
-  vagasPreenchidas: { label: "Ocupadas",    color: "#5bc0ec" },
-  vagasDisponiveis: { label: "Disponíveis", color: "#334155" },
+  vagasPreenchidas: { label: "Ocupadas",    color: "#ff460a" },
+  vagasDisponiveis: { label: "Disponíveis", color: "#232323" },
 };
 
 const chartConfigTurnos = {
-  total: { label: "Colaboradores", color: "#5bc0ec" },
+  total: { label: "Colaboradores", color: "#ff460a" },
 };
 
 const TURNO_COLORS = [
-  "#5bc0ec", "#22c55e", "#f59e0b", "#a78bfa", "#f43f5e", "#34d399",
+  "#ff460a", "#19365b", "#416e7d", "#9c3022", "#ffa78b", "#9e708b",
 ];
 
 // ============================================================================
@@ -75,7 +77,7 @@ function ocupacaoBadge(percentual: number | undefined) {
     return (
       <Badge
         className="border font-medium"
-        style={{ backgroundColor: "#f43f5e22", color: "#f43f5e", borderColor: "#f43f5e44" }}
+        style={{ backgroundColor: "#DA291B22", color: "#DA291B", borderColor: "#DA291B44" }}
       >
         {pct}%
       </Badge>
@@ -85,7 +87,7 @@ function ocupacaoBadge(percentual: number | undefined) {
     return (
       <Badge
         className="border font-medium"
-        style={{ backgroundColor: "#f59e0b22", color: "#f59e0b", borderColor: "#f59e0b44" }}
+        style={{ backgroundColor: "#E5CF6122", color: "#E5CF61", borderColor: "#E5CF6144" }}
       >
         {pct}%
       </Badge>
@@ -94,7 +96,7 @@ function ocupacaoBadge(percentual: number | undefined) {
   return (
     <Badge
       className="border font-medium"
-      style={{ backgroundColor: "#22c55e22", color: "#22c55e", borderColor: "#22c55e44" }}
+      style={{ backgroundColor: "#33724622", color: "#337246", borderColor: "#33724644" }}
     >
       {pct}%
     </Badge>
@@ -164,10 +166,12 @@ export default function DashboardLogisticaPage() {
     }
   }, [authLoading, user, router]);
 
+  const { centroCusto } = useFilter();
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["dashboard-logistica"],
+    queryKey: ["dashboard-logistica", centroCusto],
     queryFn: async () => {
-      const res = await dashboardLogisticaApi.get();
+      const res = await dashboardLogisticaApi.get(centroCusto);
       return res.data;
     },
     staleTime: 120_000,
@@ -268,7 +272,7 @@ export default function DashboardLogisticaPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div>
-                <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">
+                <h1 className="page-title">
                   Dashboard Logística
                 </h1>
                 <p className="text-muted-foreground 2xl:text-lg">
@@ -301,7 +305,7 @@ export default function DashboardLogisticaPage() {
                 <Hotel className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-primary">
+                <div className="big-number text-[40px]">
                   {kpis ? `${kpis.ocupacaoTotal}%` : "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -315,10 +319,10 @@ export default function DashboardLogisticaPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Total de Hóspedes
                 </CardTitle>
-                <Users className="h-4 w-4 text-emerald-400" />
+                <Users className="h-4 w-4 text-[#337246]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-emerald-400">
+                <div className="big-number text-[40px] text-[#337246]">
                   {kpis?.totalPreenchidas ?? "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -332,10 +336,10 @@ export default function DashboardLogisticaPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Vagas Disponíveis
                 </CardTitle>
-                <DoorOpen className="h-4 w-4 text-violet-400" />
+                <DoorOpen className="h-4 w-4 text-[#19365b]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-violet-400">
+                <div className="big-number text-[40px] text-[#19365b]">
                   {kpis?.totalDisponiveis ?? "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -366,10 +370,11 @@ export default function DashboardLogisticaPage() {
                     barGap={5}
                     margin={{ top: 20, right: 60, left: 20, bottom: 60 }}
                   >
-                    <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid vertical={false} stroke="#e2e2e2" />
                     <XAxis
                       dataKey="hotel"
-                      tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                      tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
+                      stroke="#e2e2e2"
                       angle={-45}
                       textAnchor="end"
                       interval={0}
@@ -379,7 +384,8 @@ export default function DashboardLogisticaPage() {
                       axisLine={false}
                     />
                     <YAxis
-                      tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 13 }}
+                      tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
+                      stroke="#e2e2e2"
                       tickLine={false}
                       axisLine={false}
                       allowDecimals={false}
@@ -405,7 +411,7 @@ export default function DashboardLogisticaPage() {
                       name="vagasDisponiveis"
                       stackId="a"
                       fill={chartConfig.vagasDisponiveis.color}
-                      radius={[4, 4, 0, 0]}
+                      radius={[6, 6, 0, 0]}
                     />
                   </BarChart>
                 </ChartContainer>
@@ -506,7 +512,7 @@ export default function DashboardLogisticaPage() {
                       className="flex flex-col items-center rounded-lg border border-white/5 bg-white/5 px-3 py-3"
                     >
                       <span
-                        className="text-2xl 2xl:text-3xl font-bold"
+                        className="big-number text-[40px]"
                         style={{ color: t.fill }}
                       >
                         {t.total}

@@ -129,6 +129,7 @@ const editSchema = z.object({
   PRE_ADMISSAO: z.enum(["Sim", "Não", "Pendente"]).optional().nullable(),
   OP: z.string().optional().nullable(),
   REQ: z.string().optional().nullable(),
+  NUMERO_ORACLE: z.string().optional().nullable(),
 
   // Saúde
   EXAME: z.enum(["Realizado", "Agendado", "Pendente"]).optional().nullable(),
@@ -259,6 +260,7 @@ export function EditColaboradorModal({
         DATA_ADMISSAO: formatDataSegura(colaborador.DATA_ADMISSAO) ?? "",
         FUNCAO_CLT: colaborador.FUNCAO_CLT || "",
         HISTOGRAMA: colaborador.HISTOGRAMA || "",
+        NUMERO_ORACLE: colaborador.NUMERO_ORACLE || "",
         CONTRATO: safeEnum(colaborador.CONTRATO, ["CLT", "PJ", "Temporário", "Estagiário"] as const),
         STATUS: safeEnum(colaborador.STATUS, ["Ativo", "Pendente", "Inativo", "Desligado"] as const),
         VINCULADO: colaborador.VINCULADO || "",
@@ -381,6 +383,11 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Histograma</label>
                   <Input {...register("HISTOGRAMA")} />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Nº Oracle</label>
+                  <Input {...register("NUMERO_ORACLE")} />
                 </div>
 
                 <div className="space-y-2">

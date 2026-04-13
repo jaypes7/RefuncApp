@@ -4,13 +4,14 @@
  * ============================================================================
  *
  * Exporta todos os colaboradores sem paginação para geração de planilha XLSX.
- * Dados lidos do Supabase (Fase 4+). Suporta filtros: search, status, setor.
+ * Dados lidos do Supabase (Fase 4+). Suporta filtros: search, status, cargo.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import { logExport } from "@/lib/logs";
+import { CARGOS_AGRUPADOS } from "@/constants/cargos";
 
 // ============================================================================
 // TIPOS
@@ -151,7 +152,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") ?? undefined;
     const status = searchParams.get("status") ?? undefined;
-    const setor = searchParams.get("setor") ?? undefined;
+    const cargo = searchParams.get("cargo") ?? undefined;
 
     // Busca todos os colaboradores do Supabase
     const { data: rows, error } = await supabase
@@ -180,24 +181,12 @@ export async function GET(request: NextRequest) {
       colaboradores = colaboradores.filter((c) => c.STATUS === status);
     }
 
-    if (setor) {
-      switch (setor.toUpperCase()) {
-        case "RH":
-          colaboradores = colaboradores.filter(
-            (c) => c.STATUS && c.STATUS !== "Pendente",
-          );
-          break;
-        case "LOGISTICA":
-          colaboradores = colaboradores.filter(
-            (c) => c.MOB?.trim() || c.PORTAL === "Liberado",
-          );
-          break;
-        case "SEGURANCA":
-          colaboradores = colaboradores.filter(
-            (c) => c.ASO === "Apto" || Boolean(c.TREINAMENTO),
-          );
-          break;
-      }
+    if (cargo) {
+      const grupo = (CARGOS_AGRUPADOS as Record<string, readonly string[]>)[cargo];
+      const cargosFiltro = grupo ? [...grupo] : [cargo];
+      colaboradores = colaboradores.filter((c) =>
+        cargosFiltro.includes(c.FUNCAO_CLT ?? ""),
+      );
     }
 
     try {

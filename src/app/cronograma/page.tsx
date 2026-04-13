@@ -383,7 +383,7 @@ export default function CronogramaPage() {
                 {diasUteisTotal !== null &&
                   scheduleValidation !== null &&
                   (scheduleValidation.valid ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-400">
+                    <div className="flex items-center gap-2 rounded-lg border border-[#337246]/30 bg-[#337246]/10 px-4 py-2.5 text-sm text-[#337246]">
                       <Check className="h-4 w-4 shrink-0" />
                       <span>
                         Cronograma balanceado — {scheduleValidation.stepsDaysTotal} dias úteis
@@ -423,7 +423,7 @@ export default function CronogramaPage() {
                       key={etapa.id}
                       className={`space-y-3 p-4 rounded-lg border transition-colors ${
                         etapa.concluida
-                          ? "bg-emerald-500/10 border-emerald-500/30"
+                          ? "bg-[#337246]/10 border-[#337246]/30"
                           : "bg-card/50 border-border/50"
                       }`}
                     >
@@ -431,7 +431,7 @@ export default function CronogramaPage() {
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
                             etapa.concluida
-                              ? "bg-emerald-500/20 text-emerald-400"
+                              ? "bg-[#337246]/20 text-[#337246]"
                               : "bg-primary/10 text-primary"
                           }`}
                         >
@@ -443,7 +443,7 @@ export default function CronogramaPage() {
                             {etapa.concluida && (
                               <Badge
                                 variant="outline"
-                                className="shrink-0 h-4 px-1.5 text-[10px] border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
+                                className="shrink-0 h-4 px-1.5 text-[10px] border-[#337246]/40 text-[#337246] bg-[#337246]/10"
                               >
                                 Concluído
                               </Badge>
@@ -561,7 +561,7 @@ export default function CronogramaPage() {
                           </div>
                         )}
                         {dateError && !(dateError.dataInicio || dateError.dataFim || dateError.dataStartGreaterThanEnd) && etapa.data_inicio && etapa.data_fim && (
-                          <div className="flex items-center gap-1.5 text-xs text-emerald-400 pb-0.5">
+                          <div className="flex items-center gap-1.5 text-xs text-[#337246] pb-0.5">
                             <Check className="w-3.5 h-3.5" />
                           </div>
                         )}

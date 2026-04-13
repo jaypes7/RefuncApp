@@ -36,6 +36,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { dashboardSuprimentosApi } from "@/lib/axios";
+import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { toast } from "sonner";
@@ -46,15 +47,15 @@ import { CanAccess } from "@/components/CanAccess";
 // ============================================================================
 
 const STATUS_COLORS: Record<string, string> = {
-  Aprovada:       "#22c55e",
-  Cancelada:      "#f43f5e",
-  "Em Aprovação": "#f59e0b",
+  Aprovada:       "#337246",
+  Cancelada:      "#DA291B",
+  "Em Aprovação": "#E5CF61",
 };
 
-const PIE_FALLBACK_COLORS = ["#5bc0ec", "#a78bfa", "#fb923c", "#34d399", "#f43f5e"];
+const PIE_FALLBACK_COLORS = ["#ff460a", "#19365b", "#416e7d", "#9c3022", "#ffa78b", "#9e708b", "#e3d9a3", "#232323", "#ffd7cc", "#e2e2e2"];
 
 const chartConfigStatus = {
-  total: { label: "Ordens", color: "#5bc0ec" },
+  total: { label: "Ordens", color: "#ff460a" },
 };
 
 // ============================================================================
@@ -290,7 +291,7 @@ export default function DashboardSuprimentosPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div>
-                <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">
+                <h1 className="page-title">
                   Dashboard Suprimentos
                 </h1>
                 <p className="text-muted-foreground 2xl:text-lg">
@@ -323,10 +324,10 @@ export default function DashboardSuprimentosPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Total Investido
                 </CardTitle>
-                <DollarSign className="h-4 w-4 text-emerald-400" />
+                <DollarSign className="h-4 w-4 text-[#337246]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-emerald-400">
+                <div className="big-number text-[40px] text-[#337246]">
                   {kpis ? formatBRL(kpis.totalInvestido) : "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">Soma de todos os valores</p>
@@ -341,7 +342,7 @@ export default function DashboardSuprimentosPage() {
                 <ClipboardList className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold">{kpis?.totalOrdens ?? "—"}</div>
+                <div className="big-number text-[40px]">{kpis?.totalOrdens ?? "—"}</div>
                 <p className="text-xs text-muted-foreground">Total de requisições</p>
               </CardContent>
             </Card>
@@ -351,10 +352,10 @@ export default function DashboardSuprimentosPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Entregas Realizadas
                 </CardTitle>
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                <CheckCircle2 className="h-4 w-4 text-[#337246]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-emerald-400">
+                <div className="big-number text-[40px] text-[#337246]">
                   {kpis?.entregues ?? "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">Entregues na obra</p>
@@ -366,10 +367,10 @@ export default function DashboardSuprimentosPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   % Entregue
                 </CardTitle>
-                <Package className="h-4 w-4 text-violet-400" />
+                <Package className="h-4 w-4 text-[#19365b]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-violet-400">
+                <div className="big-number text-[40px] text-[#19365b]">
                   {kpis ? `${kpis.percentualEntregue}%` : "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">Das ordens entregues</p>
@@ -388,13 +389,13 @@ export default function DashboardSuprimentosPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wider">Orçado</p>
-                    <p className="text-2xl 2xl:text-3xl font-bold text-primary">
+                    <p className="big-number text-[40px]">
                       {formatBRL(sup.orcado)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wider">Investido</p>
-                    <p className="text-2xl 2xl:text-3xl font-bold text-emerald-400">
+                    <p className="big-number text-[40px] text-[#337246]">
                       {formatBRL(sup.totalInvestido)}
                     </p>
                   </div>
@@ -406,15 +407,15 @@ export default function DashboardSuprimentosPage() {
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{pct}% do orçamento utilizado</span>
-                        <span className={overBudget ? "text-red-400 font-medium" : "text-emerald-400"}>
+                        <span className={overBudget ? "text-red-400 font-medium" : "text-[#337246]"}>
                           {overBudget
                             ? `+${formatBRL(sup.totalInvestido - sup.orcado)} acima`
                             : `${formatBRL(sup.orcado - sup.totalInvestido)} disponível`}
                         </span>
                       </div>
-                      <div className="h-3 w-full rounded-full bg-white/10 overflow-hidden">
+                      <div className="h-3 w-full rounded-full bg-[#e2e2e2]/20 overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all ${overBudget ? "bg-red-400" : "bg-emerald-400"}`}
+                          className={`h-full rounded-full transition-all ${overBudget ? "bg-red-400" : "bg-[#337246]"}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -484,7 +485,7 @@ export default function DashboardSuprimentosPage() {
                     return (
                       <div
                         key={d.name}
-                        className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-4 py-3"
+                        className="flex items-center justify-between rounded-lg border border-[#e2e2e2]/10 bg-[#e2e2e2]/10 px-4 py-3"
                       >
                         <div className="flex items-center gap-3">
                           <span className="h-3 w-3 rounded-full" style={{ backgroundColor: d.fill }} />
@@ -524,7 +525,7 @@ export default function DashboardSuprimentosPage() {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="border-white/10 hover:bg-white/5">
+                      <TableRow className="border-[#e2e2e2]/20 hover:bg-[#e2e2e2]/10">
                         <TableHead className="text-muted-foreground 2xl:text-sm">Ordem de Compra</TableHead>
                         <TableHead className="text-muted-foreground 2xl:text-sm">Descrição</TableHead>
                         <TableHead className="text-right text-muted-foreground 2xl:text-sm">Req. Previstas</TableHead>
@@ -539,7 +540,7 @@ export default function DashboardSuprimentosPage() {
                       {ordens.map((o) => (
                         <TableRow
                           key={o.id}
-                          className="border-white/5 hover:bg-white/5"
+                          className="border-[#e2e2e2]/10 hover:bg-[#e2e2e2]/10"
                         >
                           <TableCell
                             className="font-mono text-sm 2xl:text-base font-medium max-w-[160px] truncate"
@@ -574,7 +575,7 @@ export default function DashboardSuprimentosPage() {
                               </CanAccess>
                               <span
                                 className={`text-xs font-medium ${
-                                  o.entregue_obra ? "text-emerald-400" : "text-muted-foreground"
+                                  o.entregue_obra ? "text-[#337246]" : "text-muted-foreground"
                                 }`}
                               >
                                 {o.entregue_obra ? "Sim" : "Não"}

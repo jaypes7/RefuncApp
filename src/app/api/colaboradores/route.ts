@@ -14,7 +14,7 @@
  *   limit  – itens por página (default: 20, max: 100)
  *   search – busca parcial em nome ou cpf (.ilike)
  *   status – filtro exato por status (Ativo | Pendente | Inativo | Desligado)
- *   setor  – subconjunto lógico: RH | LOGISTICA | SEGURANCA
+ *   cargo  – filtro por função CLT individual ou grupo de CARGOS_AGRUPADOS
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -25,6 +25,7 @@ import {
   ColaboradorCreateSchema,
   type Colaborador,
 } from "@/lib/schemas";
+import { CARGOS_AGRUPADOS } from "@/constants/cargos";
 import { requireAuth } from "@/lib/auth";
 import { logAdicionar } from "@/lib/logs";
 
@@ -73,7 +74,9 @@ function mapRow(row: Record<string, any>): Colaborador {
     MUNICIPIO:            row.municipio         ?? null,
     UF:                   row.uf                ?? null,
     TELEFONE:             row.telefone          ?? null,
+    NUMERO_ORACLE:        row.numero_oracle     ?? null,
     turno_trabalho:       row.turno_trabalho    ?? null,
+    CENTRO_CUSTO:         row.centro_custo      ?? null,
   };
 }
 
@@ -123,7 +126,9 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
   if (data.MUNICIPIO         !== undefined) row.municipio          = data.MUNICIPIO;
   if (data.UF                !== undefined) row.uf                 = data.UF;
   if (data.TELEFONE          !== undefined) row.telefone           = data.TELEFONE;
+  if (data.NUMERO_ORACLE     !== undefined) row.numero_oracle      = data.NUMERO_ORACLE;
   if (data.turno_trabalho    !== undefined) row.turno_trabalho     = data.turno_trabalho;
+  if (data.CENTRO_CUSTO      !== undefined) row.centro_custo       = data.CENTRO_CUSTO;
 
   return row;
 }
@@ -178,19 +183,26 @@ function calcularProgresso(colaborador: Colaborador) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth("user");
+    const currentUser = await requireAuth("user");
 
     const { searchParams } = new URL(request.url);
     const queryParams = {
-      page:   searchParams.get("page")   || "1",
-      limit:  searchParams.get("limit")  || "20",
-      search: searchParams.get("search") || undefined,
-      status: searchParams.get("status") || undefined,
-      setor:  searchParams.get("setor")  || undefined,
+      page:         searchParams.get("page")         || "1",
+      limit:        searchParams.get("limit")        || "20",
+      search:       searchParams.get("search")       || undefined,
+      status:       searchParams.get("status")       || undefined,
+      cargo:        searchParams.get("cargo")        || undefined,
+      centro_custo: searchParams.get("centro_custo") || undefined,
     };
 
-    const { page, limit, search, status, setor } =
+    const { page, limit, search, status, cargo, centro_custo: ccParam } =
       ColaboradoresQuerySchema.parse(queryParams);
+
+    // Guests têm o centro_custo fixado no JWT — ignora o param do cliente
+    const centroCusto =
+      currentUser.perfil === "guest" && currentUser.centro_custo
+        ? currentUser.centro_custo
+        : ccParam;
 
     const supabase = createServerClient();
 
@@ -209,24 +221,19 @@ export async function GET(request: NextRequest) {
       query = query.eq("status", status);
     }
 
-    // ── Filtro por setor (subconjunto lógico) ─────────────────────────────
-    if (setor) {
-      switch (setor) {
-        case "RH":
-          // Status preenchido e diferente de "Pendente"
-          query = query
-            .not("status", "is", null)
-            .neq("status", "Pendente");
-          break;
-        case "LOGISTICA":
-          // MOB confirmado ou Portal liberado
-          query = query.or("mob.eq.Sim,portal.eq.Liberado");
-          break;
-        case "SEGURANCA":
-          // ASO apto ou treinamento registrado
-          query = query.or("aso.eq.Apto,treinamento.not.is.null");
-          break;
+    // ── Filtro por cargo (individual ou grupo) ────────────────────────────
+    if (cargo) {
+      const grupo = (CARGOS_AGRUPADOS as Record<string, readonly string[]>)[cargo];
+      if (grupo) {
+        query = query.in("funcao_clt", [...grupo]);
+      } else {
+        query = query.eq("funcao_clt", cargo);
       }
+    }
+
+    // ── Filtro por centro de custo ────────────────────────────────────────
+    if (centroCusto) {
+      query = query.eq("centro_custo", centroCusto);
     }
 
     // ── Paginação server-side (.range é inclusivo em ambos os extremos) ───

@@ -46,25 +46,27 @@ import {
   Globe,
 } from "lucide-react";
 import { dashboardRhApi } from "@/lib/axios";
+import { useFilter } from "@/contexts/FilterContext";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { useQueryClient } from "@tanstack/react-query";
+import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 
 // ============================================================================
 // CHART CONFIGS
 // ============================================================================
 
 const configIdades = {
-  total: { label: "Colaboradores", color: "#5bc0ec" },
+  total: { label: "Colaboradores", color: "#ff460a" },
 };
 
 const configASO = {
-  apto:    { label: "Apto",    color: "#22c55e" },
-  inapto:  { label: "Inapto",  color: "#ef4444" },
-  pendente:{ label: "Pendente",color: "#f59e0b" },
+  apto:    { label: "Apto",    color: "#337246" },
+  inapto:  { label: "Inapto",  color: "#DA291B" },
+  pendente:{ label: "Pendente",color: "#E5CF61" },
 };
 
-const UF_COLORS = ["#5bc0ec", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444", "#6b7280"];
+const UF_COLORS = ["#ff460a", "#19365b", "#416e7d", "#9c3022", "#ffa78b", "#9e708b"];
 
 const configUF = {
   count: { label: "Colaboradores" },
@@ -184,10 +186,12 @@ export default function DashboardRhPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCargo,  setFilterCargo]  = useState("all");
 
+  const { centroCusto } = useFilter();
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["dashboard-rh"],
+    queryKey: ["dashboard-rh", centroCusto],
     queryFn: async () => {
-      const res = await dashboardRhApi.get();
+      const res = await dashboardRhApi.get(centroCusto);
       return res.data;
     },
     staleTime: 60_000,
@@ -227,9 +231,9 @@ export default function DashboardRhPage() {
     const inaptoCount = Math.round(((100 - data.metricas.percentualASO) / 100) * total * 0.2);
     const pendenteCount = total - aptoCount - inaptoCount;
     return [
-      { name: "Apto", value: Math.max(0, aptoCount), fill: "#22c55e" },
-      { name: "Inapto", value: Math.max(0, inaptoCount), fill: "#ef4444" },
-      { name: "Pendente", value: Math.max(0, pendenteCount), fill: "#f59e0b" },
+      { name: "Apto", value: Math.max(0, aptoCount), fill: "#337246" },
+      { name: "Inapto", value: Math.max(0, inaptoCount), fill: "#DA291B" },
+      { name: "Pendente", value: Math.max(0, pendenteCount), fill: "#E5CF61" },
     ];
   }, [data]);
 
@@ -285,7 +289,7 @@ export default function DashboardRhPage() {
     const othersCount = sorted.slice(5).reduce((acc, s) => acc + s.count, 0);
     return [
       ...top5,
-      { uf: "Outros", count: othersCount, fill: "#6b7280", percent: ((othersCount / total) * 100).toFixed(1) },
+      { uf: "Outros", count: othersCount, fill: "#9e708b", percent: ((othersCount / total) * 100).toFixed(1) },
     ];
   }, [data]);
 
@@ -338,10 +342,10 @@ export default function DashboardRhPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div>
-                <h1 className="text-3xl 2xl:text-4xl font-bold text-foreground">
+                <h1 className="page-title">
                   Dashboard RH
                 </h1>
-                <p className="text-muted-foreground 2xl:text-lg">
+                <p className="page-subtitle">
                   Perfil demográfico e funcional dos colaboradores
                 </p>
               </div>
@@ -370,7 +374,7 @@ export default function DashboardRhPage() {
                 <Users className="h-4 w-4 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold">{kpis.total}</div>
+                <div className="big-number text-[40px]">{kpis.total}</div>
                 <p className="text-xs text-muted-foreground">Colaboradores no sistema</p>
               </CardContent>
             </Card>
@@ -380,10 +384,10 @@ export default function DashboardRhPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Admitidos
                 </CardTitle>
-                <GraduationCap className="h-4 w-4 text-emerald-400" />
+                <GraduationCap className="h-4 w-4 text-[#337246]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-emerald-400">
+                <div className="big-number text-[40px] text-[#337246]">
                   {kpis.admitidos}
                 </div>
                 <p className="text-xs text-muted-foreground">Com processo concluído</p>
@@ -395,10 +399,10 @@ export default function DashboardRhPage() {
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Funções Distintas
                 </CardTitle>
-                <MapPin className="h-4 w-4 text-violet-400" />
+                <MapPin className="h-4 w-4 text-[#19365b]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl 2xl:text-3xl font-bold text-violet-400">
+                <div className="big-number text-[40px] text-[#19365b]">
                   {totalFuncoes}
                 </div>
                 <p className="text-xs text-muted-foreground">Cargos CLT cadastrados</p>
@@ -423,26 +427,26 @@ export default function DashboardRhPage() {
                     <BarChart data={dadosASO} margin={{ top: 20, right: 60, left: 20, bottom: 20 }}>
                       <CartesianGrid
                         strokeDasharray="3 3"
-                        stroke="rgba(255,255,255,0.1)"
+                        stroke="#e2e2e2"
                         vertical={false}
                       />
                       <XAxis
                         dataKey="name"
-                        stroke="rgba(255,255,255,0.5)"
-                        fontSize={13}
+                        stroke="#e2e2e2"
+                        tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
                         tickLine={false}
                         axisLine={false}
                       />
                       <YAxis
-                        stroke="rgba(255,255,255,0.5)"
-                        fontSize={13}
+                        stroke="#e2e2e2"
+                        tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
                         tickLine={false}
                         axisLine={false}
                         allowDecimals={false}
                       />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <ChartLegend content={<ChartLegendContent />} />
-                      <Bar dataKey="value" name="Colaboradores" radius={[4, 4, 0, 0]}>
+                      <Bar dataKey="value" name="Colaboradores" radius={[6, 6, 0, 0]}>
                         {dadosASO.map((entry, i) => (
                           <Cell key={`aso-${i}`} fill={entry.fill} />
                         ))}
@@ -453,9 +457,9 @@ export default function DashboardRhPage() {
                     {dadosASO.map((s) => (
                       <div
                         key={s.name}
-                        className="flex flex-col items-center rounded-lg border border-white/5 bg-white/5 px-3 py-3"
+                        className="flex flex-col items-center rounded-lg border border-[#e2e2e2] bg-[#e2e2e2]/10 px-3 py-3"
                       >
-                        <span className="text-2xl 2xl:text-3xl font-bold" style={{ color: s.fill }}>
+                        <span className="big-number text-[40px]" style={{ color: s.fill }}>
                           {s.value}
                         </span>
                         <span className="mt-0.5 text-xs text-muted-foreground">{s.name}</span>
@@ -482,19 +486,19 @@ export default function DashboardRhPage() {
                   <BarChart data={dadosIdades} margin={{ top: 20, right: 60, left: 20, bottom: 20 }}>
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.1)"
+                      stroke="#e2e2e2"
                       vertical={false}
                     />
                     <XAxis
                       dataKey="faixa"
-                      stroke="rgba(255,255,255,0.5)"
-                      fontSize={13}
+                      stroke="#e2e2e2"
+                      tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
                       tickLine={false}
                       axisLine={false}
                     />
                     <YAxis
-                      stroke="rgba(255,255,255,0.5)"
-                      fontSize={13}
+                      stroke="#e2e2e2"
+                      tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
                       tickLine={false}
                       axisLine={false}
                       allowDecimals={false}
@@ -504,7 +508,7 @@ export default function DashboardRhPage() {
                     <Bar
                       dataKey="total"
                       name="Colaboradores"
-                      fill="#5bc0ec"
+                      fill="#ff460a"
                       radius={[6, 6, 0, 0]}
                     />
                   </BarChart>

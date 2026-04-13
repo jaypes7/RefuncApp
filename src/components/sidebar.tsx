@@ -28,11 +28,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { CanAccess } from "@/components/CanAccess";
 
 const dashboardSubItems = [
-  { name: "Geral",       href: "/dashboard",             icon: BarChart3,   userOnly: false },
-  { name: "RH",          href: "/dashboard/rh",          icon: UserCog,     userOnly: true  },
-  { name: "Logística",   href: "/dashboard/logistica",   icon: Truck,       userOnly: true  },
-  { name: "Segurança",   href: "/dashboard/seguranca",   icon: ShieldCheck, userOnly: true  },
-  { name: "Suprimentos", href: "/dashboard/suprimentos", icon: Package,     userOnly: true  },
+  { name: "Gestão a Vista - Geral",       href: "/dashboard",             icon: BarChart3,   userOnly: false },
+  { name: "Gestão a Vista - RH",          href: "/dashboard/rh",          icon: UserCog,     userOnly: true  },
+  { name: "Gestão a Vista - Logística",   href: "/dashboard/logistica",   icon: Truck,       userOnly: true  },
+  { name: "Gestão a Vista - Segurança",   href: "/dashboard/seguranca",   icon: ShieldCheck, userOnly: true  },
+  { name: "Gestão a Vista - Suprimentos", href: "/dashboard/suprimentos", icon: Package,     userOnly: true  },
 ];
 
 interface SidebarProps {
@@ -62,19 +62,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       "flex items-center gap-2.5 text-xs font-semibold transition-colors duration-150 cursor-pointer",
       !collapsed && "py-1.5 pr-3 pl-2.5 rounded-r-sm border-l-2",
       !collapsed && isActive &&
-        "border-l-primary text-primary bg-primary/[0.06]",
+        "border-l-[#ff460a] text-white bg-[#ff460a]/10",
       !collapsed && !isActive &&
-        "border-l-transparent text-muted-foreground hover:text-foreground hover:bg-accent",
+        "border-l-transparent text-white/70 hover:text-white hover:bg-white/10",
       collapsed && "justify-center rounded-sm py-2",
-      collapsed && isActive && "bg-primary/[0.08] text-primary",
+      collapsed && isActive && "bg-[#ff460a]/10 text-white",
       collapsed && !isActive &&
-        "text-muted-foreground hover:text-foreground hover:bg-accent",
+        "text-white/70 hover:text-white hover:bg-white/10",
     );
 
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-[width] duration-300",
+        "fixed left-0 top-0 z-40 h-screen bg-[#232323] border-r border-white/10 transition-[width] duration-300",
         collapsed ? "w-14" : "w-56",
       )}
     >
@@ -89,10 +89,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         >
           {!collapsed && (
             <div>
-              <h2 className="text-[11px] font-bold tracking-widest uppercase text-primary">
+              <h2 className="text-[11px] font-bold tracking-widest uppercase text-white">
                 MobilizaçãoAPP
               </h2>
-              <p className="text-[10px] text-muted-foreground/60 tracking-wide">
+              <p className="text-[10px] text-white/40 tracking-wide">
                 v2.5.0
               </p>
             </div>
@@ -101,7 +101,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             variant="ghost"
             size="icon"
             onClick={onToggle}
-            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150"
+            className="h-7 w-7 shrink-0 text-white/60 hover:text-white hover:bg-white/10 transition-colors duration-150"
           >
             {collapsed ? (
               <ChevronRight className="h-3.5 w-3.5" />
@@ -163,10 +163,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <LayoutDashboard className="h-4 w-4 shrink-0" />
               {!collapsed && (
                 <>
-                  <span className="flex-1 text-left">Dashboard</span>
+                  <span className="flex-1 text-left">Gestão a Vista</span>
                   <ChevronDown
                     className={cn(
-                      "h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-150",
+                      "h-3.5 w-3.5 text-white/40 transition-transform duration-150",
                       dashboardOpen && "rotate-180",
                     )}
                   />
@@ -176,7 +176,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
             {/* Sub-items — expanded */}
             {dashboardOpen && !collapsed && (
-              <div className="ml-3 mt-px space-y-px border-l border-border pl-2.5">
+              <div className="ml-3 mt-px space-y-px border-l border-white/10 pl-2.5">
                 {dashboardSubItems.map((sub) => {
                   const link = (
                     <Link key={sub.href} href={sub.href}>
@@ -184,8 +184,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         className={cn(
                           "flex items-center gap-2 rounded-sm px-2 py-1.5 text-[11px] font-medium transition-colors duration-150",
                           pathname === sub.href
-                            ? "text-primary bg-primary/[0.06]"
-                            : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                            ? "text-[#ff460a] bg-[#ff460a]/10"
+                            : "text-white/60 hover:text-white hover:bg-white/10",
                         )}
                       >
                         <sub.icon className="h-3.5 w-3.5 shrink-0" />
@@ -210,8 +210,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         className={cn(
                           "flex items-center justify-center rounded-sm py-1.5 transition-colors duration-150",
                           pathname === sub.href
-                            ? "bg-primary/[0.08] text-primary"
-                            : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                            ? "bg-[#ff460a]/10 text-[#ff460a]"
+                            : "text-white/60 hover:text-white hover:bg-white/10",
                         )}
                         title={sub.name}
                       >
@@ -230,14 +230,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </nav>
 
         {/* ── Footer ─────────────────────────────────────────────────── */}
-        <div className="mt-auto space-y-px border-t border-border pt-3">
+        <div className="mt-auto space-y-px border-t border-white/10 pt-3">
 
           {/* Toggle de tema */}
           <Button
             variant="ghost"
             onClick={() => setTheme(isDark ? "light" : "dark")}
             className={cn(
-              "w-full gap-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150",
+              "w-full gap-2.5 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/10 transition-colors duration-150",
               collapsed ? "justify-center px-0" : "justify-start",
             )}
             title={
@@ -266,7 +266,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             variant="ghost"
             onClick={logout}
             className={cn(
-              "w-full gap-2.5 text-xs font-semibold text-muted-foreground hover:text-destructive hover:bg-destructive/[0.06] transition-colors duration-150",
+              "w-full gap-2.5 text-xs font-semibold text-white/70 hover:text-red-400 hover:bg-red-400/10 transition-colors duration-150",
               collapsed ? "justify-center px-0" : "justify-start",
             )}
             title={collapsed ? "Sair do Sistema" : undefined}

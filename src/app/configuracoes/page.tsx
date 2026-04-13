@@ -54,7 +54,7 @@ type ConfigProjeto = {
 
 type ConfigClinica = { id?: number; nome: string };
 type ConfigHotel = { id?: string; nome: string; qt_vagas: number; vagas_ocupadas: number; vagas_disponiveis: number };
-type ConfigAcesso = { id?: string; re: string; nome: string; perfil: string; precisa_redefinir_senha?: boolean };
+type ConfigAcesso = { id?: string; re: string; nome: string; perfil: string; centro_custo?: string | null; precisa_redefinir_senha?: boolean };
 
 type LogEntry = {
   id: string;
@@ -271,12 +271,14 @@ export default function ConfiguracoesPage() {
   const [acessoRE, setAcessoRE] = useState("");
   const [acessoNome, setAcessoNome] = useState("");
   const [acessoRole, setAcessoRole] = useState("");
+  const [acessoCentroCusto, setAcessoCentroCusto] = useState("");
 
   // Acessos - edição inline
   const [editingAcessoId, setEditingAcessoId] = useState<string | null>(null);
   const [editingAcessoRE, setEditingAcessoRE] = useState("");
   const [editingAcessoNome, setEditingAcessoNome] = useState("");
   const [editingAcessoPerfil, setEditingAcessoPerfil] = useState("");
+  const [editingAcessoCentroCusto, setEditingAcessoCentroCusto] = useState("");
 
   // Clínicas - input para adicionar nova
   const [clinicaInput, setClinicaInput] = useState("");
@@ -493,7 +495,7 @@ export default function ConfiguracoesPage() {
   });
 
   const addAcessoMutation = useMutation({
-    mutationFn: async (data: { re: string; nome: string; perfil: string }) => {
+    mutationFn: async (data: { re: string; nome: string; perfil: string; centro_custo?: string }) => {
       const res = await fetch("/api/config/acessos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -507,6 +509,7 @@ export default function ConfiguracoesPage() {
       setAcessoRE("");
       setAcessoNome("");
       setAcessoRole("");
+      setAcessoCentroCusto("");
       toast.success("Acesso configurado com sucesso!");
     },
     onError: () => toast.error("Erro ao configurar acesso"),
@@ -531,11 +534,11 @@ export default function ConfiguracoesPage() {
   });
 
   const updateAcessoMutation = useMutation({
-    mutationFn: async (payload: { id: string; re: string; nome: string; perfil: string }) => {
+    mutationFn: async (payload: { id: string; re: string; nome: string; perfil: string; centro_custo?: string }) => {
       const res = await fetch(`/api/config/acessos?id=${payload.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ re: payload.re, nome: payload.nome, perfil: payload.perfil }),
+        body: JSON.stringify({ re: payload.re, nome: payload.nome, perfil: payload.perfil, centro_custo: payload.centro_custo || null }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -549,6 +552,7 @@ export default function ConfiguracoesPage() {
       setEditingAcessoRE("");
       setEditingAcessoNome("");
       setEditingAcessoPerfil("");
+      setEditingAcessoCentroCusto("");
       toast.success("Acesso atualizado com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -579,6 +583,7 @@ export default function ConfiguracoesPage() {
     setEditingAcessoRE(acesso.re);
     setEditingAcessoNome(acesso.nome);
     setEditingAcessoPerfil(acesso.perfil);
+    setEditingAcessoCentroCusto(acesso.centro_custo || "");
   };
 
   // Handler para cancelar edição de acesso
@@ -587,6 +592,7 @@ export default function ConfiguracoesPage() {
     setEditingAcessoRE("");
     setEditingAcessoNome("");
     setEditingAcessoPerfil("");
+    setEditingAcessoCentroCusto("");
   };
 
   const resetProjetoMutation = useMutation({
@@ -876,8 +882,8 @@ export default function ConfiguracoesPage() {
                           <span className="text-xs text-muted-foreground">Percentual</span>
                           <span className="text-2xl font-bold text-primary tabular-nums">
                             {diasCorridosTotal
-                              ? Math.round((diasTrabalhados.length / diasCorridosTotal) * 100)
-                              : 0}
+                              ? ((diasTrabalhados.length / diasCorridosTotal) * 100).toFixed(2)
+                              : "0.00"}
                             %
                           </span>
                         </div>
@@ -952,8 +958,8 @@ export default function ConfiguracoesPage() {
                     disabled={projetoMutation.isPending}
                     className="gap-2"
                     style={{
-                      backgroundColor: "#5bc0ec",
-                      borderColor: "#5bc0ec",
+                      backgroundColor: "#ff460a",
+                      borderColor: "#ff460a",
                     }}
                   >
                     <Save className="w-4 h-4" />
@@ -1012,7 +1018,10 @@ export default function ConfiguracoesPage() {
                         </label>
                         <Select
                           value={acessoRole}
-                          onValueChange={setAcessoRole}
+                          onValueChange={(v) => {
+                            setAcessoRole(v);
+                            if (v !== "guest") setAcessoCentroCusto("");
+                          }}
                         >
                           <SelectTrigger className="glass-input">
                             <SelectValue placeholder="Selecione o perfil" />
@@ -1026,6 +1035,20 @@ export default function ConfiguracoesPage() {
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {acessoRole === "guest" && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">
+                            Centro de Custo <span className="text-destructive">*</span>
+                          </label>
+                          <Input
+                            value={acessoCentroCusto}
+                            onChange={(e) => setAcessoCentroCusto(e.target.value)}
+                            className="glass-input"
+                            placeholder="Ex: 171"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <Button
@@ -1034,12 +1057,16 @@ export default function ConfiguracoesPage() {
                           re: acessoRE,
                           nome: acessoNome,
                           perfil: acessoRole,
+                          ...(acessoRole === "guest" && acessoCentroCusto.trim()
+                            ? { centro_custo: acessoCentroCusto.trim() }
+                            : {}),
                         })
                       }
                       disabled={
                         !acessoRE?.trim() ||
                         !acessoNome?.trim() ||
                         !acessoRole ||
+                        (acessoRole === "guest" && !acessoCentroCusto.trim()) ||
                         addAcessoMutation.isPending
                       }
                       className="gap-2 w-full"
@@ -1100,6 +1127,14 @@ export default function ConfiguracoesPage() {
                                     onChange={(e) => setEditingAcessoNome(e.target.value)}
                                     placeholder="Nome completo"
                                   />
+                                  {editingAcessoPerfil === "guest" && (
+                                    <Input
+                                      className="glass-input h-8 text-sm w-full"
+                                      value={editingAcessoCentroCusto}
+                                      onChange={(e) => setEditingAcessoCentroCusto(e.target.value)}
+                                      placeholder="Centro de Custo (ex: 171)"
+                                    />
+                                  )}
                                   <div className="flex gap-1 pt-1">
                                     <Button
                                       size="sm"
@@ -1109,6 +1144,7 @@ export default function ConfiguracoesPage() {
                                         !editingAcessoRE?.trim() ||
                                         !editingAcessoNome?.trim() ||
                                         !editingAcessoPerfil ||
+                                        (editingAcessoPerfil === "guest" && !editingAcessoCentroCusto.trim()) ||
                                         updateAcessoMutation.isPending
                                       }
                                       onClick={() =>
@@ -1118,6 +1154,9 @@ export default function ConfiguracoesPage() {
                                           re: editingAcessoRE,
                                           nome: editingAcessoNome,
                                           perfil: editingAcessoPerfil,
+                                          ...(editingAcessoPerfil === "guest"
+                                            ? { centro_custo: editingAcessoCentroCusto.trim() || undefined }
+                                            : { centro_custo: undefined }),
                                         })
                                       }
                                     >
@@ -1148,6 +1187,9 @@ export default function ConfiguracoesPage() {
                                         RE: {acesso.re} •{" "}
                                         {ROLES.find((r) => r.value === acesso.perfil)
                                           ?.label || acesso.perfil}
+                                        {acesso.centro_custo && (
+                                          <> • C.C.: {acesso.centro_custo}</>
+                                        )}
                                       </span>
                                     </div>
                                   </div>
@@ -1404,7 +1446,7 @@ export default function ConfiguracoesPage() {
                                       Ocupadas: <span className="font-medium text-amber-400">{hotel.vagas_ocupadas}</span>
                                     </span>
                                     <span className="text-xs text-muted-foreground">
-                                      Disponíveis: <span className="font-medium text-emerald-400">{hotel.vagas_disponiveis}</span>
+                                      Disponíveis: <span className="font-medium text-[#337246]">{hotel.vagas_disponiveis}</span>
                                     </span>
                                   </div>
                                   {hotel.qt_vagas > 0 && (
@@ -1436,7 +1478,7 @@ export default function ConfiguracoesPage() {
                                         updateHotelMutation.mutate({ id: hotel.id, qt_vagas: Number(editingQtVagas) || 0 })
                                       }
                                       disabled={updateHotelMutation.isPending}
-                                      className="text-emerald-400 hover:text-emerald-400 hover:bg-emerald-400/10 h-7 w-7 p-0"
+                                      className="text-[#337246] hover:text-[#337246] hover:bg-[#337246]/10 h-7 w-7 p-0"
                                     >
                                       <Check className="w-3.5 h-3.5" />
                                     </Button>
