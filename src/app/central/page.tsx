@@ -517,7 +517,7 @@ export default function CentralPage() {
 
                 {/* Status filter */}
                 <MultiSelectFilter
-                  placeholder="status"
+                  placeholder="Status"
                   width="sm:w-44 w-full"
                   selected={statusFilter}
                   onChange={(values) => {
@@ -534,7 +534,7 @@ export default function CentralPage() {
 
                 {/* Cargo filter */}
                 <MultiSelectFilter
-                  placeholder="cargos/função"
+                  placeholder="Cargos/Função"
                   width="sm:w-56 w-full"
                   selected={cargoFilter}
                   onChange={(values) => {
@@ -575,7 +575,7 @@ export default function CentralPage() {
                   </div>
                 ) : (
                   <MultiSelectFilter
-                    placeholder="centro de custo"
+                    placeholder="Centro de custo"
                     width="sm:w-44 w-full"
                     selected={centroCustoLocal}
                     onChange={(values) => {
