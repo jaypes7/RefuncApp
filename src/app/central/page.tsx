@@ -258,7 +258,7 @@ export default function CentralPage() {
         return;
       }
 
-      // Headers na ordem exata (38 colunas) - mesma ordem do import
+      // Headers na ordem exata - mesma ordem do import + campos extras do DB
       const headers = [
         "IND",
         "STATUS",
@@ -298,6 +298,13 @@ export default function CentralPage() {
         "MUNICIPIO",
         "UF",
         "TELEFONE",
+        "TURNO TRABALHO",
+        "CHECK IN",
+        "HOTEL",
+        "DATA VIAGEM",
+        "Nº ORACLE",
+        "CENTRO CUSTO",
+        "CREATED AT",
       ];
 
       // Converter colaboradores para linhas
@@ -340,6 +347,13 @@ export default function CentralPage() {
         c.MUNICIPIO || "",
         c.UF || "",
         c.TELEFONE || "",
+        c.TURNO_TRABALHO || "",
+        c.CHECK_IN || "",
+        c.HOTEL || "",
+        c.DATA_VIAGEM || "",
+        c.NUMERO_ORACLE || "",
+        c.CENTRO_CUSTO || "",
+        c.CREATED_AT || "",
       ]);
 
       // Criar worksheet

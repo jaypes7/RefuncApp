@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     let query = db
       .from("comentarios_cliente")
-      .select("id, texto, data, created_at")
+      .select("id, texto, data, created_at, centro_custo")
       .order("data", { ascending: false })
       .order("created_at", { ascending: false });
 

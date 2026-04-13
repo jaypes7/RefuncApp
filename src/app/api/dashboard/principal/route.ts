@@ -49,17 +49,19 @@ function mapColab(row: Record<string, unknown>) {
 
 type ColabRow = ReturnType<typeof mapColab>;
 
+type CurvaSResult = {
+  labels: string[];
+  planejado: (number | null)[];
+  realizado: (number | null)[];
+  valoresHoje: { planejado: number; realizado: number } | null;
+};
+
 function gerarCurvaSEtapas(
   dataInicio: string,
   dataFim: string | null,
   etapas: EtapaConfig[],
   hojeStr: string,
-): {
-  labels: string[];
-  planejado: (number | null)[];
-  realizado: (number | null)[];
-  valoresHoje: { planejado: number; realizado: number } | null;
-} {
+): CurvaSResult {
   const totalDias = etapas.reduce((s, e) => s + (e.duracaoDias || 0), 0);
   if (!dataInicio || totalDias === 0 || etapas.length === 0) {
     return { labels: [], planejado: [], realizado: [], valoresHoje: null };
@@ -68,18 +70,12 @@ function gerarCurvaSEtapas(
   const fmt = (d: Date) =>
     d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 
-  const parseDate = (dateStr: string): Date => {
-    const [dia, mes] = dateStr.split("/");
-    return new Date(`2026-${mes}-${dia}T00:00:00Z`); // Assumindo ano 2026
-  };
-
   const inicio = new Date(dataInicio + "T00:00:00Z");
   const fim = dataFim ? new Date(dataFim + "T00:00:00Z") : null;
   const labels: string[] = [];
   const planejado: (number | null)[] = [];
   const realizado: (number | null)[] = [];
 
-  // Encontrar última etapa com progresso (> 0%)
   let ultimaEtapaComProgresso = -1;
   for (let i = etapas.length - 1; i >= 0; i--) {
     if ((etapas[i].percentualConcluido ?? 0) > 0) {
@@ -88,7 +84,6 @@ function gerarCurvaSEtapas(
     }
   }
 
-  // Ponto inicial (início do projeto = dia 0)
   labels.push(fmt(inicio));
   planejado.push(0);
   realizado.push(0);
@@ -104,10 +99,8 @@ function gerarCurvaSEtapas(
     diasAcum += etapa.duracaoDias || 0;
 
     const pontoDt = new Date(inicio);
-    // Subtrai 1 porque uma etapa de 1 dia termina no mesmo dia (não no dia seguinte)
     pontoDt.setUTCDate(pontoDt.getUTCDate() + diasAcum - 1);
 
-    // Se for a última etapa e tiver dataFim, usar dataFim para garantir que o gráfico vá até o fim
     let pontoFinalDt: Date;
     if (i === etapas.length - 1 && fim) {
       pontoFinalDt = fim;
@@ -125,22 +118,18 @@ function gerarCurvaSEtapas(
     labels.push(fmt(pontoFinalDt));
     planejado.push(Math.round(plAcum * 10) / 10);
 
-    // Realizado: só até a última etapa com progresso
     if (i > ultimaEtapaComProgresso && ultimaEtapaComProgresso >= 0) {
       realizado.push(null);
     } else {
       realizado.push(Math.round(reAcum * 10) / 10);
     }
 
-    // Encontrar índice do dia atual
     if (indiceHoje === -1 && pontoDtStr >= hojeStr) {
-      indiceHoje = i + 1; // +1 porque o índice 0 é o ponto inicial
+      indiceHoje = i + 1;
     }
   }
 
-  // Calcular valores para o dia atual ou último dia com progresso
   if (hojeStr < dataInicio) {
-    // Projeto ainda não começou, pegar o último índice com valor não-nulo
     let lastIndex = -1;
     for (let i = realizado.length - 1; i >= 0; i--) {
       if (realizado[i] !== null && realizado[i] !== undefined) {
@@ -149,7 +138,7 @@ function gerarCurvaSEtapas(
       }
     }
 
-    if (lastIndex > 0) {  // > 0 para ignorar o ponto inicial (índice 0)
+    if (lastIndex > 0) {
       valoresHoje = {
         planejado: planejado[lastIndex] ?? 0,
         realizado: realizado[lastIndex] ?? 0,
@@ -163,7 +152,6 @@ function gerarCurvaSEtapas(
       realizado: realizado[indiceHoje] ?? realizado[realizado.length - 1] ?? 0,
     };
   } else {
-    // Hoje é depois do último ponto
     valoresHoje = {
       planejado: planejado[planejado.length - 1] ?? 0,
       realizado: realizado[realizado.length - 1] ?? 0,
@@ -171,6 +159,50 @@ function gerarCurvaSEtapas(
   }
 
   return { labels, planejado, realizado, valoresHoje };
+}
+
+function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
+  if (curvas.length === 0) return null;
+  if (curvas.length === 1) return curvas[0];
+
+  // Conjunto único de labels ordenado
+  const allLabels = Array.from(new Set(curvas.flatMap((c) => c.labels))).sort((a, b) => {
+    const [da, ma] = a.split("/");
+    const [db, mb] = b.split("/");
+    return `${ma}-${da}`.localeCompare(`${mb}-${db}`);
+  });
+
+  const planejado: (number | null)[] = [];
+  const realizado: (number | null)[] = [];
+
+  for (const label of allLabels) {
+    const pls: number[] = [];
+    const res: number[] = [];
+    for (const c of curvas) {
+      const idx = c.labels.indexOf(label);
+      if (idx !== -1 && c.planejado[idx] != null) pls.push(c.planejado[idx] as number);
+      if (idx !== -1 && c.realizado[idx] != null) res.push(c.realizado[idx] as number);
+    }
+    planejado.push(pls.length ? Math.round((pls.reduce((s, v) => s + v, 0) / pls.length) * 10) / 10 : null);
+    realizado.push(res.length ? Math.round((res.reduce((s, v) => s + v, 0) / res.length) * 10) / 10 : null);
+  }
+
+  // valoresHoje: média do último ponto válido de cada curva
+  const lastPls = curvas.map((c) => {
+    const arr = c.planejado.filter((v): v is number => v != null);
+    return arr[arr.length - 1] ?? 0;
+  });
+  const lastRes = curvas.map((c) => {
+    const arr = c.realizado.filter((v): v is number => v != null);
+    return arr[arr.length - 1] ?? 0;
+  });
+
+  const valoresHoje = {
+    planejado: Math.round((lastPls.reduce((s, v) => s + v, 0) / lastPls.length) * 10) / 10,
+    realizado: Math.round((lastRes.reduce((s, v) => s + v, 0) / lastRes.length) * 10) / 10,
+  };
+
+  return { labels: allLabels, planejado, realizado, valoresHoje };
 }
 
 function agruparPorFuncao(cols: ColabRow[]) {
@@ -216,7 +248,7 @@ export async function GET(request: NextRequest) {
 
     const configQuery = centroCusto
       ? db.from("configuracoes").select("*").eq("centro_custo", centroCusto).single()
-      : db.from("configuracoes").select("*").limit(1).maybeSingle();
+      : db.from("configuracoes").select("*");
 
     const etapasQuery = centroCusto
       ? db.from("etapas").select("*").eq("centro_custo", centroCusto).order("ordem", { ascending: true })
@@ -224,7 +256,7 @@ export async function GET(request: NextRequest) {
 
     const [
       { data: colabData, error: colabErr },
-      { data: configRow, error: configErr },
+      configResult,
       { data: etapasRows, error: etapasErr },
     ] = await Promise.all([
       colabQuery,
@@ -233,27 +265,90 @@ export async function GET(request: NextRequest) {
     ]);
 
     if (colabErr) throw new Error(`Falha ao buscar colaboradores: ${colabErr.message}`);
-    if (configErr && configErr.code !== "PGRST116") {
-      console.error("[Dashboard/Principal] config:", configErr.message);
-    }
     if (etapasErr) console.error("[Dashboard/Principal] etapas:", etapasErr.message);
 
-    // ── Config ──────────────────────────────────────────────────────────────
-    const etapas: EtapaConfig[] = (etapasRows ?? []).map((e, idx) => ({
-      id: e.id ?? idx + 1,
-      nome: e.nome ?? `Etapa ${idx + 1}`,
-      duracaoDias: e.dias ?? 7,
-      concluida: e.concluida ?? false,
-      percentualConcluido: e.percentual_concluido ?? 0,
-      dataInicio: e.data_inicio ?? undefined,
-      dataFim: e.data_fim ?? undefined,
-    }));
+    // ── Configs e Etapas ─────────────────────────────────────────────────────
+    const configsAll = (
+      centroCusto
+        ? (configResult.data ? [configResult.data] : [])
+        : (configResult.data ?? [])
+    ) as Array<Record<string, unknown>>;
 
-    const rawMeta = Number(configRow?.meta_admissoes ?? 0);
-    const rawPrev = Number(configRow?.colaboradores_previstos ?? 0);
-    const metaAdmissoes = rawMeta > 0 ? rawMeta : rawPrev;
-    const dataInicio = configRow?.data_inicio_projeto ?? null;
-    const dataFim = configRow?.data_fim_projeto ?? null;
+    const etapasRaw = (etapasRows ?? []) as Array<{
+      id?: number;
+      nome?: string;
+      dias?: number;
+      concluida?: boolean;
+      percentual_concluido?: number;
+      data_inicio?: string;
+      data_fim?: string;
+      ordem?: number;
+      centro_custo?: string;
+    }>;
+
+    // Agrupar etapas por centro de custo
+    const etapasPorProjeto = new Map<string, EtapaConfig[]>();
+    for (const e of etapasRaw) {
+      const cc = String(e.centro_custo ?? "__sem_cc__");
+      if (!etapasPorProjeto.has(cc)) etapasPorProjeto.set(cc, []);
+      etapasPorProjeto.get(cc)!.push({
+        id: e.id ?? 1,
+        nome: e.nome ?? `Etapa ${(etapasPorProjeto.get(cc)!.length + 1)}`,
+        duracaoDias: e.dias ?? 7,
+        concluida: e.concluida ?? false,
+        percentualConcluido: e.percentual_concluido ?? 0,
+        dataInicio: e.data_inicio ?? undefined,
+        dataFim: e.data_fim ?? undefined,
+      });
+    }
+
+    // ── Curva S ──────────────────────────────────────────────────────────────
+    const hoje = new Date().toISOString().split("T")[0];
+    let curvaS: CurvaSResult | null = null;
+    let statusProjeto: { atrasado: boolean; diasAtraso: number; percentualAtraso: number } | null = null;
+
+    if (configsAll.length > 0) {
+      const curvasIndividuais: CurvaSResult[] = [];
+      for (const cfg of configsAll) {
+        const cc = cfg.centro_custo as string;
+        const etapas = etapasPorProjeto.get(cc) ?? [];
+        if (cfg.data_inicio_projeto && etapas.length > 0) {
+          const c = gerarCurvaSEtapas(
+            cfg.data_inicio_projeto as string,
+            cfg.data_fim_projeto as string | null,
+            etapas,
+            hoje,
+          );
+          if (c.labels.length) curvasIndividuais.push(c);
+        }
+      }
+      curvaS = calcularCurvaSMedia(curvasIndividuais);
+    }
+
+    if (curvaS && curvaS.valoresHoje) {
+      const { planejado, realizado } = curvaS.valoresHoje;
+      statusProjeto = { ...verificarAtrasoFisico(planejado, realizado), diasAtraso: 0 };
+    }
+
+    // ── Agregações de configuração ───────────────────────────────────────────
+    const dataInicio = configsAll.length
+      ? configsAll
+          .map((c) => c.data_inicio_projeto as string | null)
+          .filter(Boolean)
+          .sort()[0] ?? null
+      : null;
+
+    const dataFim = configsAll.length
+      ? configsAll
+          .map((c) => c.data_fim_projeto as string | null)
+          .filter(Boolean)
+          .sort()
+          .reverse()[0] ?? null
+      : null;
+
+    const rawMetaSum = configsAll.reduce((s, c) => s + Number(c.meta_admissoes ?? 0), 0);
+    const rawPrevSum = configsAll.reduce((s, c) => s + Number(c.colaboradores_previstos ?? 0), 0);
+    const metaAdmissoes = rawMetaSum > 0 ? rawMetaSum : rawPrevSum;
 
     // ── Colaboradores ────────────────────────────────────────────────────────
     const colaboradores = (colabData ?? [])
@@ -262,7 +357,7 @@ export async function GET(request: NextRequest) {
 
     const metricas = {
       ...calcularMetricas(colaboradores),
-      colaboradoresPrevistos: rawPrev,
+      colaboradoresPrevistos: rawPrevSum,
     };
 
     // ── Admissões acumuladas ─────────────────────────────────────────────────
@@ -281,21 +376,7 @@ export async function GET(request: NextRequest) {
         [] as Array<{ data: string; quantidade: number; acumulado: number }>,
       );
 
-    const hoje = new Date().toISOString().split("T")[0];
     const hojeMs = new Date(hoje + "T00:00:00Z").getTime();
-
-    // ── Curva S ──────────────────────────────────────────────────────────────
-    const curvaS =
-      dataInicio && etapas.length > 0
-        ? gerarCurvaSEtapas(dataInicio, dataFim, etapas, hoje)
-        : null;
-
-    // statusProjeto: atraso físico comparando planejado vs. realizado do DIA ATUAL
-    let statusProjeto: { atrasado: boolean; diasAtraso: number; percentualAtraso: number } | null = null;
-    if (curvaS && curvaS.valoresHoje) {
-      const { planejado, realizado } = curvaS.valoresHoje;
-      statusProjeto = { ...verificarAtrasoFisico(planejado, realizado), diasAtraso: 0 };
-    }
 
     // ── Evolução por setor ───────────────────────────────────────────────────
     const total = colaboradores.length || 1;
@@ -339,8 +420,13 @@ export async function GET(request: NextRequest) {
       status: "Atrasado" | "Em Andamento";
     }> = [];
 
-    if (dataInicio && etapas.length > 0) {
-      const inicioMs = new Date(dataInicio + "T00:00:00Z").getTime();
+    for (const cfg of configsAll) {
+      const cc = cfg.centro_custo as string;
+      const etapas = etapasPorProjeto.get(cc) ?? [];
+      const projDataInicio = cfg.data_inicio_projeto as string | null;
+      if (!projDataInicio || etapas.length === 0) continue;
+
+      const inicioMs = new Date(projDataInicio + "T00:00:00Z").getTime();
       let diasAcum = 0;
       for (const etapa of etapas) {
         const inicioEtapaDias = diasAcum;
@@ -361,7 +447,7 @@ export async function GET(request: NextRequest) {
           tipo: "etapa",
           nivel: passou ? 1 : 2,
           cor: passou ? "red" : "yellow",
-          nome: etapa.nome || `Etapa ${etapa.id}`,
+          nome: `[${cc}] ${etapa.nome || `Etapa ${etapa.id}`}`,
           dataLimite: fimEtapaStr,
           diasAtraso,
           percentualFaltando,
@@ -374,6 +460,11 @@ export async function GET(request: NextRequest) {
       a.nivel !== b.nivel ? a.nivel - b.nivel : b.percentualFaltando - a.percentualFaltando,
     );
 
+    // Etapas concatenadas para exibição (apenas quando um CC específico)
+    const etapasExibicao = centroCusto
+      ? (etapasPorProjeto.get(centroCusto) ?? [])
+      : [];
+
     return NextResponse.json({
       metricas,
       projeto: {
@@ -383,8 +474,8 @@ export async function GET(request: NextRequest) {
         metaAdmissoes,
         status: statusProjeto,
       },
-      etapasCount: etapas.length,
-      etapas: etapas.map((e) => ({
+      etapasCount: etapasExibicao.length,
+      etapas: etapasExibicao.map((e) => ({
         id: e.id,
         nome: e.nome,
         duracaoDias: e.duracaoDias,

@@ -62,6 +62,12 @@ interface ColaboradorRow {
   VINCULADO?: string | null;
   OP?: string | null;
   HISTOGRAMA?: string | null;
+  CHECK_IN?: string | null;
+  HOTEL?: string | null;
+  DATA_VIAGEM?: string | null;
+  NUMERO_ORACLE?: string | null;
+  CENTRO_CUSTO?: string | null;
+  CREATED_AT?: string | null;
 }
 
 interface ExportButtonProps {
@@ -108,6 +114,12 @@ function toSheetRow(c: ColaboradorRow): Record<string, string | number | null> {
     Demissão:             c.DEMISSAO ?? "",
     "DT Nascimento":      c.DT_NASCIMENTO ?? "",
     Idade:                c.IDADE ?? "",
+    "Check In":           c.CHECK_IN ?? "",
+    Hotel:                c.HOTEL ?? "",
+    "Data Viagem":        c.DATA_VIAGEM ?? "",
+    "Nº Oracle":          c.NUMERO_ORACLE ?? "",
+    "Centro Custo":       c.CENTRO_CUSTO ?? "",
+    "Created At":         c.CREATED_AT ?? "",
   };
 }
 

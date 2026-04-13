@@ -97,6 +97,11 @@ export interface Colaborador {
   NUMERO_ORACLE?: string | null;
   CENTRO_CUSTO?: string | null;
   turno_trabalho?: string | null;
+  TURNO_TRABALHO?: string | null;
+  CHECK_IN?: string | null;
+  HOTEL?: string | null;
+  DATA_VIAGEM?: string | null;
+  CREATED_AT?: string | null;
   progresso?: {
     rh: number;
     logistica: number;
@@ -526,6 +531,7 @@ export interface Ocorrencia {
   /** ISO date string YYYY-MM-DD */
   data: string;
   created_at: string;
+  centro_custo?: string;
 }
 
 export const ocorrenciasApi = {
@@ -553,6 +559,7 @@ export interface ComentarioCliente {
   /** ISO date string YYYY-MM-DD */
   data: string;
   created_at: string;
+  centro_custo?: string;
 }
 
 export const comentariosClienteApi = {

@@ -164,7 +164,6 @@ export default function DashboardPage() {
     },
     retry: 2,
     staleTime: 60_000,
-    enabled: !!centroCusto,
   });
 
   // Busca configurações do projeto para o card de cabeçalho
@@ -175,7 +174,6 @@ export default function DashboardPage() {
       return response.data.data;
     },
     staleTime: 60000,
-    enabled: !!centroCusto,
   });
 
   const dashboardData: DashboardPrincipalData | undefined = data;
@@ -194,7 +192,6 @@ export default function DashboardPage() {
     queryKey: ["ocorrencias", centroCusto],
     queryFn: async () => (await ocorrenciasApi.listar(centroCusto)).data.data,
     staleTime: 30_000,
-    enabled: !!centroCusto,
   });
   const ocorrencias: Ocorrencia[] = ocorrenciasData ?? [];
 
@@ -246,7 +243,6 @@ export default function DashboardPage() {
     queryKey: ["comentarios-cliente", centroCusto],
     queryFn: async () => (await comentariosClienteApi.listar(centroCusto)).data.data,
     staleTime: 30_000,
-    enabled: !!centroCusto,
   });
   const comentarios: ComentarioCliente[] = comentariosData ?? [];
 
@@ -443,7 +439,7 @@ export default function DashboardPage() {
           <div ref={contentRef}>
 
           {/* ── Card de Cabeçalho do Projeto ── */}
-          {configData && (
+          {configData && centroCusto && (
             <Card className="glass-card mb-6">
               <CardHeader className="pb-3 flex flex-row items-center gap-2">
                 <Briefcase className="h-4 w-4 text-primary" />
@@ -892,11 +888,18 @@ export default function DashboardPage() {
                                 <p className="text-sm font-medium truncate" title={o.texto}>
                                   {o.texto}
                                 </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(o.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
-                                    timeZone: "UTC",
-                                  })}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(o.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                      timeZone: "UTC",
+                                    })}
+                                  </p>
+                                  {!centroCusto && o.centro_custo && (
+                                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary/20 text-primary">
+                                      {o.centro_custo}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <CanAccess role="user">
                                 <div className="flex items-center gap-1 shrink-0">
@@ -1045,11 +1048,18 @@ export default function DashboardPage() {
                                 <p className="text-sm font-medium truncate" title={c.texto}>
                                   {c.texto}
                                 </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(c.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
-                                    timeZone: "UTC",
-                                  })}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(c.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                      timeZone: "UTC",
+                                    })}
+                                  </p>
+                                  {!centroCusto && c.centro_custo && (
+                                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary/20 text-primary">
+                                      {c.centro_custo}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <Button

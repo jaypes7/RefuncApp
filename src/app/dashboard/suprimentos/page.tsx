@@ -159,7 +159,6 @@ export default function DashboardSuprimentosPage() {
     queryKey: ["dashboard-suprimentos", centroCusto],
     queryFn:  async () => (await dashboardSuprimentosApi.get(centroCusto)).data,
     staleTime: 120_000,
-    enabled: !!centroCusto,
   });
 
   // ── Query dedicada das ordens (inclui id para Switch) ─────────────────────
@@ -176,7 +175,6 @@ export default function DashboardSuprimentosPage() {
       return res.json();
     },
     staleTime: 30_000,
-    enabled: !!centroCusto,
   });
 
   const ordens = useMemo(() => ordensData?.data ?? [], [ordensData]);

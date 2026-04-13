@@ -33,9 +33,6 @@ import { ColaboradorSchema, type EtapaConfig } from "@/lib/schemas";
 // HELPERS
 // ============================================================================
 
-/**
- * Limpa qualquer representação numérica (R$ 1.234,56 → 1234.56).
- */
 function cleanNumeric(val: unknown): number {
   if (typeof val === "number") return isNaN(val) ? 0 : val;
   if (typeof val === "string") {
@@ -46,16 +43,6 @@ function cleanNumeric(val: unknown): number {
   return 0;
 }
 
-// ============================================================================
-// MAPEAMENTO: Supabase (snake_case) → ColaboradorSchema (UPPERCASE)
-// ============================================================================
-
-/**
- * Converte as chaves snake_case do Supabase para SCREAMING_SNAKE_CASE e
- * delega ao ColaboradorSchema a validação/transformação dos valores
- * (CPF padding, datas, enums, etc.).
- * Retorna null quando o registro falha na validação.
- */
 function parseSupabaseColaborador(row: Record<string, unknown>) {
   const upper = Object.fromEntries(
     Object.entries(row).map(([k, v]) => [k.toUpperCase(), v]),
@@ -65,10 +52,6 @@ function parseSupabaseColaborador(row: Record<string, unknown>) {
 }
 
 type ColaboradorRow = NonNullable<ReturnType<typeof parseSupabaseColaborador>>;
-
-// ============================================================================
-// TIPOS INTERNOS
-// ============================================================================
 
 interface ConfigDB {
   dataInicio: string | null;
@@ -80,31 +63,17 @@ interface ConfigDB {
   feriados: Date[];
 }
 
-// ============================================================================
-// CURVA S — BASEADA EM PESO PROPORCIONAL DE ETAPAS
-// ============================================================================
+type CurvaSResult = {
+  labels: string[];
+  planejado: number[];
+  realizado: number[];
+};
 
-/**
- * Gera arrays para o AreaChart da Curva S sem valores hardcoded.
- *
- * Planejado (linha azul):
- *   Cada etapa contribui exatamente (dias_etapa / totalDias) × 100 pontos
- *   percentuais ao progresso. O ponto final é sempre 100%.
- *
- * Realizado (linha verde):
- *   Baseado no `percentualConcluido` inserido manualmente pelo supervisor.
- *   Contribuição de cada etapa = (percentualConcluido/100) × (dias_etapa/totalDias) × 100.
- *   A soma acumulada forma a linha de acompanhamento físico.
- *
- * Proteção divisão por zero:
- *   Se não houver etapas cadastradas, retorna arrays vazios.
- */
 function gerarCurvaSEtapas(
   dataInicio: string,
   etapas: EtapaConfig[],
-): { labels: string[]; planejado: number[]; realizado: number[] } {
+): CurvaSResult {
   const totalDias = etapas.reduce((s, e) => s + (e.duracaoDias || 0), 0);
-
   if (!dataInicio || totalDias === 0 || etapas.length === 0) {
     return { labels: [], planejado: [], realizado: [] };
   }
@@ -117,12 +86,10 @@ function gerarCurvaSEtapas(
     });
 
   const inicio = new Date(dataInicio + "T00:00:00Z");
-
   const labels: string[] = [];
   const planejado: number[] = [];
   const realizado: number[] = [];
 
-  // Ponto 0 — início do projeto (progresso = 0%)
   labels.push(fmtLabel(inicio));
   planejado.push(0);
   realizado.push(0);
@@ -133,21 +100,12 @@ function gerarCurvaSEtapas(
 
   for (const etapa of etapas) {
     diasAcum += etapa.duracaoDias || 0;
-
-    // Data do fim desta etapa
     const pontoDt = new Date(inicio);
     pontoDt.setUTCDate(pontoDt.getUTCDate() + diasAcum);
-
-    // Peso desta etapa no cronograma (%)
     const peso = (etapa.duracaoDias / totalDias) * 100;
-
-    // Planejado: acumula linearmente até 100% na última etapa
     planejadoAcum = Math.min(100, planejadoAcum + peso);
-
-    // Realizado: avanço físico proporcional ao percentual informado
     const pctFisico = etapa.percentualConcluido ?? 0;
     realizadoAcum = Math.min(100, realizadoAcum + (pctFisico / 100) * peso);
-
     labels.push(fmtLabel(pontoDt));
     planejado.push(Math.round(planejadoAcum * 10) / 10);
     realizado.push(Math.round(realizadoAcum * 10) / 10);
@@ -156,28 +114,54 @@ function gerarCurvaSEtapas(
   return { labels, planejado, realizado };
 }
 
-// ============================================================================
-// FUNÇÕES DE DADOS — SUPABASE
-// ============================================================================
+function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
+  if (curvas.length === 0) return null;
+  if (curvas.length === 1) return curvas[0];
 
-/**
- * Busca config + etapas do Supabase em paralelo.
- */
+  const allLabels = Array.from(new Set(curvas.flatMap((c) => c.labels))).sort((a, b) => {
+    const [da, ma] = a.split("/");
+    const [db, mb] = b.split("/");
+    return `${ma}-${da}`.localeCompare(`${mb}-${db}`);
+  });
+
+  const planejado: number[] = [];
+  const realizado: number[] = [];
+
+  for (const label of allLabels) {
+    const pls: number[] = [];
+    const res: number[] = [];
+    for (const c of curvas) {
+      const idx = c.labels.indexOf(label);
+      if (idx !== -1) {
+        pls.push(c.planejado[idx]);
+        res.push(c.realizado[idx]);
+      }
+    }
+    planejado.push(pls.length ? Math.round((pls.reduce((s, v) => s + v, 0) / pls.length) * 10) / 10 : 0);
+    realizado.push(res.length ? Math.round((res.reduce((s, v) => s + v, 0) / res.length) * 10) / 10 : 0);
+  }
+
+  return { labels: allLabels, planejado, realizado };
+}
+
 async function getConfig(centroCusto?: string): Promise<ConfigDB> {
   const supabase = createServerClient();
 
   const configQuery = centroCusto
     ? supabase.from("configuracoes").select("*").eq("centro_custo", centroCusto).single()
-    : supabase.from("configuracoes").select("*").single();
+    : supabase.from("configuracoes").select("*");
 
   const etapasQuery = centroCusto
     ? supabase.from("etapas").select("*").eq("centro_custo", centroCusto).order("ordem", { ascending: true })
     : supabase.from("etapas").select("*").order("ordem", { ascending: true });
 
   const [
-    { data: configRow, error: configError },
+    configResult,
     { data: etapasRows, error: etapasError },
   ] = await Promise.all([configQuery, etapasQuery]);
+
+  const configError = (configResult as { error?: { message: string; code?: string } }).error;
+  const configRow = (configResult as { data?: unknown }).data;
 
   if (configError && configError.code !== "PGRST116") {
     console.error("[Dashboard] Erro ao buscar config:", configError.message);
@@ -186,38 +170,87 @@ async function getConfig(centroCusto?: string): Promise<ConfigDB> {
     console.error("[Dashboard] Erro ao buscar etapas:", etapasError.message);
   }
 
-  // Mapeia etapas do Supabase incluindo percentual de avanço físico
-  const etapasFinal: EtapaConfig[] = (etapasRows ?? []).map((e, idx) => ({
-    id: e.id ?? idx + 1,
-    nome: e.nome ?? `Etapa ${idx + 1}`,
-    duracaoDias: e.dias ?? 7,
-    concluida: e.concluida ?? false,
-    percentualConcluido: e.percentual_concluido ?? 0,
-  }));
+  const configsAll = centroCusto
+    ? (configRow ? [configRow as Record<string, unknown>] : [])
+    : (configRow as Record<string, unknown>[] ?? []);
 
-  // meta_admissoes pode nunca ter sido preenchido na rota /api/config/projeto-dados
-  // (que não persiste esse campo). Nesse caso, usamos colaboradores_previstos como
-  // proxy — semanticamente equivalente: "quantas pessoas planejamos mobilizar".
-  const rawMeta       = Number(configRow?.meta_admissoes ?? 0);
-  const rawPrevistos  = Number(configRow?.colaboradores_previstos ?? 0);
-  const metaAdmissoes = rawMeta > 0 ? rawMeta : rawPrevistos;
+  const etapasRaw = (etapasRows ?? []) as Array<{
+    id?: number;
+    nome?: string;
+    dias?: number;
+    concluida?: boolean;
+    percentual_concluido?: number;
+    data_inicio?: string;
+    data_fim?: string;
+    ordem?: number;
+    centro_custo?: string;
+  }>;
+
+  const etapasPorProjeto = new Map<string, EtapaConfig[]>();
+  for (const e of etapasRaw) {
+    const cc = String(e.centro_custo ?? "__sem_cc__");
+    if (!etapasPorProjeto.has(cc)) etapasPorProjeto.set(cc, []);
+    etapasPorProjeto.get(cc)!.push({
+      id: e.id ?? 1,
+      nome: e.nome ?? `Etapa ${(etapasPorProjeto.get(cc)!.length + 1)}`,
+      duracaoDias: e.dias ?? 7,
+      concluida: e.concluida ?? false,
+      percentualConcluido: e.percentual_concluido ?? 0,
+      dataInicio: e.data_inicio ?? undefined,
+      dataFim: e.data_fim ?? undefined,
+    });
+  }
+
+  // Se há centroCusto específico, retorna normalmente
+  if (centroCusto) {
+    const cfg = configsAll[0] ?? {};
+    const rawMeta = Number(cfg.meta_admissoes ?? 0);
+    const rawPrev = Number(cfg.colaboradores_previstos ?? 0);
+    return {
+      dataInicio: (cfg.data_inicio_projeto as string) ?? null,
+      dataFim: (cfg.data_fim_projeto as string) ?? null,
+      etapas: etapasPorProjeto.get(centroCusto) ?? [],
+      metaAdmissoes: rawMeta > 0 ? rawMeta : rawPrev,
+      colaboradoresPrevistos: rawPrev,
+      orcadoSuprimentos: Number(cfg.orcado_suprimentos ?? 0),
+      feriados: Array.isArray(cfg.feriados_projeto)
+        ? (cfg.feriados_projeto as string[]).map((d) => new Date(d))
+        : [],
+    };
+  }
+
+  // Agregação "Todos"
+  const dataInicio = configsAll.length
+    ? configsAll.map((c) => c.data_inicio_projeto as string | null).filter(Boolean).sort()[0] ?? null
+    : null;
+
+  const dataFim = configsAll.length
+    ? configsAll.map((c) => c.data_fim_projeto as string | null).filter(Boolean).sort().reverse()[0] ?? null
+    : null;
+
+  const rawMetaSum = configsAll.reduce((s, c) => s + Number(c.meta_admissoes ?? 0), 0);
+  const rawPrevSum = configsAll.reduce((s, c) => s + Number(c.colaboradores_previstos ?? 0), 0);
+  const orcadoSum = configsAll.reduce((s, c) => s + Number(c.orcado_suprimentos ?? 0), 0);
+
+  // Concatenar todas as etapas para cálculo de pendências
+  const todasEtapas: EtapaConfig[] = [];
+  for (const cfg of configsAll) {
+    const cc = cfg.centro_custo as string;
+    const etapas = etapasPorProjeto.get(cc) ?? [];
+    todasEtapas.push(...etapas);
+  }
 
   return {
-    dataInicio: configRow?.data_inicio_projeto ?? null,
-    dataFim: configRow?.data_fim_projeto ?? null,
-    etapas: etapasFinal,
-    metaAdmissoes,
-    colaboradoresPrevistos: rawPrevistos,
-    orcadoSuprimentos: Number(configRow?.orcado_suprimentos ?? 0),
-    feriados: Array.isArray(configRow?.feriados_projeto)
-      ? (configRow.feriados_projeto as string[]).map((d) => new Date(d))
-      : [],
+    dataInicio,
+    dataFim,
+    etapas: todasEtapas,
+    metaAdmissoes: rawMetaSum > 0 ? rawMetaSum : rawPrevSum,
+    colaboradoresPrevistos: rawPrevSum,
+    orcadoSuprimentos: orcadoSum,
+    feriados: [],
   };
 }
 
-/**
- * Busca suprimentos do Supabase.
- */
 async function getSuprimentos(centroCusto?: string): Promise<
   Array<{
     ordemCompra: string;
@@ -248,15 +281,9 @@ async function getSuprimentos(centroCusto?: string): Promise<
   }));
 }
 
-/**
- * Busca a capacidade dos hotéis cadastrados na tabela `configuracoes_hoteis`.
- * Usado para compor vagasTotais no cálculo de ocupação.
- */
 async function getHoteis(centroCusto?: string): Promise<Array<{ nome: string; vagas_totais: number }>> {
   const supabase = createServerClient();
-  let query = supabase
-    .from("configuracoes_hoteis")
-    .select("nome, qt_vagas");
+  let query = supabase.from("configuracoes_hoteis").select("nome, qt_vagas");
   if (centroCusto) {
     query = query.eq("centro_custo", centroCusto);
   }
@@ -270,10 +297,6 @@ async function getHoteis(centroCusto?: string): Promise<Array<{ nome: string; va
     vagas_totais: Number(h.qt_vagas ?? 0),
   }));
 }
-
-// ============================================================================
-// FUNÇÕES DE AGREGAÇÃO
-// ============================================================================
 
 function agruparPorFuncao(
   colaboradores: ColaboradorRow[],
@@ -340,9 +363,7 @@ function agruparPorMob(
   const contagem: Record<string, number> = {};
   for (const c of colaboradores) {
     const mob = c.MOB?.trim();
-    if (mob) {
-      contagem[mob] = (contagem[mob] || 0) + 1;
-    }
+    if (mob) contagem[mob] = (contagem[mob] || 0) + 1;
   }
   return Object.entries(contagem)
     .map(([mob, total]) => ({ mob, total }))
@@ -380,23 +401,21 @@ function calcularHoteisLogistica(
   rows: Array<{ hotel: string | null }>,
   hotelConfigs: Array<{ nome: string; vagas_totais: number }>,
 ): DashboardData["agregacoes"]["vagasHoteis"] {
-  // Conta ocupados por hotel a partir de logistica_controle
   const ocupadas: Record<string, number> = {};
   for (const r of rows) {
     const h = r.hotel?.trim();
     if (h) ocupadas[h] = (ocupadas[h] || 0) + 1;
   }
 
-  // Com configuracoes_hoteis: usa capacidade real para percentual correto
   if (hotelConfigs.length > 0) {
     return hotelConfigs
       .map((h) => {
         const preenchidas = ocupadas[h.nome] ?? 0;
         return {
-          hotel:            h.nome,
-          vagasTotais:      h.vagas_totais,
+          hotel: h.nome,
+          vagasTotais: h.vagas_totais,
           vagasPreenchidas: preenchidas,
-          percentual:       h.vagas_totais > 0
+          percentual: h.vagas_totais > 0
             ? Math.round((preenchidas / h.vagas_totais) * 100)
             : 0,
         };
@@ -404,13 +423,12 @@ function calcularHoteisLogistica(
       .sort((a, b) => b.vagasPreenchidas - a.vagasPreenchidas);
   }
 
-  // Fallback sem configurações cadastradas: trata total = preenchidas
   return Object.entries(ocupadas)
     .map(([hotel, preenchidas]) => ({
       hotel,
-      vagasTotais:      preenchidas,
+      vagasTotais: preenchidas,
       vagasPreenchidas: preenchidas,
-      percentual:       100,
+      percentual: 100,
     }))
     .sort((a, b) => b.vagasPreenchidas - a.vagasPreenchidas);
 }
@@ -466,7 +484,6 @@ export async function GET(request: NextRequest) {
       logisticaQuery = logisticaQuery.eq("centro_custo", centroCusto);
     }
 
-    // ── 5 leituras em paralelo (Supabase) ────────────────────────────────────
     const [
       { data: colaboradoresData, error: colabError },
       config,
@@ -489,12 +506,10 @@ export async function GET(request: NextRequest) {
       throw new Error(`Falha ao buscar colaboradores: ${colabError.message}`);
     }
 
-    // Valida e transforma Supabase rows via ColaboradorSchema; descarta inválidos
     const colaboradores = (colaboradoresData ?? [])
       .map((row) => parseSupabaseColaborador(row as Record<string, unknown>))
       .filter((c): c is ColaboradorRow => c !== null && !!c.CPF && !!c.NOME);
 
-    // ── Métricas principais ──────────────────────────────────────────────────
     const metricas = {
       ...calcularMetricas(colaboradores),
       colaboradoresPrevistos: config.colaboradoresPrevistos,
@@ -502,14 +517,10 @@ export async function GET(request: NextRequest) {
 
     const progressoReal = calcularProgressoReal(colaboradores);
 
-    // ── Admissões acumuladas por DATA_ADMISSAO ────────────────────────────────
-    // Normaliza para YYYY-MM-DD: Supabase pode retornar timestamps com timezone
-    // (ex: "2024-01-15T00:00:00+00:00") que quebrariam a comparação lexicográfica
-    // usada em gerarDadosGraficoCurvaS.
     const admissoesPorDia: Record<string, number> = {};
     for (const c of colaboradores) {
       const dataAdm = c.DATA_ADMISSAO
-        ? c.DATA_ADMISSAO.split("T")[0]   // garante YYYY-MM-DD
+        ? c.DATA_ADMISSAO.split("T")[0]
         : null;
       if (dataAdm) {
         admissoesPorDia[dataAdm] = (admissoesPorDia[dataAdm] || 0) + 1;
@@ -527,35 +538,55 @@ export async function GET(request: NextRequest) {
         [] as Array<{ data: string; quantidade: number; acumulado: number }>,
       );
 
-    // ── Curva S — peso proporcional por etapa ────────────────────────────────
-    // A geração NÃO depende mais de meta_admissoes: usa os dias e o
-    // percentual_concluido de cada etapa cadastrada no banco.
+    // ── Curva S — quando "Todos", calcula média entre projetos ───────────────
     let curvaS = null;
     let statusProjeto = null;
 
-    if (config.dataInicio && config.etapas.length > 0) {
+    if (!centroCusto) {
+      // Buscar configs e etapas novamente de forma estruturada para curva S média
+      const { data: allConfigs } = await supabase.from("configuracoes").select("centro_custo, data_inicio_projeto");
+      const { data: allEtapas } = await supabase.from("etapas").select("*").order("ordem", { ascending: true });
+      const etapasMap = new Map<string, EtapaConfig[]>();
+      for (const e of (allEtapas ?? [])) {
+        const cc = String(e.centro_custo ?? "__sem_cc__");
+        if (!etapasMap.has(cc)) etapasMap.set(cc, []);
+        etapasMap.get(cc)!.push({
+          id: e.id ?? 1,
+          nome: e.nome ?? `Etapa ${etapasMap.get(cc)!.length + 1}`,
+          duracaoDias: e.dias ?? 7,
+          concluida: e.concluida ?? false,
+          percentualConcluido: e.percentual_concluido ?? 0,
+          dataInicio: e.data_inicio ?? undefined,
+          dataFim: e.data_fim ?? undefined,
+        });
+      }
+      const curvas: CurvaSResult[] = [];
+      for (const cfg of (allConfigs ?? [])) {
+        const cc = cfg.centro_custo as string;
+        const di = cfg.data_inicio_projeto as string | null;
+        if (di && etapasMap.has(cc)) {
+          const c = gerarCurvaSEtapas(di, etapasMap.get(cc)!);
+          if (c.labels.length) curvas.push(c);
+        }
+      }
+      curvaS = calcularCurvaSMedia(curvas);
+    } else if (config.dataInicio && config.etapas.length > 0) {
       curvaS = gerarCurvaSEtapas(config.dataInicio, config.etapas);
     }
 
-    // statusProjeto: atraso físico usando último ponto da curva S por etapas
     if (curvaS && curvaS.planejado.length > 0) {
       const lastPlanejado = ([...curvaS.planejado].reverse().find((v) => v != null) ?? 0) as number;
       const lastRealizado = ([...curvaS.realizado].reverse().find((v) => v != null) ?? 0) as number;
       statusProjeto = { ...verificarAtrasoFisico(lastPlanejado, lastRealizado), diasAtraso: 0 };
     }
 
-    // ── Evolução por setor ───────────────────────────────────────────────────
     const total = colaboradores.length || 1;
-    // Conta colaboradores com MOB preenchido (qualquer valor não vazio)
     const totalMob = colaboradores.filter((c) => c.MOB?.trim()).length;
     const evolucaoPorSetor = {
       rh: {
-        total: colaboradores.filter((c) => c.STATUS && c.STATUS !== "Pendente")
-          .length,
+        total: colaboradores.filter((c) => c.STATUS && c.STATUS !== "Pendente").length,
         percentual: Math.round(
-          (colaboradores.filter((c) => c.STATUS && c.STATUS !== "Pendente")
-            .length / total) *
-            100,
+          (colaboradores.filter((c) => c.STATUS && c.STATUS !== "Pendente").length / total) * 100,
         ),
       },
       logistica: {
@@ -570,7 +601,6 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // ── Status dos colaboradores ─────────────────────────────────────────────
     const statusCount = {
       Ativo: colaboradores.filter((c) => c.STATUS === "Ativo").length,
       Pendente: colaboradores.filter((c) => c.STATUS === "Pendente").length,
@@ -582,44 +612,98 @@ export async function GET(request: NextRequest) {
       ? calcularDiaAtual(config.dataInicio)
       : 0;
 
-    // ── Atraso físico por etapa ──────────────────────────────────────────────
     const hoje = new Date().toISOString().split("T")[0];
     const hojeMs = new Date(hoje + "T00:00:00Z").getTime();
 
     const pendencias: DashboardData["pendencias"] = [];
 
     if (config.dataInicio && config.etapas.length > 0) {
-      const inicioProjetoMs = new Date(config.dataInicio + "T00:00:00Z").getTime();
-      let diasAcum = 0;
-      for (const etapa of config.etapas) {
-        const inicioEtapaDias = diasAcum;
-        diasAcum += etapa.duracaoDias || 0;
-        const fimEtapaDias = diasAcum;
+      if (centroCusto) {
+        // Pendências de um único projeto
+        const inicioProjetoMs = new Date(config.dataInicio + "T00:00:00Z").getTime();
+        let diasAcum = 0;
+        for (const etapa of config.etapas) {
+          const inicioEtapaDias = diasAcum;
+          diasAcum += etapa.duracaoDias || 0;
+          const fimEtapaDias = diasAcum;
 
-        const inicioEtapaMs = inicioProjetoMs + inicioEtapaDias * 86400000;
-        const fimEtapaMs = inicioProjetoMs + fimEtapaDias * 86400000;
-        const fimEtapaStr = new Date(fimEtapaMs).toISOString().split("T")[0];
-        const inicioEtapaStr = new Date(inicioEtapaMs).toISOString().split("T")[0];
+          const inicioEtapaMs = inicioProjetoMs + inicioEtapaDias * 86400000;
+          const fimEtapaMs = inicioProjetoMs + fimEtapaDias * 86400000;
+          const fimEtapaStr = new Date(fimEtapaMs).toISOString().split("T")[0];
+          const inicioEtapaStr = new Date(inicioEtapaMs).toISOString().split("T")[0];
 
-        if (hoje < inicioEtapaStr) continue;
-        if ((etapa.percentualConcluido ?? 0) >= 100) continue;
+          if (hoje < inicioEtapaStr) continue;
+          if ((etapa.percentualConcluido ?? 0) >= 100) continue;
 
-        const passouPrazo = hoje > fimEtapaStr;
-        const diasAtraso = passouPrazo
-          ? Math.floor((hojeMs - fimEtapaMs) / 86400000)
-          : 0;
-        const percentualFaltando = 100 - (etapa.percentualConcluido ?? 0);
+          const passouPrazo = hoje > fimEtapaStr;
+          const diasAtraso = passouPrazo
+            ? Math.floor((hojeMs - fimEtapaMs) / 86400000)
+            : 0;
+          const percentualFaltando = 100 - (etapa.percentualConcluido ?? 0);
 
-        pendencias.push({
-          tipo: "etapa",
-          nivel: passouPrazo ? 1 : 2,
-          cor: passouPrazo ? "red" : "yellow",
-          nome: etapa.nome || `Etapa ${etapa.id}`,
-          dataLimite: fimEtapaStr,
-          diasAtraso,
-          percentualFaltando,
-          status: passouPrazo ? "Atrasado" : "Em Andamento",
-        });
+          pendencias.push({
+            tipo: "etapa",
+            nivel: passouPrazo ? 1 : 2,
+            cor: passouPrazo ? "red" : "yellow",
+            nome: etapa.nome || `Etapa ${etapa.id}`,
+            dataLimite: fimEtapaStr,
+            diasAtraso,
+            percentualFaltando,
+            status: passouPrazo ? "Atrasado" : "Em Andamento",
+          });
+        }
+      } else {
+        // Pendências de todos os projetos
+        const { data: allConfigsPend } = await supabase.from("configuracoes").select("centro_custo, data_inicio_projeto");
+        const { data: allEtapasPend } = await supabase.from("etapas").select("*").order("ordem", { ascending: true });
+        const etapasMapPend = new Map<string, EtapaConfig[]>();
+        for (const e of (allEtapasPend ?? [])) {
+          const cc = String(e.centro_custo ?? "__sem_cc__");
+          if (!etapasMapPend.has(cc)) etapasMapPend.set(cc, []);
+          etapasMapPend.get(cc)!.push({
+            id: e.id ?? 1,
+            nome: e.nome ?? `Etapa ${etapasMapPend.get(cc)!.length + 1}`,
+            duracaoDias: e.dias ?? 7,
+            concluida: e.concluida ?? false,
+            percentualConcluido: e.percentual_concluido ?? 0,
+            dataInicio: e.data_inicio ?? undefined,
+            dataFim: e.data_fim ?? undefined,
+          });
+        }
+        for (const cfg of (allConfigsPend ?? [])) {
+          const cc = cfg.centro_custo as string;
+          const projDataInicio = cfg.data_inicio_projeto as string | null;
+          const etapas = etapasMapPend.get(cc) ?? [];
+          if (!projDataInicio || etapas.length === 0) continue;
+          const inicioProjetoMs = new Date(projDataInicio + "T00:00:00Z").getTime();
+          let diasAcum = 0;
+          for (const etapa of etapas) {
+            const inicioEtapaDias = diasAcum;
+            diasAcum += etapa.duracaoDias || 0;
+            const fimEtapaDias = diasAcum;
+            const inicioEtapaStr = new Date(inicioProjetoMs + inicioEtapaDias * 86400000).toISOString().split("T")[0];
+            const fimEtapaMs = inicioProjetoMs + fimEtapaDias * 86400000;
+            const fimEtapaStr = new Date(fimEtapaMs).toISOString().split("T")[0];
+
+            if (hoje < inicioEtapaStr) continue;
+            if ((etapa.percentualConcluido ?? 0) >= 100) continue;
+
+            const passouPrazo = hoje > fimEtapaStr;
+            const diasAtraso = passouPrazo ? Math.floor((hojeMs - fimEtapaMs) / 86400000) : 0;
+            const percentualFaltando = 100 - (etapa.percentualConcluido ?? 0);
+
+            pendencias.push({
+              tipo: "etapa",
+              nivel: passouPrazo ? 1 : 2,
+              cor: passouPrazo ? "red" : "yellow",
+              nome: `[${cc}] ${etapa.nome || `Etapa ${etapa.id}`}`,
+              dataLimite: fimEtapaStr,
+              diasAtraso,
+              percentualFaltando,
+              status: passouPrazo ? "Atrasado" : "Em Andamento",
+            });
+          }
+        }
       }
     }
 
@@ -628,7 +712,6 @@ export async function GET(request: NextRequest) {
       return b.percentualFaltando - a.percentualFaltando;
     });
 
-    // ── Monta resposta ───────────────────────────────────────────────────────
     const responseData: DashboardData = {
       metricas,
       progresso: {
