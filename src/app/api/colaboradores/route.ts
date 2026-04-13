@@ -217,23 +217,30 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Filtro por status ─────────────────────────────────────────────────
-    if (status) {
-      query = query.eq("status", status);
+    const statuses = status?.split(",").filter(Boolean);
+    if (statuses?.length) {
+      query = query.in("status", statuses);
     }
 
     // ── Filtro por cargo (individual ou grupo) ────────────────────────────
-    if (cargo) {
-      const grupo = (CARGOS_AGRUPADOS as Record<string, readonly string[]>)[cargo];
-      if (grupo) {
-        query = query.in("funcao_clt", [...grupo]);
-      } else {
-        query = query.eq("funcao_clt", cargo);
-      }
+    const cargosSelecionados = cargo?.split(",").filter(Boolean);
+    if (cargosSelecionados?.length) {
+      const funcoesFinais = new Set<string>();
+      cargosSelecionados.forEach((item) => {
+        const grupo = (CARGOS_AGRUPADOS as Record<string, readonly string[]>)[item];
+        if (grupo) {
+          grupo.forEach((c) => funcoesFinais.add(c));
+        } else {
+          funcoesFinais.add(item);
+        }
+      });
+      query = query.in("funcao_clt", [...funcoesFinais]);
     }
 
     // ── Filtro por centro de custo ────────────────────────────────────────
-    if (centroCusto) {
-      query = query.eq("centro_custo", centroCusto);
+    const ccs = centroCusto?.split(",").filter(Boolean);
+    if (ccs?.length) {
+      query = query.in("centro_custo", ccs);
     }
 
     // ── Paginação server-side (.range é inclusivo em ambos os extremos) ───

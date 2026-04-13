@@ -232,7 +232,7 @@ export default function DashboardSegurancaPage() {
               </Button>
               <div>
                 <h1 className="page-title">
-                  Dashboard Segurança
+                  Gestão a Vista - Segurança
                 </h1>
                 <p className="text-muted-foreground 2xl:text-lg">
                   FITs, RPV e status de acesso ao portal

@@ -343,7 +343,7 @@ export default function DashboardRhPage() {
               </Button>
               <div>
                 <h1 className="page-title">
-                  Dashboard RH
+                  Gestão a Vista - RH
                 </h1>
                 <p className="page-subtitle">
                   Perfil demográfico e funcional dos colaboradores
