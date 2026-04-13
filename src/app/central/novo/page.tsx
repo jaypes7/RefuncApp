@@ -25,6 +25,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useFilter } from "@/contexts/FilterContext";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,6 +218,7 @@ export default function OnboardingPage() {
   const cpfBeingChecked = useRef<string | null>(null);
   const totalSteps = 8;
   const router = useRouter();
+  const { centroCusto } = useFilter();
 
   // Busca clínicas da API
   const { data: clinicasData, isLoading: isLoadingClinicas } = useQuery({
@@ -281,6 +283,8 @@ export default function OnboardingPage() {
         MUNICIPIO: data.municipio,
         UF: data.uf,
         TELEFONE: data.telefone,
+        // Centro de custo ativo do contexto global
+        CENTRO_CUSTO: centroCusto,
       };
 
       return colaboradoresApi.criar(colaborador);
@@ -547,6 +551,11 @@ export default function OnboardingPage() {
                 </p>
               </div>
               <div className="text-right">
+                {centroCusto && (
+                  <div className="mb-1 text-xs text-muted-foreground">
+                    Centro de custo: <span className="font-medium text-foreground">{centroCusto}</span>
+                  </div>
+                )}
                 <span className="text-sm font-medium text-primary">
                   Etapa {step} de {totalSteps}
                 </span>

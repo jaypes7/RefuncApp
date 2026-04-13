@@ -218,14 +218,22 @@ export async function GET(request: NextRequest) {
       .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao");
     if (centroCusto) colabQuery = colabQuery.eq("centro_custo", centroCusto);
 
+    const configQuery = centroCusto
+      ? db.from("configuracoes").select("*").eq("centro_custo", centroCusto).single()
+      : db.from("configuracoes").select("*").limit(1).maybeSingle();
+
+    const etapasQuery = centroCusto
+      ? db.from("etapas").select("*").eq("centro_custo", centroCusto).order("ordem", { ascending: true })
+      : db.from("etapas").select("*").order("ordem", { ascending: true });
+
     const [
       { data: colabData, error: colabErr },
       { data: configRow, error: configErr },
       { data: etapasRows, error: etapasErr },
     ] = await Promise.all([
       colabQuery,
-      db.from("configuracoes").select("*").single(),
-      db.from("etapas").select("*").order("ordem", { ascending: true }),
+      configQuery,
+      etapasQuery,
     ]);
 
     if (colabErr) throw new Error(`Falha ao buscar colaboradores: ${colabErr.message}`);
@@ -241,6 +249,8 @@ export async function GET(request: NextRequest) {
       duracaoDias: e.dias ?? 7,
       concluida: e.concluida ?? false,
       percentualConcluido: e.percentual_concluido ?? 0,
+      dataInicio: e.data_inicio ?? undefined,
+      dataFim: e.data_fim ?? undefined,
     }));
 
     const rawMeta = Number(configRow?.meta_admissoes ?? 0);
@@ -384,6 +394,8 @@ export async function GET(request: NextRequest) {
         duracaoDias: e.duracaoDias,
         percentualConcluido: e.percentualConcluido ?? 0,
         concluida: e.concluida ?? false,
+        dataInicio: e.dataInicio,
+        dataFim: e.dataFim,
       })),
       pendencias: pendencias.slice(0, 10),
       graficos: {

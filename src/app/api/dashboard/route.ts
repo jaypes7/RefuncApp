@@ -17,7 +17,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import type { DashboardData } from "@/lib/axios";
@@ -163,16 +163,21 @@ function gerarCurvaSEtapas(
 /**
  * Busca config + etapas do Supabase em paralelo.
  */
-async function getConfig(): Promise<ConfigDB> {
+async function getConfig(centroCusto?: string): Promise<ConfigDB> {
   const supabase = createServerClient();
+
+  const configQuery = centroCusto
+    ? supabase.from("configuracoes").select("*").eq("centro_custo", centroCusto).single()
+    : supabase.from("configuracoes").select("*").single();
+
+  const etapasQuery = centroCusto
+    ? supabase.from("etapas").select("*").eq("centro_custo", centroCusto).order("ordem", { ascending: true })
+    : supabase.from("etapas").select("*").order("ordem", { ascending: true });
 
   const [
     { data: configRow, error: configError },
     { data: etapasRows, error: etapasError },
-  ] = await Promise.all([
-    supabase.from("configuracoes").select("*").single(),
-    supabase.from("etapas").select("*").order("ordem", { ascending: true }),
-  ]);
+  ] = await Promise.all([configQuery, etapasQuery]);
 
   if (configError && configError.code !== "PGRST116") {
     console.error("[Dashboard] Erro ao buscar config:", configError.message);
@@ -213,7 +218,7 @@ async function getConfig(): Promise<ConfigDB> {
 /**
  * Busca suprimentos do Supabase.
  */
-async function getSuprimentos(): Promise<
+async function getSuprimentos(centroCusto?: string): Promise<
   Array<{
     ordemCompra: string;
     totalReqPrevistas: number;
@@ -223,7 +228,11 @@ async function getSuprimentos(): Promise<
   }>
 > {
   const supabase = createServerClient();
-  const { data, error } = await supabase.from("suprimentos_ordens").select("*");
+  let query = supabase.from("suprimentos_ordens").select("*");
+  if (centroCusto) {
+    query = query.eq("centro_custo", centroCusto);
+  }
+  const { data, error } = await query;
 
   if (error) {
     console.error("[Dashboard] Erro ao buscar suprimentos:", error.message);
@@ -243,11 +252,15 @@ async function getSuprimentos(): Promise<
  * Busca a capacidade dos hotéis cadastrados na tabela `configuracoes_hoteis`.
  * Usado para compor vagasTotais no cálculo de ocupação.
  */
-async function getHoteis(): Promise<Array<{ nome: string; vagas_totais: number }>> {
+async function getHoteis(centroCusto?: string): Promise<Array<{ nome: string; vagas_totais: number }>> {
   const supabase = createServerClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("configuracoes_hoteis")
     .select("nome, qt_vagas");
+  if (centroCusto) {
+    query = query.eq("centro_custo", centroCusto);
+  }
+  const { data, error } = await query;
   if (error) {
     console.error("[Dashboard] Erro ao buscar configuracoes_hoteis:", error.message);
     return [];
@@ -433,11 +446,28 @@ function sumarizarSuprimentos(
 // GET /api/dashboard
 // ============================================================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const currentUser = await requireAuth();
+
+    const { searchParams } = new URL(request.url);
+    const ccParam = searchParams.get("centro_custo") || undefined;
+    const centroCusto =
+      currentUser.perfil === "guest" && currentUser.centro_custo
+        ? currentUser.centro_custo
+        : ccParam;
 
     const supabase = createServerClient();
+
+    let colabQuery = supabase.from("colaboradores").select("*");
+    if (centroCusto) {
+      colabQuery = colabQuery.eq("centro_custo", centroCusto);
+    }
+
+    let logisticaQuery = supabase.from("logistica_controle").select("turno_trabalho, hotel");
+    if (centroCusto) {
+      logisticaQuery = logisticaQuery.eq("centro_custo", centroCusto);
+    }
 
     // ── 5 leituras em paralelo (Supabase) ────────────────────────────────────
     const [
@@ -447,11 +477,11 @@ export async function GET() {
       { data: logisticaData },
       hotelConfigs,
     ] = await Promise.all([
-      supabase.from("colaboradores").select("*"),
-      getConfig(),
-      getSuprimentos(),
-      supabase.from("logistica_controle").select("turno_trabalho, hotel"),
-      getHoteis(),
+      colabQuery,
+      getConfig(centroCusto),
+      getSuprimentos(centroCusto),
+      logisticaQuery,
+      getHoteis(centroCusto),
     ]);
     const logisticaRows = (logisticaData ?? []) as Array<{
       turno_trabalho: string | null;

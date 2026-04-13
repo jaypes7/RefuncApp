@@ -10,15 +10,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await requireAuth();
+
+    const { searchParams } = new URL(request.url);
+    const centroCusto = searchParams.get("centro_custo") || "09.06.0001.171";
 
     const db = createServerClient();
     const { data, error } = await db
       .from("configuracoes")
       .select("feriados_projeto")
-      .eq("id", 1)
+      .eq("centro_custo", centroCusto)
       .single();
 
     if (error) throw error;
@@ -43,7 +46,8 @@ export async function POST(request: NextRequest) {
     await requireAuth();
 
     const body = await request.json();
-    const { feriados } = body;
+    const { feriados, centro_custo } = body;
+    const targetCentroCusto = centro_custo || "09.06.0001.171";
 
     if (!Array.isArray(feriados)) {
       return NextResponse.json(
@@ -66,10 +70,10 @@ export async function POST(request: NextRequest) {
     const { error } = await db
       .from("configuracoes")
       .update({
-        feriados_projeto: feriados.sort(),
+        feriados_projeto: feriados.length > 0 ? feriados.sort() : null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", 1);
+      .eq("centro_custo", targetCentroCusto);
 
     if (error) throw error;
 

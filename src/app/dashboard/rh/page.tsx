@@ -195,6 +195,7 @@ export default function DashboardRhPage() {
       return res.data;
     },
     staleTime: 60_000,
+    enabled: !!centroCusto,
   });
 
   // ── KPIs RH ───────────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@ interface FilterContextType {
   centroCusto: string | null;
   /** Atualiza o filtro ativo (salvo em localStorage) */
   setCentroCusto: (v: string | null) => void;
+  /** Lista de centros de custo disponíveis no sistema (projetos cadastrados) */
+  centrosDisponiveis: string[];
   /** true para convidados — o filtro é fixo e não pode ser alterado */
   isLocked: boolean;
 }
@@ -34,11 +36,43 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
   const isGuest =
     !authLoading && user?.perfil === "guest" && !!user?.centro_custo;
 
-  // Inicializa com o valor do localStorage (ou null)
-  const [centroCusto, _setCentroCusto] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem(STORAGE_KEY) || null;
-  });
+  // Inicializa como null para evitar hydration mismatch;
+  // o valor do localStorage é aplicado no useEffect de montagem.
+  const [centroCusto, _setCentroCusto] = useState<string | null>(null);
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  const [centrosDisponiveis, setCentrosDisponiveis] = useState<string[]>([]);
+
+  // Efeito de hidratação: lê localStorage apenas no cliente
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      _setCentroCusto(saved);
+    }
+    setHasHydrated(true);
+  }, []);
+
+  // Busca os projetos cadastrados (fonte única de verdade para a sidebar)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    fetch("/api/projetos")
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((json: { data?: Array<{ centro_custo: string }> }) => {
+        const list = (json.data || [])
+          .map((p) => p.centro_custo)
+          .filter(Boolean)
+          .sort();
+        setCentrosDisponiveis(list);
+        // Se não há centro de custo selecionado e há opções disponíveis,
+        // seleciona o primeiro automaticamente (exceto para guests que têm o seu)
+        if (!isGuest && list.length > 0 && !centroCusto) {
+          _setCentroCusto(list[0]);
+          localStorage.setItem(STORAGE_KEY, list[0]);
+        }
+      })
+      .catch(() => setCentrosDisponiveis([]));
+  }, [isGuest, centroCusto]);
 
   // Quando o usuário carrega, sobrescreve o filtro com o valor do guest (fixo)
   useEffect(() => {
@@ -63,7 +97,9 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <FilterContext.Provider value={{ centroCusto, setCentroCusto, isLocked: isGuest }}>
+    <FilterContext.Provider
+      value={{ centroCusto, setCentroCusto, centrosDisponiveis, isLocked: isGuest }}
+    >
       {children}
     </FilterContext.Provider>
   );

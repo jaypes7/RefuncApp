@@ -21,12 +21,13 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { etapas } = ConfigEtapasSchema.parse(body);
+    const centroCusto = body.centroCusto ?? "09.06.0001.171";
 
     // Busca as datas do projeto para validar as datas das etapas
     const { data: configData, error: configError } = await supabase
       .from("configuracoes")
       .select("data_inicio_projeto, data_fim_projeto")
-      .eq("id", 1)
+      .eq("centro_custo", centroCusto)
       .single();
 
     if (configError) {
@@ -75,11 +76,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Remove todas as etapas atuais e insere a nova lista
+    // Remove apenas as etapas do centro de custo e insere a nova lista
     const { error: delError } = await supabase
       .from("etapas")
       .delete()
-      .gte("id", 0);
+      .eq("centro_custo", centroCusto);
 
     if (delError) {
       throw new Error(`Erro ao remover etapas: ${delError.message}`);
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
       const payload = etapas.map((e, idx) => {
         const rawEtapa = body.etapas?.find((raw: any) => raw.id === e.id);
         return {
-          id: e.id,
+          id: e.id ?? idx + 1,
           nome: e.nome,
           dias: e.duracaoDias,
           ordem: idx + 1,
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
           percentual_concluido: e.percentualConcluido ?? 0,
           data_inicio: rawEtapa?.dataInicio || null,
           data_fim: rawEtapa?.dataFim || null,
+          centro_custo: centroCusto,
         };
       });
 

@@ -312,6 +312,8 @@ export type DashboardPrincipalData = {
     duracaoDias: number;
     percentualConcluido: number;
     concluida: boolean;
+    dataInicio?: string;
+    dataFim?: string;
   }>;
   agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes" | "distribuicaoMob">;
 };
@@ -364,7 +366,10 @@ export const dashboardLogisticaApi = {
 };
 
 export const dashboardSuprimentosApi = {
-  get: () => api.get<DashboardSuprimentosData>("/dashboard/suprimentos"),
+  get: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<DashboardSuprimentosData>(`/dashboard/suprimentos${params}`);
+  },
 };
 
 // ============================================================================
@@ -397,7 +402,10 @@ export interface ConfigData {
 }
 
 export const configApi = {
-  get: () => api.get<{ data: ConfigData }>("/config"),
+  get: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<{ data: ConfigData }>(`/config${params}`);
+  },
 
   update: (config: {
     dataInicio: string;
@@ -495,6 +503,7 @@ export interface ExportParams {
   search?: string;
   status?: string;
   cargo?: string;
+  centro_custo?: string;
 }
 
 export interface ExportResponse {
@@ -520,12 +529,15 @@ export interface Ocorrencia {
 }
 
 export const ocorrenciasApi = {
-  listar: () => api.get<{ data: Ocorrencia[] }>("/ocorrencias"),
+  listar: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<{ data: Ocorrencia[] }>(`/ocorrencias${params}`);
+  },
 
-  criar: (body: { texto: string; data: string }) =>
+  criar: (body: { texto: string; data: string; centro_custo?: string }) =>
     api.post<{ data: Ocorrencia }>("/ocorrencias", body),
 
-  atualizar: (id: number, body: { texto: string; data: string }) =>
+  atualizar: (id: number, body: { texto: string; data: string; centro_custo?: string }) =>
     api.put<{ data: Ocorrencia }>(`/ocorrencias/${id}`, body),
 
   deletar: (id: number) => api.delete(`/ocorrencias/${id}`),
@@ -544,12 +556,15 @@ export interface ComentarioCliente {
 }
 
 export const comentariosClienteApi = {
-  listar: () => api.get<{ data: ComentarioCliente[] }>("/comentarios-cliente"),
+  listar: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<{ data: ComentarioCliente[] }>(`/comentarios-cliente${params}`);
+  },
 
-  criar: (body: { texto: string; data: string }) =>
+  criar: (body: { texto: string; data: string; centro_custo?: string }) =>
     api.post<{ data: ComentarioCliente }>("/comentarios-cliente", body),
 
-  atualizar: (id: number, body: { texto: string; data: string }) =>
+  atualizar: (id: number, body: { texto: string; data: string; centro_custo?: string }) =>
     api.put<{ data: ComentarioCliente }>(`/comentarios-cliente/${id}`, body),
 
   deletar: (id: number) => api.delete(`/comentarios-cliente/${id}`),

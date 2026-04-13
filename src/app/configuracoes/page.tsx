@@ -10,6 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -38,6 +46,7 @@ import {
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFilter } from "@/contexts/FilterContext";
 import { WorkingDaysCalendar } from "@/components/WorkingDaysCalendar";
 
 // --- Types ---
@@ -50,6 +59,13 @@ type ConfigProjeto = {
   data_fim: string;
   colaboradores_previstos: string;
   orcado_suprimentos: string;
+};
+
+type ProjetoResumo = {
+  centro_custo: string;
+  nome_cliente: string | null;
+  data_inicio_projeto: string | null;
+  data_fim_projeto: string | null;
 };
 
 type ConfigClinica = { id?: number; nome: string };
@@ -112,7 +128,13 @@ export default function ConfiguracoesPage() {
   const { user, isLoading: authLoading } = useAuth();
 
   const queryClient = useQueryClient();
+  const { centroCusto, setCentroCusto } = useFilter();
   const [activeTab, setActiveTab] = useState("projeto");
+
+  // Projetos (CRUD)
+  const [novoProjetoOpen, setNovoProjetoOpen] = useState(false);
+  const [novoProjetoCC, setNovoProjetoCC] = useState("");
+  const [novoProjetoNome, setNovoProjetoNome] = useState("");
 
   // Projeto
   const [projeto, setProjeto] = useState<ConfigProjeto>({
@@ -135,13 +157,17 @@ export default function ConfiguracoesPage() {
 
   // Query para buscar dias trabalhados
   const { data: diasTrabalhadosData } = useQuery({
-    queryKey: ["config", "dias-trabalhados"],
+    queryKey: ["config", "dias-trabalhados", centroCusto],
     queryFn: async () => {
-      const res = await fetch("/api/config/dias-trabalhados");
+      const params = centroCusto
+        ? `?centro_custo=${encodeURIComponent(centroCusto)}`
+        : "";
+      const res = await fetch(`/api/config/dias-trabalhados${params}`);
       if (!res.ok) throw new Error("Falha ao carregar dias trabalhados");
       const json = await res.json();
       return json.dias_trabalhados as string[];
     },
+    enabled: !!centroCusto,
   });
 
   // Sincroniza dias trabalhados do servidor
@@ -153,13 +179,17 @@ export default function ConfiguracoesPage() {
 
   // Query para buscar feriados
   const { data: feriadosData } = useQuery({
-    queryKey: ["config", "feriados"],
+    queryKey: ["config", "feriados", centroCusto],
     queryFn: async () => {
-      const res = await fetch("/api/config/feriados");
+      const params = centroCusto
+        ? `?centro_custo=${encodeURIComponent(centroCusto)}`
+        : "";
+      const res = await fetch(`/api/config/feriados${params}`);
       if (!res.ok) throw new Error("Falha ao carregar feriados");
       const json = await res.json();
       return json.feriados as string[];
     },
+    enabled: !!centroCusto,
   });
 
   // Sincroniza feriados do servidor
@@ -175,7 +205,7 @@ export default function ConfiguracoesPage() {
       const res = await fetch("/api/config/feriados", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feriados: lista }),
+        body: JSON.stringify({ feriados: lista, centro_custo: centroCusto }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -210,7 +240,7 @@ export default function ConfiguracoesPage() {
       const res = await fetch("/api/config/dias-trabalhados", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dias_trabalhados: dias }),
+        body: JSON.stringify({ dias_trabalhados: dias, centro_custo: centroCusto }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -294,13 +324,17 @@ export default function ConfiguracoesPage() {
   // --- Data Fetching ---
   // Tipado com ApiConfigResponse para refletir as chaves uppercase da API
   const { data: projetoData } = useQuery<ApiConfigResponse>({
-    queryKey: ["config", "projeto"],
+    queryKey: ["config", "projeto", centroCusto],
     queryFn: async () => {
-      const res = await fetch("/api/config");
+      const params = centroCusto
+        ? `?centro_custo=${encodeURIComponent(centroCusto)}`
+        : "";
+      const res = await fetch(`/api/config${params}`);
       if (!res.ok) throw new Error("Falha ao carregar configurações");
       const json = await res.json();
       return json.data as ApiConfigResponse;
     },
+    enabled: !!centroCusto,
   });
 
   const { data: clinicasData } = useQuery<ConfigClinica[]>({
@@ -337,6 +371,60 @@ export default function ConfiguracoesPage() {
       if (!res.ok) throw new Error("Falha ao carregar logs");
       return res.json();
     },
+  });
+
+  const { data: projetosData } = useQuery<ProjetoResumo[]>({
+    queryKey: ["projetos"],
+    queryFn: async () => {
+      const res = await fetch("/api/projetos");
+      if (!res.ok) throw new Error("Falha ao carregar projetos");
+      const json = await res.json();
+      return json.data as ProjetoResumo[];
+    },
+  });
+
+  const criarProjetoMutation = useMutation({
+    mutationFn: async (data: { centro_custo: string; nome_cliente?: string }) => {
+      const res = await fetch("/api/projetos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao criar projeto");
+      }
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["projetos"] });
+      queryClient.invalidateQueries({ queryKey: ["centros-custo"] });
+      setNovoProjetoOpen(false);
+      setNovoProjetoCC("");
+      setNovoProjetoNome("");
+      setCentroCusto(variables.centro_custo);
+      toast.success(`Projeto ${variables.centro_custo} criado com sucesso!`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const excluirProjetoMutation = useMutation({
+    mutationFn: async (cc: string) => {
+      const res = await fetch(`/api/projetos/${encodeURIComponent(cc)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao excluir projeto");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projetos"] });
+      queryClient.invalidateQueries({ queryKey: ["centros-custo"] });
+      toast.success("Projeto excluído com sucesso!");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   // ── Derived data from queries (no local state needed) ──────────────────────
@@ -703,6 +791,57 @@ export default function ConfiguracoesPage() {
             <CardContent className="p-6">
               {/* Projeto Tab */}
               <TabsContent value="projeto" className="w-full mt-10 space-y-8">
+                {/* ── Seleção e Gerenciamento de Projetos ── */}
+                <Card className="border border-border/60 bg-card/40">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-sm font-medium mb-1.5 block">Projeto ativo</label>
+                        <Select
+                          value={centroCusto || ""}
+                          onValueChange={(v) => setCentroCusto(v)}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecione um projeto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(projetosData || []).map((p) => (
+                              <SelectItem key={p.centro_custo} value={p.centro_custo}>
+                                {p.centro_custo}
+                                {p.nome_cliente ? ` — ${p.nome_cliente}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => setNovoProjetoOpen(true)}
+                        >
+                          <Plus className="w-4 h-4" />
+                          Novo Projeto
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          className="gap-2"
+                          disabled={!centroCusto || projetosData?.length === 1}
+                          onClick={() => {
+                            if (!centroCusto) return;
+                            if (confirm(`Tem certeza que deseja excluir o projeto ${centroCusto}? Esta ação não pode ser desfeita.`)) {
+                              excluirProjetoMutation.mutate(centroCusto);
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Excluir
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
                 <div>
                   <h2 className="text-xl font-semibold mb-1 flex items-center gap-2">
                     <Building className="w-5 h-5 text-primary" />
@@ -1632,6 +1771,51 @@ export default function ConfiguracoesPage() {
             </CardContent>
           </Tabs>
         </Card>
+      {/* Dialog: Novo Projeto */}
+      <Dialog open={novoProjetoOpen} onOpenChange={setNovoProjetoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo Projeto</DialogTitle>
+            <DialogDescription>
+              Crie um novo projeto informando o centro de custo e, opcionalmente, o nome do cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Centro de Custo *</label>
+              <Input
+                placeholder="Ex: 09.06.0001.171"
+                value={novoProjetoCC}
+                onChange={(e) => setNovoProjetoCC(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Nome do Cliente</label>
+              <Input
+                placeholder="Ex: Cliente Alfa"
+                value={novoProjetoNome}
+                onChange={(e) => setNovoProjetoNome(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNovoProjetoOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!novoProjetoCC.trim() || criarProjetoMutation.isPending}
+              onClick={() =>
+                criarProjetoMutation.mutate({
+                  centro_custo: novoProjetoCC.trim(),
+                  nome_cliente: novoProjetoNome.trim() || undefined,
+                })
+              }
+            >
+              {criarProjetoMutation.isPending ? "Criando..." : "Criar Projeto"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </ProtectedRoute>
   );
