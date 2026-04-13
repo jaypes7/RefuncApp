@@ -57,6 +57,12 @@ interface ColaboradorExport {
   UF: string | null;
   TELEFONE: string | null;
   TURNO_TRABALHO: string | null;
+  CHECK_IN: string | null;
+  HOTEL: string | null;
+  DATA_VIAGEM: string | null;
+  NUMERO_ORACLE: string | null;
+  CENTRO_CUSTO: string | null;
+  CREATED_AT: string | null;
   progresso: {
     rh: number;
     logistica: number;
@@ -116,6 +122,12 @@ function mapRow(row: Record<string, unknown>): ColaboradorExport {
     UF: toStr(row["uf"]),
     TELEFONE: toStr(row["telefone"]),
     TURNO_TRABALHO: toStr(row["turno_trabalho"]),
+    CHECK_IN: toStr(row["check_in"]),
+    HOTEL: toStr(row["hotel"]),
+    DATA_VIAGEM: toStr(row["data_viagem"]),
+    NUMERO_ORACLE: toStr(row["numero_oracle"]),
+    CENTRO_CUSTO: toStr(row["centro_custo"]),
+    CREATED_AT: toStr(row["created_at"]),
     progresso: calcularProgresso(row),
   };
 }

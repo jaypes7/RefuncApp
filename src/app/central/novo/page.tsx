@@ -231,62 +231,65 @@ export default function OnboardingPage() {
 
   const clinicas = clinicasData?.data || [];
 
+  // Helper para montar payload da API a partir dos dados do formulário
+  const buildColaboradorPayload = (data: FullFormData) => {
+    return {
+      // Colunas 1-5
+      IND: data.ind,
+      STATUS: data.status || "Pendente",
+      ENVIADO_RH: data.enviadoRh,
+      PESSOA: data.pessoa,
+      REQ: data.req,
+      // Colunas 6-10
+      VINCULADO: data.vinculado,
+      CARTA_OFERTA: data.cartaOferta,
+      COLAB_PEND: data.colabPend,
+      EXAME: data.exame,
+      CLINICA: data.clinica,
+      // Colunas 11-15
+      DOCS: data.docs,
+      ASO: data.aso,
+      RPV: data.rpv,
+      PRE_ADMISSAO: data.preAdmissao,
+      MOB: data.mob,
+      // Colunas 16-20
+      OP: data.op,
+      DATA_ADMISSAO: data.dataAdmissao,
+      CONTRATO: data.contrato,
+      PORTAL: data.portal,
+      CRACHA: data.cracha,
+      // Colunas 21-25
+      PONTO: data.ponto,
+      TREINAMENTO: data.treinamento,
+      REALIZAR_TREINAMENTO: data.realizarTreinamento,
+      LOCAL_TREINAMENTO: data.localTreinamento,
+      RE: data.re,
+      // Colunas 26-30
+      NOME: data.nome,
+      FUNCAO_CLT: data.funcaoClt,
+      HISTOGRAMA: data.histograma,
+      NUMERO_ORACLE: data.numeroOracle,
+      IDADE: data.idade,
+      DT_NASCIMENTO: data.dtNascimento,
+      // Colunas 31-35
+      CPF: data.cpf.replace(/\D/g, ""), // Remove máscara
+      VR: data.vr,
+      TERMINO: data.termino || null,
+      PRORROGACAO: data.prorrogacao || null,
+      DEMISSAO: data.demissao || null,
+      // Colunas 36-38
+      MUNICIPIO: data.municipio,
+      UF: data.uf,
+      TELEFONE: data.telefone,
+      // Centro de custo ativo do contexto global
+      CENTRO_CUSTO: centroCusto,
+    };
+  };
+
   // Mutação para criar colaborador
   const createMutation = useMutation({
     mutationFn: async (data: FullFormData) => {
-      // Mapeia os dados do formulário para o formato da API (38 colunas)
-      const colaborador = {
-        // Colunas 1-5
-        IND: data.ind,
-        STATUS: data.status,
-        ENVIADO_RH: data.enviadoRh,
-        PESSOA: data.pessoa,
-        REQ: data.req,
-        // Colunas 6-10
-        VINCULADO: data.vinculado,
-        CARTA_OFERTA: data.cartaOferta,
-        COLAB_PEND: data.colabPend,
-        EXAME: data.exame,
-        CLINICA: data.clinica,
-        // Colunas 11-15
-        DOCS: data.docs,
-        ASO: data.aso,
-        RPV: data.rpv,
-        PRE_ADMISSAO: data.preAdmissao,
-        MOB: data.mob,
-        // Colunas 16-20
-        OP: data.op,
-        DATA_ADMISSAO: data.dataAdmissao,
-        CONTRATO: data.contrato,
-        PORTAL: data.portal,
-        CRACHA: data.cracha,
-        // Colunas 21-25
-        PONTO: data.ponto,
-        TREINAMENTO: data.treinamento,
-        REALIZAR_TREINAMENTO: data.realizarTreinamento,
-        LOCAL_TREINAMENTO: data.localTreinamento,
-        RE: data.re,
-        // Colunas 26-30
-        NOME: data.nome,
-        FUNCAO_CLT: data.funcaoClt,
-        HISTOGRAMA: data.histograma,
-        NUMERO_ORACLE: data.numeroOracle,
-        IDADE: data.idade,
-        DT_NASCIMENTO: data.dtNascimento,
-        // Colunas 31-35
-        CPF: data.cpf.replace(/\D/g, ""), // Remove máscara
-        VR: data.vr,
-        TERMINO: data.termino || null,
-        PRORROGACAO: data.prorrogacao || null,
-        DEMISSAO: data.demissao || null,
-        // Colunas 36-38
-        MUNICIPIO: data.municipio,
-        UF: data.uf,
-        TELEFONE: data.telefone,
-        // Centro de custo ativo do contexto global
-        CENTRO_CUSTO: centroCusto,
-      };
-
+      const colaborador = buildColaboradorPayload(data);
       return colaboradoresApi.criar(colaborador);
     },
     onSuccess: () => {
@@ -305,6 +308,28 @@ export default function OnboardingPage() {
         e.response?.data?.error || e.message || "Erro ao cadastrar colaborador";
       toast.error(message);
       console.error("Erro ao criar colaborador:", error);
+    },
+  });
+
+  // Mutação para salvar rascunho
+  const draftMutation = useMutation({
+    mutationFn: async (data: FullFormData) => {
+      const colaborador = buildColaboradorPayload(data);
+      return colaboradoresApi.criar(colaborador);
+    },
+    onSuccess: () => {
+      toast.success("Rascunho salvo com sucesso!");
+      router.push("/central");
+    },
+    onError: (error: unknown) => {
+      const e = error as {
+        response?: { data?: { error?: string } };
+        message?: string;
+      };
+      const message =
+        e.response?.data?.error || e.message || "Erro ao salvar rascunho";
+      toast.error(message);
+      console.error("Erro ao salvar rascunho:", error);
     },
   });
 
@@ -355,6 +380,7 @@ export default function OnboardingPage() {
     control,
     formState: { errors },
     trigger,
+    getValues,
   } = useForm<FullFormData>({
     mode: "onChange",
     defaultValues: {
@@ -503,6 +529,15 @@ export default function OnboardingPage() {
 
   const onSubmitFinal = (data: FullFormData) => {
     createMutation.mutate(data);
+  };
+
+  const handleSaveDraft = () => {
+    const data = getValues();
+    if (!data.cpf || data.cpf.length !== 14 || !data.nome || data.nome.length < 3) {
+      toast.error("CPF e Nome completo são obrigatórios para salvar o rascunho.");
+      return;
+    }
+    draftMutation.mutate(data);
   };
 
   // Variantes de animação
@@ -860,13 +895,23 @@ export default function OnboardingPage() {
                     </CardContent>
 
                     <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => router.push("/central")}
-                      >
-                        Cancelar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => router.push("/central")}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={draftMutation.isPending || !isStep1Valid}
+                        >
+                          {draftMutation.isPending ? "Salvando..." : "Salvar como rascunho"}
+                        </Button>
+                      </div>
                       <Button
                         type="submit"
                         disabled={!isStep1Valid}
@@ -1239,14 +1284,24 @@ export default function OnboardingPage() {
                     </CardContent>
 
                     <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handlePrevious}
-                        className="gap-2"
-                      >
-                        <ChevronLeft className="h-4 w-4" /> Voltar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handlePrevious}
+                          className="gap-2"
+                        >
+                          <ChevronLeft className="h-4 w-4" /> Voltar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={draftMutation.isPending}
+                        >
+                          {draftMutation.isPending ? "Salvando..." : "Salvar como rascunho"}
+                        </Button>
+                      </div>
                       <Button
                         type="submit"
                         disabled={!isStep2Valid}
@@ -1408,14 +1463,24 @@ export default function OnboardingPage() {
                     </CardContent>
 
                     <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handlePrevious}
-                        className="gap-2"
-                      >
-                        <ChevronLeft className="h-4 w-4" /> Voltar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handlePrevious}
+                          className="gap-2"
+                        >
+                          <ChevronLeft className="h-4 w-4" /> Voltar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={draftMutation.isPending}
+                        >
+                          {draftMutation.isPending ? "Salvando..." : "Salvar como rascunho"}
+                        </Button>
+                      </div>
                       <Button
                         type="submit"
                         disabled={!isStep3Valid}
@@ -1490,14 +1555,24 @@ export default function OnboardingPage() {
                     </CardContent>
 
                     <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handlePrevious}
-                        className="gap-2"
-                      >
-                        <ChevronLeft className="h-4 w-4" /> Voltar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handlePrevious}
+                          className="gap-2"
+                        >
+                          <ChevronLeft className="h-4 w-4" /> Voltar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={draftMutation.isPending}
+                        >
+                          {draftMutation.isPending ? "Salvando..." : "Salvar como rascunho"}
+                        </Button>
+                      </div>
                       <Button
                         type="submit"
                         disabled={!isStep4Valid}
@@ -1605,14 +1680,24 @@ export default function OnboardingPage() {
                     </CardContent>
 
                     <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handlePrevious}
-                        className="gap-2"
-                      >
-                        <ChevronLeft className="h-4 w-4" /> Voltar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handlePrevious}
+                          className="gap-2"
+                        >
+                          <ChevronLeft className="h-4 w-4" /> Voltar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={draftMutation.isPending}
+                        >
+                          {draftMutation.isPending ? "Salvando..." : "Salvar como rascunho"}
+                        </Button>
+                      </div>
                       <Button
                         type="submit"
                         disabled={!isStep5Valid}
@@ -1693,14 +1778,24 @@ export default function OnboardingPage() {
                     </CardContent>
 
                     <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handlePrevious}
-                        className="gap-2"
-                      >
-                        <ChevronLeft className="h-4 w-4" /> Voltar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handlePrevious}
+                          className="gap-2"
+                        >
+                          <ChevronLeft className="h-4 w-4" /> Voltar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={draftMutation.isPending}
+                        >
+                          {draftMutation.isPending ? "Salvando..." : "Salvar como rascunho"}
+                        </Button>
+                      </div>
                       <Button
                         type="submit"
                         disabled={!isStep6Valid}
@@ -1867,14 +1962,24 @@ export default function OnboardingPage() {
                     </CardContent>
 
                     <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handlePrevious}
-                        className="gap-2"
-                      >
-                        <ChevronLeft className="h-4 w-4" /> Voltar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handlePrevious}
+                          className="gap-2"
+                        >
+                          <ChevronLeft className="h-4 w-4" /> Voltar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={draftMutation.isPending}
+                        >
+                          {draftMutation.isPending ? "Salvando..." : "Salvar como rascunho"}
+                        </Button>
+                      </div>
                       <Button
                         type="submit"
                         disabled={!isStep7Valid}
@@ -2008,14 +2113,24 @@ export default function OnboardingPage() {
                     </CardContent>
 
                     <CardFooter className="flex justify-between border-t bg-muted/50 py-6">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handlePrevious}
-                        className="gap-2"
-                      >
-                        <ChevronLeft className="h-4 w-4" /> Voltar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handlePrevious}
+                          className="gap-2"
+                        >
+                          <ChevronLeft className="h-4 w-4" /> Voltar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={draftMutation.isPending}
+                        >
+                          {draftMutation.isPending ? "Salvando..." : "Salvar como rascunho"}
+                        </Button>
+                      </div>
                       <Button
                         type="submit"
                         disabled={!isStep8Valid || createMutation.isPending}
