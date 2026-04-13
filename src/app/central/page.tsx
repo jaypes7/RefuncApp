@@ -35,16 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -211,7 +202,7 @@ export default function CentralPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const { centroCusto, setCentroCusto, isLocked } = useFilter();
+  const { centroCusto, isLocked } = useFilter();
 
   // Redireciona guests para o Dashboard Geral (única página permitida)
   useEffect(() => {
@@ -221,8 +212,11 @@ export default function CentralPage() {
   }, [authLoading, user, router]);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 500);
-  const [statusFilter, setStatusFilter] = useState<string>("todos");
-  const [cargoFilter, setCargoFilter] = useState<string>("todos");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [cargoFilter, setCargoFilter] = useState<string[]>([]);
+  const [centroCustoLocal, setCentroCustoLocal] = useState<string[]>(
+    centroCusto ? [centroCusto] : []
+  );
   const [page, setPage] = useState(1);
 
   // Estado do modal de importação
@@ -256,7 +250,7 @@ export default function CentralPage() {
 
       // Buscar todos os colaboradores usando a API de exportação (sem paginação)
       const exportParams: { cargo?: string } = {};
-      if (cargoFilter !== "todos") exportParams.cargo = cargoFilter;
+      if (cargoFilter.length) exportParams.cargo = cargoFilter.join(",");
       const response = await exportApi.exportar(exportParams);
       const allColaboradores = response.data.data || [];
 
@@ -386,14 +380,14 @@ export default function CentralPage() {
       debouncedSearch,
       statusFilter,
       cargoFilter,
-      centroCusto,
+      centroCustoLocal,
     ],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
-      if (statusFilter !== "todos") params.status = statusFilter;
-      if (cargoFilter !== "todos") params.cargo = cargoFilter;
-      if (centroCusto) params.centro_custo = centroCusto;
+      if (statusFilter.length) params.status = statusFilter.join(",");
+      if (cargoFilter.length) params.cargo = cargoFilter.join(",");
+      if (centroCustoLocal.length) params.centro_custo = centroCustoLocal.join(",");
 
       const response = await colaboradoresApi.listar(params);
       return response.data;
@@ -522,76 +516,56 @@ export default function CentralPage() {
                 </div>
 
                 {/* Status filter */}
-                <Select
-                  value={statusFilter}
-                  onValueChange={(value) => {
-                    setStatusFilter(value);
+                <MultiSelectFilter
+                  placeholder="status"
+                  width="sm:w-44 w-full"
+                  selected={statusFilter}
+                  onChange={(values) => {
+                    setStatusFilter(values);
                     setPage(1);
                   }}
-                >
-                  <SelectTrigger className="h-9 w-full text-sm sm:w-44 border-slate-300 bg-white dark:border-input dark:bg-input/30">
-                    <SelectValue placeholder="Todos os Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os Status</SelectItem>
-                    <SelectItem value="Ativo">Ativo</SelectItem>
-                    <SelectItem value="Pendente">Pendente</SelectItem>
-                    <SelectItem value="Inativo">Inativo</SelectItem>
-                    <SelectItem value="Desligado">Desligado</SelectItem>
-                  </SelectContent>
-                </Select>
+                  options={[
+                    { value: "Ativo", label: "Ativo" },
+                    { value: "Pendente", label: "Pendente" },
+                    { value: "Inativo", label: "Inativo" },
+                    { value: "Desligado", label: "Desligado" },
+                  ]}
+                />
 
                 {/* Cargo filter */}
-                <Select
-                  value={cargoFilter}
-                  onValueChange={(value) => {
-                    setCargoFilter(value);
+                <MultiSelectFilter
+                  placeholder="cargos/função"
+                  width="sm:w-56 w-full"
+                  selected={cargoFilter}
+                  onChange={(values) => {
+                    setCargoFilter(values);
                     setPage(1);
                   }}
-                >
-                  <SelectTrigger className="h-9 w-full text-sm sm:w-56 border-slate-300 bg-white dark:border-input dark:bg-input/30">
-                    <SelectValue placeholder="Todos os Cargos" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    <SelectItem value="todos">Todos os Cargos</SelectItem>
-                    {Object.entries(CARGOS_AGRUPADOS).map(([grupo, cargos], idx) => (
-                      <SelectGroup key={grupo}>
-                        {idx > 0 && <SelectSeparator />}
-                        <SelectItem value={grupo} className="font-medium">
-                          {grupo} (todos)
-                        </SelectItem>
-                        {cargos.map((c) => (
-                          <SelectItem
-                            key={c}
-                            value={c}
-                            className="pl-6 text-muted-foreground"
-                          >
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ))}
-                    {(() => {
+                  groups={[
+                    ...Object.entries(CARGOS_AGRUPADOS)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([grupo, cargos]) => ({
+                        label: grupo,
+                        options: [...cargos]
+                          .sort((a, b) => a.localeCompare(b))
+                          .map((c) => ({ value: c, label: c })),
+                      })),
+                    ...(() => {
                       const todosAgrupados = new Set<string>(
                         Object.values(CARGOS_AGRUPADOS).flat(),
                       );
                       const orfaos = CARGOS.filter(
                         (c) => !todosAgrupados.has(c),
-                      );
-                      if (orfaos.length === 0) return null;
-                      return (
-                        <SelectGroup>
-                          <SelectSeparator />
-                          {orfaos.map((c) => (
-                            <SelectItem key={c} value={c}>
-                              {c}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      );
-                    })()}
-                  </SelectContent>
-                </Select>
+                      ).sort((a, b) => a.localeCompare(b));
+                      return orfaos.length
+                        ? [{
+                            label: "Outros",
+                            options: orfaos.map((c) => ({ value: c, label: c })),
+                          }]
+                        : [];
+                    })(),
+                  ]}
+                />
 
                 {/* Centro de Custo filter */}
                 {isLocked ? (
@@ -600,25 +574,19 @@ export default function CentralPage() {
                     <span className="font-medium">{centroCusto}</span>
                   </div>
                 ) : (
-                  <Select
-                    value={centroCusto ?? "todos"}
-                    onValueChange={(value) => {
-                      setCentroCusto(value === "todos" ? null : value);
+                  <MultiSelectFilter
+                    placeholder="centro de custo"
+                    width="sm:w-44 w-full"
+                    selected={centroCustoLocal}
+                    onChange={(values) => {
+                      setCentroCustoLocal(values);
                       setPage(1);
                     }}
-                  >
-                    <SelectTrigger className="h-9 w-full text-sm sm:w-44 border-slate-300 bg-white dark:border-input dark:bg-input/30">
-                      <SelectValue placeholder="Centro de Custo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos os C.C.</SelectItem>
-                      {centrosDisponiveis.map((cc) => (
-                        <SelectItem key={cc} value={cc}>
-                          {cc}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={centrosDisponiveis.map((cc) => ({
+                      value: cc,
+                      label: cc,
+                    }))}
+                  />
                 )}
               </div>
             </div>

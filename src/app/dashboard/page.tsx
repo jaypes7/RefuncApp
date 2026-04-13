@@ -415,7 +415,7 @@ export default function DashboardPage() {
           {/* Header */}
           <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <h1 className="page-title">Gestão a vista</h1>
+              <h1 className="page-title">Gestão a Vista - Geral</h1>
               <p className="page-subtitle">
                 Visão geral do projeto e métricas
               </p>

@@ -273,7 +273,7 @@ export default function DashboardLogisticaPage() {
               </Button>
               <div>
                 <h1 className="page-title">
-                  Dashboard Logística
+                  Gestão a Vista - Logística
                 </h1>
                 <p className="text-muted-foreground 2xl:text-lg">
                   Ocupação e disponibilidade dos hotéis

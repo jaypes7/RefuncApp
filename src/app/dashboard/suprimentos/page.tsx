@@ -292,7 +292,7 @@ export default function DashboardSuprimentosPage() {
               </Button>
               <div>
                 <h1 className="page-title">
-                  Dashboard Suprimentos
+                  Gestão a Vista - Suprimentos
                 </h1>
                 <p className="text-muted-foreground 2xl:text-lg">
                   Acompanhamento de ordens de compra e entregas
