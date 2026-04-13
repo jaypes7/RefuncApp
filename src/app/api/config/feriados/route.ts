@@ -8,14 +8,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const currentUser = await requireAuth();
 
     const { searchParams } = new URL(request.url);
-    const centroCusto = searchParams.get("centro_custo") || "09.06.0001.171";
+    const ccParam = searchParams.get("centro_custo") || undefined;
+    const centroCusto = resolveCentroCusto(currentUser, ccParam) || "09.06.0001.171";
 
     const db = createServerClient();
     const { data, error } = await db
@@ -43,11 +44,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    const currentUser = await requireAuth();
 
     const body = await request.json();
     const { feriados, centro_custo } = body;
-    const targetCentroCusto = centro_custo || "09.06.0001.171";
+    const targetCentroCusto = resolveCentroCusto(currentUser, centro_custo) || "09.06.0001.171";
 
     if (!Array.isArray(feriados)) {
       return NextResponse.json(

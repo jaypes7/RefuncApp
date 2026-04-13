@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import { logExport } from "@/lib/logs";
 import { CARGOS_AGRUPADOS } from "@/constants/cargos";
 
@@ -153,7 +153,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") ?? undefined;
     const status = searchParams.get("status") ?? undefined;
     const cargo = searchParams.get("cargo") ?? undefined;
-    const centroCusto = searchParams.get("centro_custo") ?? undefined;
+    const ccParam = searchParams.get("centro_custo") ?? undefined;
+    const centroCusto = resolveCentroCusto(user, ccParam);
 
     // Monta a query base
     let query = supabase.from("colaboradores").select("*");

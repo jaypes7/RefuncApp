@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { ConfigUpdateSchema, type EtapaConfig } from "@/lib/schemas";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import { logConfig } from "@/lib/logs";
 import { calculateWorkingDays } from "@/lib/date-utils";
 
@@ -45,10 +45,11 @@ interface ConfigResponse {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const currentUser = await requireAuth();
 
     const { searchParams } = new URL(request.url);
-    const centroCustoParam = searchParams.get("centro_custo") || undefined;
+    const ccParam = searchParams.get("centro_custo") || undefined;
+    const centroCustoParam = resolveCentroCusto(currentUser, ccParam);
 
     const supabase = createServerClient();
 

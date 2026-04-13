@@ -11,7 +11,7 @@ export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
 import { z, ZodError } from "zod";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
 
 const OcorrenciaCreateSchema = z.object({
@@ -23,11 +23,12 @@ const OcorrenciaCreateSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const currentUser = await requireAuth();
     const db = createServerClient();
 
     const { searchParams } = new URL(request.url);
-    const centroCusto = searchParams.get("centro_custo")?.trim() ?? "";
+    const ccParam = searchParams.get("centro_custo")?.trim() || undefined;
+    const centroCusto = resolveCentroCusto(currentUser, ccParam);
 
     let query = db
       .from("ocorrencias")

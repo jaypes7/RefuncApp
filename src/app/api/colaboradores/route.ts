@@ -26,7 +26,7 @@ import {
   type Colaborador,
 } from "@/lib/schemas";
 import { CARGOS_AGRUPADOS } from "@/constants/cargos";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import { logAdicionar } from "@/lib/logs";
 
 // ============================================================================
@@ -198,11 +198,8 @@ export async function GET(request: NextRequest) {
     const { page, limit, search, status, cargo, centro_custo: ccParam } =
       ColaboradoresQuerySchema.parse(queryParams);
 
-    // Guests têm o centro_custo fixado no JWT — ignora o param do cliente
-    const centroCusto =
-      currentUser.perfil === "guest" && currentUser.centro_custo
-        ? currentUser.centro_custo
-        : ccParam;
+    // Users/guests têm o centro_custo fixado no JWT — ignora o param do cliente
+    const centroCusto = resolveCentroCusto(currentUser, ccParam);
 
     const supabase = createServerClient();
 

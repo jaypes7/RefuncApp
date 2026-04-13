@@ -19,7 +19,7 @@ export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import type { DashboardData } from "@/lib/axios";
 import {
   calcularMetricas,
@@ -452,10 +452,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const ccParam = searchParams.get("centro_custo") || undefined;
-    const centroCusto =
-      currentUser.perfil === "guest" && currentUser.centro_custo
-        ? currentUser.centro_custo
-        : ccParam;
+    const centroCusto = resolveCentroCusto(currentUser, ccParam);
 
     const supabase = createServerClient();
 
