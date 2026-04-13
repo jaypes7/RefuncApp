@@ -322,19 +322,33 @@ export default function ConfiguracoesPage() {
   const [editingQtVagas, setEditingQtVagas] = useState("");
 
   // --- Data Fetching ---
+
+  const { data: projetosData } = useQuery<ProjetoResumo[]>({
+    queryKey: ["projetos"],
+    queryFn: async () => {
+      const res = await fetch("/api/projetos");
+      if (!res.ok) throw new Error("Falha ao carregar projetos");
+      const json = await res.json();
+      return json.data as ProjetoResumo[];
+    },
+  });
+
+  // Fallback para o primeiro projeto quando admin está em "Todos" (null)
+  const projetoQueryCc = centroCusto || projetosData?.[0]?.centro_custo || "";
+
   // Tipado com ApiConfigResponse para refletir as chaves uppercase da API
   const { data: projetoData } = useQuery<ApiConfigResponse>({
-    queryKey: ["config", "projeto", centroCusto],
+    queryKey: ["config", "projeto", projetoQueryCc],
     queryFn: async () => {
-      const params = centroCusto
-        ? `?centro_custo=${encodeURIComponent(centroCusto)}`
+      const params = projetoQueryCc
+        ? `?centro_custo=${encodeURIComponent(projetoQueryCc)}`
         : "";
       const res = await fetch(`/api/config${params}`);
       if (!res.ok) throw new Error("Falha ao carregar configurações");
       const json = await res.json();
       return json.data as ApiConfigResponse;
     },
-    enabled: !!centroCusto,
+    enabled: !!projetoQueryCc,
   });
 
   const { data: clinicasData } = useQuery<ConfigClinica[]>({
@@ -370,16 +384,6 @@ export default function ConfiguracoesPage() {
       const res = await fetch("/api/logs");
       if (!res.ok) throw new Error("Falha ao carregar logs");
       return res.json();
-    },
-  });
-
-  const { data: projetosData } = useQuery<ProjetoResumo[]>({
-    queryKey: ["projetos"],
-    queryFn: async () => {
-      const res = await fetch("/api/projetos");
-      if (!res.ok) throw new Error("Falha ao carregar projetos");
-      const json = await res.json();
-      return json.data as ProjetoResumo[];
     },
   });
 
@@ -1157,10 +1161,7 @@ export default function ConfiguracoesPage() {
                         </label>
                         <Select
                           value={acessoRole}
-                          onValueChange={(v) => {
-                            setAcessoRole(v);
-                            if (v !== "guest") setAcessoCentroCusto("");
-                          }}
+                          onValueChange={(v) => setAcessoRole(v)}
                         >
                           <SelectTrigger className="glass-input">
                             <SelectValue placeholder="Selecione o perfil" />
@@ -1175,19 +1176,30 @@ export default function ConfiguracoesPage() {
                         </Select>
                       </div>
 
-                      {acessoRole === "guest" && (
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">
-                            Centro de Custo <span className="text-destructive">*</span>
-                          </label>
-                          <Input
-                            value={acessoCentroCusto}
-                            onChange={(e) => setAcessoCentroCusto(e.target.value)}
-                            className="glass-input"
-                            placeholder="Ex: 171"
-                          />
-                        </div>
-                      )}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">
+                          Centro de Custo
+                          {(acessoRole === "user" || acessoRole === "guest") && (
+                            <span className="text-destructive ml-1">*</span>
+                          )}
+                        </label>
+                        <Select
+                          value={acessoCentroCusto}
+                          onValueChange={(v) => setAcessoCentroCusto(v)}
+                        >
+                          <SelectTrigger className="glass-input">
+                            <SelectValue placeholder="Selecione o projeto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(projetosData || []).map((p) => (
+                              <SelectItem key={p.centro_custo} value={p.centro_custo}>
+                                {p.centro_custo}
+                                {p.nome_cliente ? ` — ${p.nome_cliente}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <Button
@@ -1196,16 +1208,14 @@ export default function ConfiguracoesPage() {
                           re: acessoRE,
                           nome: acessoNome,
                           perfil: acessoRole,
-                          ...(acessoRole === "guest" && acessoCentroCusto.trim()
-                            ? { centro_custo: acessoCentroCusto.trim() }
-                            : {}),
+                          centro_custo: acessoCentroCusto.trim() || undefined,
                         })
                       }
                       disabled={
                         !acessoRE?.trim() ||
                         !acessoNome?.trim() ||
                         !acessoRole ||
-                        (acessoRole === "guest" && !acessoCentroCusto.trim()) ||
+                        ((acessoRole === "user" || acessoRole === "guest") && !acessoCentroCusto.trim()) ||
                         addAcessoMutation.isPending
                       }
                       className="gap-2 w-full"
@@ -1266,14 +1276,22 @@ export default function ConfiguracoesPage() {
                                     onChange={(e) => setEditingAcessoNome(e.target.value)}
                                     placeholder="Nome completo"
                                   />
-                                  {editingAcessoPerfil === "guest" && (
-                                    <Input
-                                      className="glass-input h-8 text-sm w-full"
-                                      value={editingAcessoCentroCusto}
-                                      onChange={(e) => setEditingAcessoCentroCusto(e.target.value)}
-                                      placeholder="Centro de Custo (ex: 171)"
-                                    />
-                                  )}
+                                  <Select
+                                    value={editingAcessoCentroCusto}
+                                    onValueChange={(v) => setEditingAcessoCentroCusto(v)}
+                                  >
+                                    <SelectTrigger className="glass-input h-8 text-sm w-full">
+                                      <SelectValue placeholder="Selecione o projeto" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {(projetosData || []).map((p) => (
+                                        <SelectItem key={p.centro_custo} value={p.centro_custo}>
+                                          {p.centro_custo}
+                                          {p.nome_cliente ? ` — ${p.nome_cliente}` : ""}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                   <div className="flex gap-1 pt-1">
                                     <Button
                                       size="sm"
@@ -1283,7 +1301,7 @@ export default function ConfiguracoesPage() {
                                         !editingAcessoRE?.trim() ||
                                         !editingAcessoNome?.trim() ||
                                         !editingAcessoPerfil ||
-                                        (editingAcessoPerfil === "guest" && !editingAcessoCentroCusto.trim()) ||
+                                        ((editingAcessoPerfil === "user" || editingAcessoPerfil === "guest") && !editingAcessoCentroCusto.trim()) ||
                                         updateAcessoMutation.isPending
                                       }
                                       onClick={() =>
@@ -1293,9 +1311,7 @@ export default function ConfiguracoesPage() {
                                           re: editingAcessoRE,
                                           nome: editingAcessoNome,
                                           perfil: editingAcessoPerfil,
-                                          ...(editingAcessoPerfil === "guest"
-                                            ? { centro_custo: editingAcessoCentroCusto.trim() || undefined }
-                                            : { centro_custo: undefined }),
+                                          centro_custo: editingAcessoCentroCusto.trim() || undefined,
                                         })
                                       }
                                     >

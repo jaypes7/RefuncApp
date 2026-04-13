@@ -18,7 +18,7 @@ interface FilterContextType {
   setCentroCusto: (v: string | null) => void;
   /** Lista de centros de custo disponíveis no sistema (projetos cadastrados) */
   centrosDisponiveis: string[];
-  /** true para convidados — o filtro é fixo e não pode ser alterado */
+  /** true quando o filtro é fixo e não pode ser alterado (guest/user vinculados) */
   isLocked: boolean;
 }
 
@@ -35,6 +35,9 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
 
   const isGuest =
     !authLoading && user?.perfil === "guest" && !!user?.centro_custo;
+  const isLinkedUser =
+    !authLoading && user?.perfil === "user" && !!user?.centro_custo;
+  const isAdmin = !authLoading && user?.perfil === "admin";
 
   // Inicializa como null para evitar hydration mismatch;
   // o valor do localStorage é aplicado no useEffect de montagem.
@@ -64,28 +67,48 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
           .filter(Boolean)
           .sort();
         setCentrosDisponiveis(list);
-        // Se não há centro de custo selecionado e há opções disponíveis,
-        // seleciona o primeiro automaticamente (exceto para guests que têm o seu)
-        if (!isGuest && list.length > 0 && !centroCusto) {
+
+        // Guest / user vinculado: nunca altera auto-seleção
+        if (isGuest || isLinkedUser) return;
+
+        // Admin: não força seleção automática — permite "Todos" (null)
+        if (isAdmin) {
+          // Se o centro salvo não existe mais na lista, limpa
+          if (centroCusto && list.length > 0 && !list.includes(centroCusto)) {
+            _setCentroCusto(null);
+            localStorage.removeItem(STORAGE_KEY);
+          }
+          return;
+        }
+
+        // User não vinculado (sem centro_custo): fallback para o primeiro projeto
+        if (list.length > 0 && !centroCusto) {
+          _setCentroCusto(list[0]);
+          localStorage.setItem(STORAGE_KEY, list[0]);
+          return;
+        }
+
+        // Se o centro atual não existe mais, reseta para o primeiro
+        if (centroCusto && list.length > 0 && !list.includes(centroCusto)) {
           _setCentroCusto(list[0]);
           localStorage.setItem(STORAGE_KEY, list[0]);
         }
       })
       .catch(() => setCentrosDisponiveis([]));
-  }, [isGuest, centroCusto]);
+  }, [isGuest, isLinkedUser, isAdmin, centroCusto]);
 
-  // Quando o usuário carrega, sobrescreve o filtro com o valor do guest (fixo)
+  // Quando o usuário carrega, sobrescreve o filtro com o valor vinculado (fixo)
   useEffect(() => {
     if (authLoading) return;
-    if (isGuest && user?.centro_custo) {
+    if ((isGuest || isLinkedUser) && user?.centro_custo) {
       _setCentroCusto(user.centro_custo);
       localStorage.setItem(STORAGE_KEY, user.centro_custo);
     }
-  }, [authLoading, isGuest, user?.centro_custo]);
+  }, [authLoading, isGuest, isLinkedUser, user?.centro_custo]);
 
   const setCentroCusto = useCallback(
     (v: string | null) => {
-      if (isGuest) return; // guests não podem mudar o filtro
+      if (isGuest || isLinkedUser) return; // filtrados não podem mudar
       _setCentroCusto(v);
       if (v) {
         localStorage.setItem(STORAGE_KEY, v);
@@ -93,12 +116,17 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem(STORAGE_KEY);
       }
     },
-    [isGuest],
+    [isGuest, isLinkedUser],
   );
 
   return (
     <FilterContext.Provider
-      value={{ centroCusto, setCentroCusto, centrosDisponiveis, isLocked: isGuest }}
+      value={{
+        centroCusto,
+        setCentroCusto,
+        centrosDisponiveis,
+        isLocked: isGuest || isLinkedUser,
+      }}
     >
       {children}
     </FilterContext.Provider>

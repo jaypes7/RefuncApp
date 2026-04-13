@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 
 // ── Tipos de resposta ─────────────────────────────────────────────────────────
 
@@ -57,10 +57,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const ccParam = searchParams.get("centro_custo") || undefined;
-    const centroCusto =
-      currentUser.perfil === "guest" && currentUser.centro_custo
-        ? currentUser.centro_custo
-        : ccParam;
+    const centroCusto = resolveCentroCusto(currentUser, ccParam);
 
     const db = createServerClient();
 

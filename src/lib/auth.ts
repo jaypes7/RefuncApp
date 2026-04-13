@@ -173,3 +173,16 @@ export async function requireAuth(requiredRole?: UserRole): Promise<JWTPayload> 
 
   return user;
 }
+
+/**
+ * Resolve o centro de custo efetivo para a requisição.
+ * Admin respeita o parâmetro enviado pelo cliente (pode ser null = todos).
+ * User/Guest são sempre restritos ao centro_custo do seu perfil.
+ */
+export function resolveCentroCusto(
+  currentUser: JWTPayload,
+  ccParam?: string | null,
+): string | undefined {
+  if (currentUser.perfil === "admin") return ccParam || undefined;
+  return currentUser.centro_custo || undefined;
+}

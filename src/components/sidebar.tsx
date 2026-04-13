@@ -133,77 +133,109 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
 
         {/* ── Project Selector ───────────────────────────────────────── */}
-        <div className={cn("mb-4", collapsed && "flex justify-center")}>
-          {collapsed ? (
-            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  disabled={isLocked}
-                  className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10"
-                  title={centroCusto ?? "Selecionar projeto"}
-                >
-                  <Building2 className="h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent side="right" align="start" className="w-56 p-1">
-                <div className="max-h-64 overflow-y-auto">
-                  {centrosDisponiveis.map((cc) => (
+        <CanAccess role="admin">
+          <div className={cn("mb-4", collapsed && "flex justify-center")}>
+            {collapsed ? (
+              <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10"
+                    title={centroCusto ?? "Todos"}
+                  >
+                    <Building2 className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent side="right" align="start" className="w-56 p-1">
+                  <div className="max-h-64 overflow-y-auto">
                     <button
-                      key={cc}
-                      onClick={() => handleSelectProject(cc)}
+                      onClick={() => {
+                        setCentroCusto(null);
+                        setProjectOpen(false);
+                      }}
                       className={cn(
                         "w-full rounded px-2 py-1.5 text-left text-sm",
-                        cc === centroCusto
+                        centroCusto === null
                           ? "bg-[#ff460a]/10 text-[#ff460a] font-medium"
                           : "hover:bg-accent"
                       )}
                     >
-                      {cc}
+                      Todos
                     </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          ) : (
-            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  disabled={isLocked}
-                  className="w-full justify-between px-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/10"
-                >
-                  <span className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 shrink-0" />
-                    <span className="truncate text-left">
-                      {centroCusto ?? "Selecionar projeto"}
+                    {centrosDisponiveis.map((cc) => (
+                      <button
+                        key={cc}
+                        onClick={() => handleSelectProject(cc)}
+                        className={cn(
+                          "w-full rounded px-2 py-1.5 text-left text-sm",
+                          cc === centroCusto
+                            ? "bg-[#ff460a]/10 text-[#ff460a] font-medium"
+                            : "hover:bg-accent"
+                        )}
+                      >
+                        {cc}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between px-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/10"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 shrink-0" />
+                      <span className="truncate text-left">
+                        {centroCusto ?? "Todos"}
+                      </span>
                     </span>
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-1">
-                <div className="max-h-64 overflow-y-auto">
-                  {centrosDisponiveis.map((cc) => (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-1">
+                  <div className="max-h-64 overflow-y-auto">
                     <button
-                      key={cc}
-                      onClick={() => handleSelectProject(cc)}
+                      onClick={() => {
+                        setCentroCusto(null);
+                        setProjectOpen(false);
+                        queryClient.invalidateQueries({ queryKey: ["config"] });
+                        queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
+                        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+                        queryClient.invalidateQueries({ queryKey: ["centros-custo"] });
+                      }}
                       className={cn(
                         "w-full rounded px-2 py-1.5 text-left text-sm",
-                        cc === centroCusto
+                        centroCusto === null
                           ? "bg-primary/10 text-primary font-medium"
                           : "hover:bg-accent"
                       )}
                     >
-                      {cc}
+                      Todos
                     </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
+                    {centrosDisponiveis.map((cc) => (
+                      <button
+                        key={cc}
+                        onClick={() => handleSelectProject(cc)}
+                        className={cn(
+                          "w-full rounded px-2 py-1.5 text-left text-sm",
+                          cc === centroCusto
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "hover:bg-accent"
+                        )}
+                      >
+                        {cc}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+        </CanAccess>
 
         {/* ── Navigation ─────────────────────────────────────────────── */}
         <nav className="flex-1 space-y-px">

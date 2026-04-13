@@ -26,13 +26,23 @@ const ProjetoCreateSchema = z.object({
 
 export async function GET() {
   try {
-    await requireAuth();
+    const currentUser = await requireAuth();
     const db = createServerClient();
 
-    const { data, error } = await db
+    let query = db
       .from("configuracoes")
       .select("centro_custo, nome_cliente, data_inicio_projeto, data_fim_projeto")
       .order("centro_custo", { ascending: true });
+
+    // Users e guests só veem o projeto do seu centro de custo vinculado
+    if (currentUser.perfil !== "admin" && currentUser.centro_custo) {
+      query = query.eq("centro_custo", currentUser.centro_custo);
+    } else if (currentUser.perfil !== "admin") {
+      // user/guest sem centro_custo vinculado → lista vazia
+      return NextResponse.json({ data: [] });
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
