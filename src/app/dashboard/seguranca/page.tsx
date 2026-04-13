@@ -138,6 +138,7 @@ export default function DashboardSegurancaPage() {
       return res.json();
     },
     staleTime: 30_000,
+    enabled: !!centroCusto,
   });
 
   // ── KPIs derivados ────────────────────────────────────────────────────────

@@ -43,20 +43,28 @@ interface ConfigResponse {
 // GET /api/config
 // ============================================================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await requireAuth();
 
+    const { searchParams } = new URL(request.url);
+    const centroCustoParam = searchParams.get("centro_custo") || undefined;
+
     const supabase = createServerClient();
 
-    // Busca configurações e etapas em paralelo
+    // Busca configurações e etapas em paralelo, filtradas por centro de custo
+    const configQuery = centroCustoParam
+      ? supabase.from("configuracoes").select("*").eq("centro_custo", centroCustoParam).single()
+      : supabase.from("configuracoes").select("*").limit(1).maybeSingle();
+
+    const etapasQuery = centroCustoParam
+      ? supabase.from("etapas").select("*").eq("centro_custo", centroCustoParam).order("ordem", { ascending: true })
+      : supabase.from("etapas").select("*").order("ordem", { ascending: true });
+
     const [
       { data: configRow, error: configError },
       { data: etapasRows, error: etapasError },
-    ] = await Promise.all([
-      supabase.from("configuracoes").select("*").single(),
-      supabase.from("etapas").select("*").order("ordem", { ascending: true }),
-    ]);
+    ] = await Promise.all([configQuery, etapasQuery]);
 
     // PGRST116 = row not found — aceita, usa defaults
     if (configError && configError.code !== "PGRST116") {
@@ -147,12 +155,13 @@ export async function POST(request: NextRequest) {
       feriados_projeto,
     );
 
-    // ── Upsert configuracoes (id = 1 é o registro único do projeto) ──────────
+    // ── Upsert configuracoes por centro de custo ────────────────────────────
+    const targetCentroCusto = centroCusto ?? "09.06.0001.171";
     const { error: configError } = await supabase
       .from("configuracoes")
       .upsert(
         {
-          id: 1,
+          centro_custo: targetCentroCusto,
           data_inicio_projeto: dataInicioFmt,
           data_fim_projeto: dataFimFmt,
           dias_totais_projeto: diasTotais,
@@ -161,33 +170,34 @@ export async function POST(request: NextRequest) {
           gerente_operacoes: gerenteOperacoes ?? null,
           gerente_contrato: gerenteContrato ?? null,
           nome_cliente: nomeCliente ?? null,
-          centro_custo: centroCusto ?? null,
           colaboradores_previstos: colaboradores_previstos ?? null,
           orcado_suprimentos: orcado_suprimentos ?? null,
-          feriados_projeto: feriados_projeto
-            ? feriados_projeto.map((d) =>
-                d instanceof Date ? d.toISOString().split("T")[0] : String(d),
-              )
-            : null,
+          feriados_projeto:
+            feriados_projeto && feriados_projeto.length > 0
+              ? feriados_projeto.map((d) =>
+                  d instanceof Date ? d.toISOString().split("T")[0] : String(d),
+                )
+              : null,
         },
-        { onConflict: "id" },
+        { onConflict: "centro_custo" },
       );
 
     if (configError) {
       throw new Error(`Erro ao salvar configurações: ${configError.message}`);
     }
 
-    // ── Etapas: substitui toda a lista ───────────────────────────────────────
+    // ── Etapas: substitui toda a lista do centro de custo ────────────────────
     if (etapas.length > 0) {
-      // Remove todas as etapas atuais
-      await supabase.from("etapas").delete().gte("id", 0);
+      // Remove apenas as etapas do centro de custo alvo
+      await supabase.from("etapas").delete().eq("centro_custo", targetCentroCusto);
 
       const etapasPayload = etapas.map((e, idx) => ({
-        id: e.id,
+        id: e.id ?? idx + 1,
         nome: e.nome,
         dias: e.duracaoDias,
         ordem: idx + 1,
         concluida: false,
+        centro_custo: targetCentroCusto,
       }));
 
       const { error: etapasError } = await supabase

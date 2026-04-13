@@ -47,28 +47,30 @@ export async function POST(request: NextRequest) {
       feriados_projeto,
     );
 
+    const targetCentroCusto = centroCusto ?? "09.06.0001.171";
+
     // Upsert apenas os campos do projeto — as etapas não são tocadas
     const { error } = await supabase
       .from("configuracoes")
       .upsert(
         {
-          id: 1,
+          centro_custo: targetCentroCusto,
           data_inicio_projeto: dataInicioFmt,
           data_fim_projeto: dataFimFmt,
           dias_totais_projeto: diasTotais,
           gerente_operacoes: gerenteOperacoes ?? null,
           gerente_contrato: gerenteContrato ?? null,
           nome_cliente: nomeCliente ?? null,
-          centro_custo: centroCusto ?? null,
           colaboradores_previstos: colaboradores_previstos ?? null,
           orcado_suprimentos: orcado_suprimentos ?? null,
-          feriados_projeto: feriados_projeto
-            ? feriados_projeto.map((d) =>
-                d instanceof Date ? d.toISOString().split("T")[0] : String(d),
-              )
-            : null,
+          feriados_projeto:
+            feriados_projeto && feriados_projeto.length > 0
+              ? feriados_projeto.map((d) =>
+                  d instanceof Date ? d.toISOString().split("T")[0] : String(d),
+                )
+              : null,
         },
-        { onConflict: "id" },
+        { onConflict: "centro_custo" },
       );
 
     if (error) {

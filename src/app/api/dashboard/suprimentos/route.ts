@@ -15,7 +15,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 
@@ -37,23 +37,36 @@ function cleanNumeric(val: unknown): number {
 // GET /api/dashboard/suprimentos
 // ============================================================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requireAuth("user");
+    const currentUser = await requireAuth("user");
+
+    const { searchParams } = new URL(request.url);
+    const ccParam = searchParams.get("centro_custo") || undefined;
+    const centroCusto =
+      currentUser.perfil === "guest" && currentUser.centro_custo
+        ? currentUser.centro_custo
+        : ccParam;
 
     const db = createServerClient();
+
+    let ordensQuery = db
+      .from("suprimentos_ordens")
+      .select(
+        "id,ordem_compra,descricao,fornecedor,status,status_ordem,valor_oc,valores,entregue_obra,total_req_previstas",
+      );
+    if (centroCusto) {
+      ordensQuery = ordensQuery.eq("centro_custo", centroCusto);
+    }
+
+    const configQuery = centroCusto
+      ? db.from("configuracoes").select("orcado_suprimentos").eq("centro_custo", centroCusto).single()
+      : db.from("configuracoes").select("orcado_suprimentos").limit(1).maybeSingle();
 
     const [
       { data: ordensData, error: ordensErr },
       { data: configRow, error: configErr },
-    ] = await Promise.all([
-      db
-        .from("suprimentos_ordens")
-        .select(
-          "id,ordem_compra,descricao,fornecedor,status,status_ordem,valor_oc,valores,entregue_obra,total_req_previstas",
-        ),
-      db.from("configuracoes").select("orcado_suprimentos").single(),
-    ]);
+    ] = await Promise.all([ordensQuery, configQuery]);
 
     if (ordensErr) throw new Error(ordensErr.message);
     if (configErr && configErr.code !== "PGRST116") {

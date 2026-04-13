@@ -153,11 +153,18 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") ?? undefined;
     const status = searchParams.get("status") ?? undefined;
     const cargo = searchParams.get("cargo") ?? undefined;
+    const centroCusto = searchParams.get("centro_custo") ?? undefined;
 
-    // Busca todos os colaboradores do Supabase
-    const { data: rows, error } = await supabase
-      .from("colaboradores")
-      .select("*");
+    // Monta a query base
+    let query = supabase.from("colaboradores").select("*");
+
+    // Filtro por centro de custo (suporta multi-select via vírgula)
+    const ccs = centroCusto?.split(",").filter(Boolean);
+    if (ccs?.length) {
+      query = query.in("centro_custo", ccs);
+    }
+
+    const { data: rows, error } = await query;
 
     if (error) {
       throw new Error(`Falha ao buscar colaboradores: ${error.message}`);

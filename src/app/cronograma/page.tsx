@@ -30,6 +30,7 @@ import {
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 
 // --- Types ---
@@ -79,6 +80,7 @@ const ETAPAS_DEFAULT: EtapaCronograma[] = [
 
 export default function CronogramaPage() {
   const { user, isLoading: authLoading } = useAuth();
+  const { centroCusto } = useFilter();
   const queryClient = useQueryClient();
 
   const [projetoData, setProjetoData] = useState<ApiConfigResponse | null>(null);
@@ -93,24 +95,32 @@ export default function CronogramaPage() {
   const [pendingSaveData, setPendingSaveData] = useState<ConfigCronograma | null>(null);
 
   const { data: projetoQueryData } = useQuery<ApiConfigResponse>({
-    queryKey: ["config", "projeto"],
+    queryKey: ["config", "projeto", centroCusto],
     queryFn: async () => {
-      const res = await fetch("/api/config");
+      const params = centroCusto
+        ? `?centro_custo=${encodeURIComponent(centroCusto)}`
+        : "";
+      const res = await fetch(`/api/config${params}`);
       if (!res.ok) throw new Error("Falha ao carregar configurações");
       const json = await res.json();
       return json.data as ApiConfigResponse;
     },
+    enabled: !!centroCusto,
   });
 
   // Buscar dias trabalhados do calendário
   const { data: diasTrabalhadosData } = useQuery({
-    queryKey: ["config", "dias-trabalhados"],
+    queryKey: ["config", "dias-trabalhados", centroCusto],
     queryFn: async () => {
-      const res = await fetch("/api/config/dias-trabalhados");
+      const params = centroCusto
+        ? `?centro_custo=${encodeURIComponent(centroCusto)}`
+        : "";
+      const res = await fetch(`/api/config/dias-trabalhados${params}`);
       if (!res.ok) throw new Error("Falha ao carregar dias trabalhados");
       const json = await res.json();
       return json.dias_trabalhados as string[];
     },
+    enabled: !!centroCusto,
   });
 
   useEffect(() => {
@@ -162,6 +172,7 @@ export default function CronogramaPage() {
   const cronogramaMutation = useMutation({
     mutationFn: async (data: ConfigCronograma) => {
       const payload = {
+        centroCusto,
         etapas: data.etapas.map((e) => ({
           id: e.id,
           nome: e.nome,

@@ -21,16 +21,25 @@ const OcorrenciaCreateSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const db = createServerClient();
 
-    const { data, error } = await db
+    const { searchParams } = new URL(request.url);
+    const centroCusto = searchParams.get("centro_custo")?.trim() ?? "";
+
+    let query = db
       .from("ocorrencias")
       .select("id, texto, data, created_at")
       .order("data", { ascending: false })
       .order("created_at", { ascending: false });
+
+    if (centroCusto) {
+      query = query.eq("centro_custo", centroCusto);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -50,10 +59,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { texto, data } = OcorrenciaCreateSchema.parse(body);
 
+    // Extrai centro_custo do usuário logado para persistência
+    const centroCusto = (body as { centro_custo?: string }).centro_custo;
+
     const db = createServerClient();
     const { data: row, error } = await db
       .from("ocorrencias")
-      .insert({ texto, data })
+      .insert({ texto, data, centro_custo: centroCusto || null })
       .select("id, texto, data, created_at")
       .single();
 

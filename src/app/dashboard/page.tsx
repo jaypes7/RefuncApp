@@ -84,6 +84,12 @@ const chartConfigFuncoes = {
   total: { label: "Colaboradores", color: MANSERV_CHART.primary },
 };
 
+function fmtDate(v: string | undefined | null): string | null {
+  if (!v) return null;
+  const d = new Date(v + "T00:00:00Z");
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+}
+
 // Paleta de cores para o pie de funções
 const PIE_COLORS = MANSERV_PIE_COLORS;
 
@@ -158,16 +164,18 @@ export default function DashboardPage() {
     },
     retry: 2,
     staleTime: 60_000,
+    enabled: !!centroCusto,
   });
 
   // Busca configurações do projeto para o card de cabeçalho
   const { data: configData } = useQuery({
-    queryKey: ["config"],
+    queryKey: ["config", centroCusto],
     queryFn: async () => {
-      const response = await configApi.get();
+      const response = await configApi.get(centroCusto);
       return response.data.data;
     },
     staleTime: 60000,
+    enabled: !!centroCusto,
   });
 
   const dashboardData: DashboardPrincipalData | undefined = data;
@@ -183,14 +191,15 @@ export default function DashboardPage() {
   const [editandoData, setEditandoData] = useState("");
 
   const { data: ocorrenciasData } = useQuery({
-    queryKey: ["ocorrencias"],
-    queryFn: async () => (await ocorrenciasApi.listar()).data.data,
+    queryKey: ["ocorrencias", centroCusto],
+    queryFn: async () => (await ocorrenciasApi.listar(centroCusto)).data.data,
     staleTime: 30_000,
+    enabled: !!centroCusto,
   });
   const ocorrencias: Ocorrencia[] = ocorrenciasData ?? [];
 
   const criarOcorrencia = useMutation({
-    mutationFn: () => ocorrenciasApi.criar({ texto: novoTexto.trim(), data: novaData }),
+    mutationFn: () => ocorrenciasApi.criar({ texto: novoTexto.trim(), data: novaData, centro_custo: centroCusto || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ocorrencias"] });
       setNovoTexto("");
@@ -205,7 +214,7 @@ export default function DashboardPage() {
 
   const atualizarOcorrencia = useMutation({
     mutationFn: ({ id, texto, data }: { id: number; texto: string; data: string }) =>
-      ocorrenciasApi.atualizar(id, { texto: texto.trim(), data }),
+      ocorrenciasApi.atualizar(id, { texto: texto.trim(), data, centro_custo: centroCusto || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ocorrencias"] });
       setEditandoId(null);
@@ -234,14 +243,15 @@ export default function DashboardPage() {
   const [editandoComentarioData, setEditandoComentarioData] = useState("");
 
   const { data: comentariosData } = useQuery({
-    queryKey: ["comentarios-cliente"],
-    queryFn: async () => (await comentariosClienteApi.listar()).data.data,
+    queryKey: ["comentarios-cliente", centroCusto],
+    queryFn: async () => (await comentariosClienteApi.listar(centroCusto)).data.data,
     staleTime: 30_000,
+    enabled: !!centroCusto,
   });
   const comentarios: ComentarioCliente[] = comentariosData ?? [];
 
   const criarComentario = useMutation({
-    mutationFn: () => comentariosClienteApi.criar({ texto: novoComentario.trim(), data: novaDataComentario }),
+    mutationFn: () => comentariosClienteApi.criar({ texto: novoComentario.trim(), data: novaDataComentario, centro_custo: centroCusto || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comentarios-cliente"] });
       setNovoComentario("");
@@ -256,7 +266,7 @@ export default function DashboardPage() {
 
   const atualizarComentario = useMutation({
     mutationFn: ({ id, texto, data }: { id: number; texto: string; data: string }) =>
-      comentariosClienteApi.atualizar(id, { texto: texto.trim(), data }),
+      comentariosClienteApi.atualizar(id, { texto: texto.trim(), data, centro_custo: centroCusto || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comentarios-cliente"] });
       setEditandoComentarioId(null);
@@ -1145,6 +1155,11 @@ export default function DashboardPage() {
                             <Check className="h-4 w-4 text-green-500 shrink-0" />
                           ) : null}
                         </div>
+                        {(etapa.dataInicio || etapa.dataFim) && (
+                          <div className="text-xs text-muted-foreground">
+                            {fmtDate(etapa.dataInicio) ?? "—"} - {fmtDate(etapa.dataFim) ?? "—"}
+                          </div>
+                        )}
                         <div className="text-xs text-muted-foreground">
                           {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""}
                         </div>

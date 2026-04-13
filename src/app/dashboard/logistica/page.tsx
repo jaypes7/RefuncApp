@@ -175,6 +175,7 @@ export default function DashboardLogisticaPage() {
       return res.data;
     },
     staleTime: 120_000,
+    enabled: !!centroCusto,
   });
 
   const hoteis = useMemo(

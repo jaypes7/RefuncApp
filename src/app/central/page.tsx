@@ -202,7 +202,7 @@ export default function CentralPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const { centroCusto, isLocked } = useFilter();
+  const { centroCusto } = useFilter();
 
   // Redireciona guests para o Dashboard Geral (única página permitida)
   useEffect(() => {
@@ -214,9 +214,7 @@ export default function CentralPage() {
   const debouncedSearch = useDebounce(search, 500);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [cargoFilter, setCargoFilter] = useState<string[]>([]);
-  const [centroCustoLocal, setCentroCustoLocal] = useState<string[]>(
-    centroCusto ? [centroCusto] : []
-  );
+  const [centroCustoLocal, setCentroCustoLocal] = useState<string[]>([]);
   const [page, setPage] = useState(1);
 
   // Estado do modal de importação
@@ -249,8 +247,9 @@ export default function CentralPage() {
       toast.info("Preparando exportação...");
 
       // Buscar todos os colaboradores usando a API de exportação (sem paginação)
-      const exportParams: { cargo?: string } = {};
+      const exportParams: { cargo?: string; centro_custo?: string } = {};
       if (cargoFilter.length) exportParams.cargo = cargoFilter.join(",");
+      if (centroCustoLocal.length) exportParams.centro_custo = centroCustoLocal.join(",");
       const response = await exportApi.exportar(exportParams);
       const allColaboradores = response.data.data || [];
 
@@ -568,26 +567,19 @@ export default function CentralPage() {
                 />
 
                 {/* Centro de Custo filter */}
-                {isLocked ? (
-                  <div className="flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-input dark:bg-input/30 sm:w-44">
-                    <span className="text-muted-foreground">C.C.:</span>
-                    <span className="font-medium">{centroCusto}</span>
-                  </div>
-                ) : (
-                  <MultiSelectFilter
-                    placeholder="Centro de custo"
-                    width="sm:w-44 w-full"
-                    selected={centroCustoLocal}
-                    onChange={(values) => {
-                      setCentroCustoLocal(values);
-                      setPage(1);
-                    }}
-                    options={centrosDisponiveis.map((cc) => ({
-                      value: cc,
-                      label: cc,
-                    }))}
-                  />
-                )}
+                <MultiSelectFilter
+                  placeholder="Centro de custo"
+                  width="sm:w-44 w-full"
+                  selected={centroCustoLocal}
+                  onChange={(values) => {
+                    setCentroCustoLocal(values);
+                    setPage(1);
+                  }}
+                  options={centrosDisponiveis.map((cc) => ({
+                    value: cc,
+                    label: cc,
+                  }))}
+                />
               </div>
             </div>
 

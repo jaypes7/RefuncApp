@@ -167,12 +167,16 @@ export async function GET(request: NextRequest) {
     const limit  = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? 50)));
     const search = searchParams.get("search")?.trim() ?? "";
     const status = searchParams.get("status")?.trim() ?? "";
+    const centroCusto = searchParams.get("centro_custo")?.trim() ?? "";
 
     const db = createServerClient();
     let query = db
       .from("suprimentos_ordens")
       .select("*", { count: "exact" });
 
+    if (centroCusto) {
+      query = query.eq("centro_custo", centroCusto);
+    }
     if (search) {
       query = query.or(`ordem_compra.ilike.%${search}%,descricao.ilike.%${search}%`);
     }

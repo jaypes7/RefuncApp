@@ -36,6 +36,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { dashboardSuprimentosApi } from "@/lib/axios";
+import { useFilter } from "@/contexts/FilterContext";
 import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
@@ -151,11 +152,14 @@ export default function DashboardSuprimentosPage() {
     }
   }, [authLoading, user, router]);
 
+  const { centroCusto } = useFilter();
+
   // ── Query do dashboard de suprimentos (KPIs + gráficos) ───────────────────
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["dashboard-suprimentos"],
-    queryFn:  async () => (await dashboardSuprimentosApi.get()).data,
+    queryKey: ["dashboard-suprimentos", centroCusto],
+    queryFn:  async () => (await dashboardSuprimentosApi.get(centroCusto)).data,
     staleTime: 120_000,
+    enabled: !!centroCusto,
   });
 
   // ── Query dedicada das ordens (inclui id para Switch) ─────────────────────
@@ -163,13 +167,16 @@ export default function DashboardSuprimentosPage() {
     data: ordensData,
     refetch: refetchOrdens,
   } = useQuery<{ data: OrdemRow[] }>({
-    queryKey: ["suprimentos-ordens"],
+    queryKey: ["suprimentos-ordens", centroCusto],
     queryFn:  async () => {
-      const res = await fetch("/api/suprimentos/ordens?limit=200");
+      const params = new URLSearchParams({ limit: "200" });
+      if (centroCusto) params.set("centro_custo", centroCusto);
+      const res = await fetch(`/api/suprimentos/ordens?${params.toString()}`);
       if (!res.ok) throw new Error("Erro ao buscar ordens");
       return res.json();
     },
     staleTime: 30_000,
+    enabled: !!centroCusto,
   });
 
   const ordens = useMemo(() => ordensData?.data ?? [], [ordensData]);

@@ -19,13 +19,21 @@ import {
   Sun,
   Moon,
   CalendarClock,
+  Building2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 const dashboardSubItems = [
   { name: "Gestão a Vista - Geral",       href: "/dashboard",             icon: BarChart3,   userOnly: false },
@@ -44,10 +52,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { centroCusto, setCentroCusto, centrosDisponiveis, isLocked } = useFilter();
+  const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     pathname.startsWith("/dashboard"),
   );
+  const [projectOpen, setProjectOpen] = useState(false);
 
   // Evita hydration mismatch — ícone só renderiza no cliente
   useEffect(() => setMounted(true), []);
@@ -56,6 +67,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const isDashboardActive = pathname.startsWith("/dashboard");
   const isDark = theme === "dark";
+
+  const handleSelectProject = (cc: string) => {
+    setCentroCusto(cc);
+    setProjectOpen(false);
+    // Invalida todas as queries para forçar recarregamento com novo centro de custo
+    queryClient.invalidateQueries({ queryKey: ["config"] });
+    queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["centros-custo"] });
+  };
 
   const navItem = (isActive: boolean) =>
     cn(
@@ -109,6 +130,79 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <ChevronLeft className="h-3.5 w-3.5" />
             )}
           </Button>
+        </div>
+
+        {/* ── Project Selector ───────────────────────────────────────── */}
+        <div className={cn("mb-4", collapsed && "flex justify-center")}>
+          {collapsed ? (
+            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={isLocked}
+                  className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10"
+                  title={centroCusto ?? "Selecionar projeto"}
+                >
+                  <Building2 className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="right" align="start" className="w-56 p-1">
+                <div className="max-h-64 overflow-y-auto">
+                  {centrosDisponiveis.map((cc) => (
+                    <button
+                      key={cc}
+                      onClick={() => handleSelectProject(cc)}
+                      className={cn(
+                        "w-full rounded px-2 py-1.5 text-left text-sm",
+                        cc === centroCusto
+                          ? "bg-[#ff460a]/10 text-[#ff460a] font-medium"
+                          : "hover:bg-accent"
+                      )}
+                    >
+                      {cc}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  disabled={isLocked}
+                  className="w-full justify-between px-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/10"
+                >
+                  <span className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate text-left">
+                      {centroCusto ?? "Selecionar projeto"}
+                    </span>
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-1">
+                <div className="max-h-64 overflow-y-auto">
+                  {centrosDisponiveis.map((cc) => (
+                    <button
+                      key={cc}
+                      onClick={() => handleSelectProject(cc)}
+                      className={cn(
+                        "w-full rounded px-2 py-1.5 text-left text-sm",
+                        cc === centroCusto
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "hover:bg-accent"
+                      )}
+                    >
+                      {cc}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
 
         {/* ── Navigation ─────────────────────────────────────────────── */}
