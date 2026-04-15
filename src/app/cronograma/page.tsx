@@ -347,14 +347,6 @@ export default function CronogramaPage() {
     updateEtapaPercentual(etapa.id, Math.min(100, soma));
   };
 
-  const updateEtapaDias = (id: number, dias: number) => {
-    const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, dias: Math.max(0, dias) } : e,
-    );
-    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
-    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
-  };
-
   const updateEtapaConcluida = (id: number, concluida: boolean) => {
     const novasEtapas = cronograma.etapas.map((e) =>
       e.id === id ? { ...e, concluida } : e,
@@ -669,36 +661,7 @@ export default function CronogramaPage() {
                           })()}
                         </div>
                         <div className="flex items-center gap-3">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={etapa.dias}
-                            onChange={(e) =>
-                              updateEtapaDias(etapa.id, parseInt(e.target.value) || 0)
-                            }
-                            className="w-20 glass-input text-center"
-                            title="Duração em dias úteis"
-                          />
-                          <span className="text-sm text-muted-foreground w-10 shrink-0">
-                            dias
-                          </span>
                           <div className="flex flex-col items-center gap-0.5">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={etapa.percentual_concluido}
-                              onChange={(e) =>
-                                updateEtapaPercentual(etapa.id, parseInt(e.target.value))
-                              }
-                              className="w-16 glass-input text-center"
-                              title="Avanço físico desta etapa (0–100%)"
-                            />
-                            <span className="text-[10px] text-muted-foreground">
-                              % físico
-                            </span>
-                          </div>
-                          <div className="flex flex-col items-center gap-0.5 ml-1">
                             <Switch
                               checked={etapa.concluida ?? false}
                               onCheckedChange={(checked: boolean) =>

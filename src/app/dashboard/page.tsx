@@ -754,27 +754,22 @@ export default function DashboardPage() {
                         content={({ active, payload, label }) => {
                           if (!active || !payload || !payload.length) return null;
                           const p = payload[0].payload as {
-                            mes?: string;
-                            previstoEtapa?: number;
-                            realizadoEtapa?: number;
-                            etapaNome?: string;
+                            previsto?: number;
+                            realizado?: number;
                           };
                           return (
                             <div className="rounded-lg border bg-background p-2 shadow-sm">
                               <p className="text-xs text-muted-foreground">{label}</p>
-                              {p.etapaNome && p.etapaNome !== "—" && (
-                                <p className="text-xs font-medium">{p.etapaNome}</p>
-                              )}
                               <p className="text-xs">
                                 Planejado:{" "}
                                 <span className="font-semibold">
-                                  {p.previstoEtapa?.toFixed(1) ?? 0}%
+                                  {p.previsto?.toFixed(1) ?? 0}%
                                 </span>
                               </p>
                               <p className="text-xs">
                                 Realizado:{" "}
                                 <span className="font-semibold">
-                                  {p.realizadoEtapa?.toFixed(1) ?? 0}%
+                                  {p.realizado?.toFixed(1) ?? 0}%
                                 </span>
                               </p>
                             </div>
@@ -1150,6 +1145,16 @@ export default function DashboardPage() {
                   <CardTitle>Etapas do Projeto</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  <div className="flex items-center justify-end gap-4 mb-4 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-block h-1.5 w-4 rounded-full bg-blue-500" />
+                      <span>Previsto</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-block h-1.5 w-4 rounded-full bg-[#DA291B]" />
+                      <span>Realizado</span>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {dashboardData.etapas.map((etapa) => (
                       <div
