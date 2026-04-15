@@ -17,6 +17,7 @@ import {
   Users,
   Loader2,
   Plus,
+  Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ import { colaboradoresApi, exportApi, type Colaborador } from "@/lib/axios";
 import { ImportModal } from "@/components/ImportModal";
 import { ColaboradorDetailsModal } from "@/components/ColaboradorDetailsModal";
 import { EditColaboradorModal } from "@/components/EditColaboradorModal";
+import { RealocarColaboradorModal } from "@/components/RealocarColaboradorModal";
 import { CanAccess } from "@/components/CanAccess";
 import * as XLSX from "xlsx";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -221,11 +223,12 @@ export default function CentralPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Estados para modais de detalhes e edição
+  // Estados para modais de detalhes, edição e realocação
   const [selectedColaborador, setSelectedColaborador] =
     useState<Colaborador | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [realocarModalOpen, setRealocarModalOpen] = useState(false);
 
   const limit = 20;
 
@@ -409,8 +412,8 @@ export default function CentralPage() {
 
   // Mutação para remover colaborador
   const deleteMutation = useMutation({
-    mutationFn: async (cpf: string) => {
-      await colaboradoresApi.remover(cpf);
+    mutationFn: async (id: string) => {
+      await colaboradoresApi.remover(id);
     },
     onSuccess: () => {
       toast.success("Colaborador removido com sucesso!");
@@ -425,9 +428,9 @@ export default function CentralPage() {
   const colaboradores = data?.data || [];
   const pagination = data?.pagination;
 
-  const handleDelete = async (cpf: string, nome: string) => {
+  const handleDelete = async (id: string, nome: string) => {
     if (confirm(`Tem certeza que deseja remover ${nome}?`)) {
-      deleteMutation.mutate(cpf);
+      deleteMutation.mutate(id);
     }
   };
 
@@ -645,7 +648,7 @@ export default function CentralPage() {
                       const setor = getSetor(colab);
                       return (
                         <TableRow
-                          key={colab.CPF}
+                          key={colab.id}
                           className="transition-colors hover:bg-muted/50"
                         >
                           {/* Nome + Avatar */}
@@ -655,9 +658,16 @@ export default function CentralPage() {
                                 name={colab.NOME || "?"}
                                 index={index}
                               />
-                              <span className="font-medium text-foreground truncate" title={colab.NOME || ""}>
-                                {colab.NOME}
-                              </span>
+                              <div className="flex min-w-0 flex-col">
+                                <span className="font-medium text-foreground truncate" title={colab.NOME || ""}>
+                                  {colab.NOME}
+                                </span>
+                                {colab.CENTRO_CUSTO && (
+                                  <span className="inline-flex w-fit items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10 dark:bg-slate-500/10 dark:text-slate-400">
+                                    {colab.CENTRO_CUSTO}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
 
@@ -726,15 +736,24 @@ export default function CentralPage() {
                                     className="cursor-pointer gap-2"
                                     onSelect={(e) => {
                                       e.preventDefault();
-                                      // Navega para a rota dedicada de edição, passando o CPF limpo
-                                      const cpfLimpo = String(
-                                        colab.CPF || "",
-                                      ).replace(/\D/g, "");
-                                      router.push(`/central/editar/${cpfLimpo}`);
+                                      if (colab.id) {
+                                        router.push(`/central/editar/${colab.id}`);
+                                      }
                                     }}
                                   >
                                     <Pencil className="h-4 w-4" />
                                     Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="cursor-pointer gap-2"
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      setSelectedColaborador(colab);
+                                      setRealocarModalOpen(true);
+                                    }}
+                                  >
+                                    <Shuffle className="h-4 w-4" />
+                                    Realocar
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
@@ -743,7 +762,7 @@ export default function CentralPage() {
                                     disabled={deleteMutation.isPending}
                                     onClick={() =>
                                       handleDelete(
-                                        colab.CPF || "",
+                                        colab.id || "",
                                         colab.NOME || "",
                                       )
                                     }
@@ -836,6 +855,14 @@ export default function CentralPage() {
         colaborador={selectedColaborador}
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
+      />
+
+      {/* Modal de Realocação */}
+      <RealocarColaboradorModal
+        colaborador={selectedColaborador}
+        open={realocarModalOpen}
+        onOpenChange={setRealocarModalOpen}
+        centrosDisponiveis={centrosDisponiveis}
       />
     </ProtectedRoute>
   );

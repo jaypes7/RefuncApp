@@ -1,33 +1,23 @@
 /**
  * ============================================================================
- * API: /api/colaboradores
+ * API: /api/colaboradores/[id]
  * ============================================================================
  *
- * GET → Lista colaboradores com paginação e filtros (Supabase)
+ * GET    → Busca colaborador por id
+ * PUT    → Atualização parcial (merge com registro existente)
+ * DELETE → Remove colaborador (com registro de auditoria)
  *
  * Tabela Supabase: colaboradores
  *   - Colunas em snake_case / lowercase
  *   - A resposta é mapeada para UPPERCASE para manter compatibilidade com a UI
- *
- * Query params aceitos:
- *   page   – número da página (default: 1)
- *   limit  – itens por página (default: 20, max: 100)
- *   search – busca parcial em nome ou cpf (.ilike)
- *   status – filtro exato por status (Ativo | Pendente | Inativo | Desligado)
- *   cargo  – filtro por função CLT individual ou grupo de CARGOS_AGRUPADOS
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createServerClient } from "@/lib/supabase";
-import {
-  ColaboradoresQuerySchema,
-  ColaboradorCreateSchema,
-  type Colaborador,
-} from "@/lib/schemas";
-import { CARGOS_AGRUPADOS } from "@/constants/cargos";
-import { requireAuth, resolveCentroCusto } from "@/lib/auth";
-import { logAdicionar } from "@/lib/logs";
+import { ColaboradorUpdateSchema, type Colaborador } from "@/lib/schemas";
+import { requireAuth } from "@/lib/auth";
+import { logEditar, logRemover } from "@/lib/logs";
 
 // ============================================================================
 // MAPEAMENTO Supabase → Colaborador (lowercase → UPPERCASE)
@@ -62,7 +52,7 @@ function mapRow(row: Record<string, any>): Colaborador {
     REALIZAR_TREINAMENTO: row.realizar_treinamento ?? null,
     LOCAL_TREINAMENTO:    row.local_treinamento ?? null,
     RE:                   row.re                ?? null,
-    NOME:                 row.nome              ?? null,
+    NOME:                 row.nome              ?? "",
     FUNCAO_CLT:           row.funcao_clt        ?? null,
     HISTOGRAMA:           row.histograma        ?? null,
     IDADE:                row.idade             ?? null,
@@ -118,9 +108,6 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
   if (data.HISTOGRAMA        !== undefined) row.histograma         = data.HISTOGRAMA;
   if (data.IDADE             !== undefined) row.idade              = data.IDADE;
   if (data.DT_NASCIMENTO     !== undefined) row.dt_nascimento      = data.DT_NASCIMENTO;
-  // CPF é obrigatório - sempre incluir
-  row.cpf = data.CPF;
-  if (data.id                !== undefined) row.id                 = data.id;
   if (data.VR                !== undefined) row.vr                 = data.VR;
   if (data.TERMINO           !== undefined) row.termino            = data.TERMINO;
   if (data.PRORROGACAO       !== undefined) row.prorrogacao        = data.PRORROGACAO;
@@ -136,141 +123,120 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
 }
 
 // ============================================================================
-// PROGRESSO POR SETOR
+// HELPER: busca colaborador por CPF
 // ============================================================================
 
-function calcularProgresso(colaborador: Colaborador) {
-  const rhCampos = [
-    colaborador.CPF,
-    colaborador.NOME,
-    colaborador.DT_NASCIMENTO,
-    colaborador.STATUS,
-  ];
-  const rhPreenchidos = rhCampos.filter((v) => v && v !== "Pendente").length;
-  const progressoRH = Math.round((rhPreenchidos / rhCampos.length) * 100);
+async function findById(id: string) {
+  const supabase = createServerClient();
+  const { data, error } = await supabase
+    .from("colaboradores")
+    .select("*")
+    .eq("id", id)
+    .single();
 
-  const logCampos = [colaborador.MOB, colaborador.OP, colaborador.PORTAL];
-  const logPreenchidos = logCampos.filter(
-    (v) => v && v !== "Pendente" && v !== "Não",
-  ).length;
-  const progressoLogistica = Math.round(
-    (logPreenchidos / logCampos.length) * 100,
-  );
-
-  const segCampos = [
-    colaborador.EXAME,
-    colaborador.ASO,
-    colaborador.TREINAMENTO,
-  ];
-  const segPreenchidos = segCampos.filter(
-    (v) => v && v !== "Pendente" && v !== "Inapto",
-  ).length;
-  const progressoSeguranca = Math.round(
-    (segPreenchidos / segCampos.length) * 100,
-  );
-
-  return {
-    rh: progressoRH,
-    logistica: progressoLogistica,
-    seguranca: progressoSeguranca,
-    geral: Math.round(
-      (progressoRH + progressoLogistica + progressoSeguranca) / 3,
-    ),
-  };
+  return { data, error };
 }
 
 // ============================================================================
-// GET /api/colaboradores
+// GET /api/colaboradores/[id]
 // ============================================================================
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
-    const currentUser = await requireAuth("user");
+    await requireAuth("user");
 
-    const { searchParams } = new URL(request.url);
-    const queryParams = {
-      page:         searchParams.get("page")         || "1",
-      limit:        searchParams.get("limit")        || "20",
-      search:       searchParams.get("search")       || undefined,
-      status:       searchParams.get("status")       || undefined,
-      cargo:        searchParams.get("cargo")        || undefined,
-      centro_custo: searchParams.get("centro_custo") || undefined,
-    };
+    const { id } = await params;
+    const { data, error } = await findById(id);
 
-    const { page, limit, search, status, cargo, centro_custo: ccParam } =
-      ColaboradoresQuerySchema.parse(queryParams);
-
-    // Users/guests têm o centro_custo fixado no JWT — ignora o param do cliente
-    const centroCusto = resolveCentroCusto(currentUser, ccParam);
-
-    const supabase = createServerClient();
-
-    // ── Monta a query base com contagem exata ─────────────────────────────
-    let query = supabase
-      .from("colaboradores")
-      .select("*", { count: "exact" });
-
-    // ── Filtro de busca (nome ou cpf, case-insensitive) ───────────────────
-    if (search) {
-      query = query.or(`nome.ilike.%${search}%,cpf.ilike.%${search}%`);
+    if (error || !data) {
+      return NextResponse.json(
+        { error: "Colaborador não encontrado" },
+        { status: 404 },
+      );
     }
 
-    // ── Filtro por status ─────────────────────────────────────────────────
-    const statuses = status?.split(",").filter(Boolean);
-    if (statuses?.length) {
-      query = query.in("status", statuses);
-    }
-
-    // ── Filtro por cargo (individual ou grupo) ────────────────────────────
-    const cargosSelecionados = cargo?.split(",").filter(Boolean);
-    if (cargosSelecionados?.length) {
-      const funcoesFinais = new Set<string>();
-      cargosSelecionados.forEach((item) => {
-        const grupo = (CARGOS_AGRUPADOS as Record<string, readonly string[]>)[item];
-        if (grupo) {
-          grupo.forEach((c) => funcoesFinais.add(c));
-        } else {
-          funcoesFinais.add(item);
-        }
-      });
-      query = query.in("funcao_clt", [...funcoesFinais]);
-    }
-
-    // ── Filtro por centro de custo ────────────────────────────────────────
-    const ccs = centroCusto?.split(",").filter(Boolean);
-    if (ccs?.length) {
-      query = query.in("centro_custo", ccs);
-    }
-
-    // ── Paginação server-side (.range é inclusivo em ambos os extremos) ───
-    const from = (page - 1) * limit;
-    const to   = from + limit - 1;
-    query = query.range(from, to);
-
-    const { data, count, error } = await query;
-
-    if (error) {
-      throw new Error(`Erro ao buscar colaboradores: ${error.message}`);
-    }
-
-    const total      = count ?? 0;
-    const totalPages = Math.ceil(total / limit);
-
-    const resultsWithProgress = (data ?? []).map((row) => {
-      const colaborador = mapRow(row);
-      return { ...colaborador, progresso: calcularProgresso(colaborador) };
-    });
-
-    return NextResponse.json({
-      data: resultsWithProgress,
-      pagination: { page, limit, total, totalPages },
-    });
+    return NextResponse.json({ data: mapRow(data) });
   } catch (error) {
-    console.error("[GET /colaboradores]", error);
+    console.error("[GET /colaboradores/[id]]", error);
+
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
+    }
+    return NextResponse.json(
+      { error: "Erro interno do servidor" },
+      { status: 500 },
+    );
+  }
+}
+
+// ============================================================================
+// PUT /api/colaboradores/[id]
+// ============================================================================
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const user = await requireAuth("user");
+    const { id } = await params;
+
+    // 1. Verifica existência
+    const { data: existing, error: fetchError } = await findById(id);
+    if (fetchError || !existing) {
+      return NextResponse.json(
+        { error: "Colaborador não encontrado" },
+        { status: 404 },
+      );
+    }
+
+    // 2. Valida body (partial)
+    const body = await request.json();
+    const validated = ColaboradorUpdateSchema.parse(body);
+
+    // id e CPF não podem ser alterados via PUT
+    delete (validated as Record<string, unknown>).id;
+    delete (validated as Record<string, unknown>).CPF;
+
+    // 3. Determina campos alterados para auditoria
+    const existingMapped = mapRow(existing);
+    const changedFields = (Object.keys(validated) as (keyof typeof validated)[]).filter(
+      (key) => validated[key] !== undefined && validated[key] !== existingMapped[key],
+    );
+
+    if (changedFields.length === 0) {
+      return NextResponse.json({ data: existingMapped, message: "Nenhuma alteração detectada" });
+    }
+
+    // 4. Persiste apenas os campos fornecidos
+    const supabase = createServerClient();
+    const { data: updated, error: updateError } = await supabase
+      .from("colaboradores")
+      .update(toDbRow(validated))
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw new Error(`Erro ao atualizar colaborador: ${updateError.message}`);
+    }
+
+    // 5. Auditoria
+    await logEditar(user.re, existing.cpf ?? id, existing.nome ?? id, changedFields);
+
+    return NextResponse.json({ data: mapRow(updated) });
+  } catch (error) {
+    console.error("[PUT /colaboradores/[id]]", error);
 
     if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "Parâmetros inválidos", details: error.issues },
+        { error: "Dados inválidos", details: error.issues },
         { status: 400 },
       );
     }
@@ -288,67 +254,44 @@ export async function GET(request: NextRequest) {
 }
 
 // ============================================================================
-// POST /api/colaboradores - Criar novo colaborador
+// DELETE /api/colaboradores/[id]
 // ============================================================================
 
-export async function POST(request: NextRequest) {
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const user = await requireAuth("user");
-    const body = await request.json();
+    const { id } = await params;
 
-    // Valida o body usando o schema de criação
-    const validated = ColaboradorCreateSchema.parse(body);
+    // 1. Verifica existência (precisa do nome para o log)
+    const { data: existing, error: fetchError } = await findById(id);
+    if (fetchError || !existing) {
+      return NextResponse.json(
+        { error: "Colaborador não encontrado" },
+        { status: 404 },
+      );
+    }
 
+    // 2. Remove
     const supabase = createServerClient();
-
-    // Verifica se o par (CPF, centro_custo) já existe
-    let existingQuery = supabase
+    const { error: deleteError } = await supabase
       .from("colaboradores")
-      .select("cpf, nome, centro_custo")
-      .eq("cpf", validated.CPF);
+      .delete()
+      .eq("id", id);
 
-    if (validated.CENTRO_CUSTO) {
-      existingQuery = existingQuery.eq("centro_custo", validated.CENTRO_CUSTO);
-    } else {
-      existingQuery = existingQuery.is("centro_custo", null);
+    if (deleteError) {
+      throw new Error(`Erro ao remover colaborador: ${deleteError.message}`);
     }
 
-    const { data: existing } = await existingQuery.maybeSingle();
+    // 3. Auditoria
+    await logRemover(user.re, existing.cpf ?? id, existing.nome ?? id);
 
-    if (existing) {
-      return NextResponse.json(
-        { error: `CPF já cadastrado neste centro de custo: ${existing.nome || existing.cpf}` },
-        { status: 409 },
-      );
-    }
-
-    // Converte para formato do banco
-    const dbRow = toDbRow(validated);
-
-    // Insere no banco
-    const { data: inserted, error: insertError } = await supabase
-      .from("colaboradores")
-      .insert(dbRow)
-      .select()
-      .single();
-
-    if (insertError) {
-      throw new Error(`Erro ao inserir colaborador: ${insertError.message}`);
-    }
-
-    // Log de auditoria
-    await logAdicionar(user.re, validated.CPF, validated.NOME || validated.CPF);
-
-    return NextResponse.json({ data: mapRow(inserted) }, { status: 201 });
+    return NextResponse.json({ message: "Colaborador removido com sucesso" });
   } catch (error) {
-    console.error("[POST /colaboradores]", error);
+    console.error("[DELETE /colaboradores/[id]]", error);
 
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        { error: "Dados inválidos", details: error.issues },
-        { status: 400 },
-      );
-    }
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }

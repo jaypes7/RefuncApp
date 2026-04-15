@@ -23,6 +23,7 @@ import {
   verificarAtrasoFisico,
 } from "@/lib/curva-s";
 import type { EtapaConfig } from "@/lib/schemas";
+import { getNationalHolidays } from "@/lib/date-utils";
 
 // ============================================================================
 // HELPERS
@@ -49,116 +50,311 @@ function mapColab(row: Record<string, unknown>) {
 
 type ColabRow = ReturnType<typeof mapColab>;
 
+type DetalhesDia = {
+  etapaId: number;
+  etapaNome: string;
+  planejadoEtapa: number;
+  realizadoEtapa: number;
+};
+
 type CurvaSResult = {
   labels: string[];
   planejado: (number | null)[];
   realizado: (number | null)[];
-  valoresHoje: { planejado: number; realizado: number } | null;
+  detalhes: DetalhesDia[];
+  valoresHoje: {
+    diario: { planejado: number; realizado: number } | null;
+    etapas: { planejado: number; realizado: number } | null;
+  } | null;
 };
+
+type ProgressoDiarioRow = {
+  etapa_id: number;
+  data: string;      // YYYY-MM-DD
+  percentual: number;
+};
+
+/**
+ * Calcula o progresso global planejado em uma data específica, com base nas
+ * datas reais de início/fim de cada etapa (interpolação linear dentro da etapa).
+ *
+ * Fallback para o modo legado (baseado em duracaoDias) se as etapas não tiverem datas.
+ */
+function calcularPlanejadoNaData(
+  dateStr: string,
+  etapas: EtapaConfig[],
+  totalDias: number,
+  dataInicioProjeto: string,
+): number {
+  // Verifica se todas as etapas têm datas configuradas
+  const todasComDatas = etapas.every((e) => e.dataInicio && e.dataFim);
+
+  if (todasComDatas) {
+    let plAcum = 0;
+    for (const etapa of etapas) {
+      const peso = (etapa.duracaoDias / totalDias) * 100;
+      const ini = etapa.dataInicio!;
+      const fim = etapa.dataFim!;
+
+      if (dateStr < ini) {
+        // Ainda não começou esta etapa
+        continue;
+      } else if (dateStr >= fim) {
+        // Etapa totalmente planejada
+        plAcum += peso;
+      } else {
+        // Dentro da etapa: interpolação linear proporcional aos dias decorridos
+        const MS_PER_DAY = 86_400_000;
+        const iniMs = new Date(ini + "T00:00:00Z").getTime();
+        const fimMs = new Date(fim + "T00:00:00Z").getTime();
+        const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+        const diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
+        const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+        const frac = Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa));
+        plAcum += frac * peso;
+      }
+    }
+    return Math.min(100, Math.round(plAcum * 10) / 10);
+  }
+
+  // Fallback legado: posiciona os pontos com base na duração acumulada
+  const inicio = new Date(dataInicioProjeto + "T00:00:00Z");
+  let diasAcum = 0;
+  let plAcum = 0;
+  for (const etapa of etapas) {
+    const diasAntes = diasAcum;
+    diasAcum += etapa.duracaoDias || 0;
+    const peso = (etapa.duracaoDias / totalDias) * 100;
+
+    const fimEtapaDt = new Date(inicio);
+    fimEtapaDt.setUTCDate(fimEtapaDt.getUTCDate() + diasAcum - 1);
+    const fimEtapaStr = fimEtapaDt.toISOString().split("T")[0];
+
+    const iniEtapaDt = new Date(inicio);
+    iniEtapaDt.setUTCDate(iniEtapaDt.getUTCDate() + diasAntes);
+    const iniEtapaStr = iniEtapaDt.toISOString().split("T")[0];
+
+    if (dateStr < iniEtapaStr) continue;
+    if (dateStr >= fimEtapaStr) {
+      plAcum += peso;
+    } else {
+      const MS_PER_DAY = 86_400_000;
+      const iniMs = iniEtapaDt.getTime();
+      const fimMs = fimEtapaDt.getTime();
+      const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+      const diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
+      const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+      const frac = fimMs > iniMs ? Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa)) : 0;
+      plAcum += frac * peso;
+    }
+  }
+  return Math.min(100, Math.round(plAcum * 10) / 10);
+}
+
+/**
+ * Calcula o progresso global REALIZADO em uma data específica, usando os
+ * dados de progresso diário (etapas_progresso_diario).
+ *
+ * Para cada etapa, pega o ÚLTIMO registro com data ≤ dateStr e usa esse
+ * percentual ponderado pelo peso da etapa no total do projeto.
+ *
+ * Retorna null se não houver nenhum registro diário preenchido até dateStr.
+ */
+function calcularRealizadoNaData(
+  dateStr: string,
+  etapas: EtapaConfig[],
+  totalDias: number,
+  progressoDiario: ProgressoDiarioRow[],
+): number | null {
+  let reAcum = 0;
+  let temAlgumDado = false;
+
+  for (const etapa of etapas) {
+    const peso = (etapa.duracaoDias / totalDias) * 100;
+
+    // Soma de TODOS os incrementos diários desta etapa até dateStr
+    // (cada entrada representa o progresso daquele dia, não o total)
+    const registros = progressoDiario
+      .filter((r) => r.etapa_id === etapa.id && r.data <= dateStr);
+
+    if (registros.length > 0) {
+      const soma = registros.reduce((s, r) => s + r.percentual, 0);
+      reAcum += (Math.min(100, soma) / 100) * peso;
+      temAlgumDado = true;
+    }
+  }
+
+  return temAlgumDado ? Math.min(100, Math.round(reAcum * 10) / 10) : null;
+}
+
+function gerarDiasTrabalhadosFallback(dataInicio: string, dataFim: string): string[] {
+  const inicio = new Date(dataInicio + "T00:00:00Z");
+  const fim = new Date(dataFim + "T00:00:00Z");
+  const dias: string[] = [];
+
+  const startYear = inicio.getUTCFullYear();
+  const endYear = fim.getUTCFullYear();
+  const holidays = new Set<string>();
+  for (let year = startYear; year <= endYear; year++) {
+    for (const h of getNationalHolidays(year)) {
+      holidays.add(h);
+    }
+  }
+
+  const MS_PER_DAY = 86_400_000;
+  let current = inicio.getTime();
+  const endTime = fim.getTime();
+
+  while (current <= endTime) {
+    const d = new Date(current);
+    const dow = d.getUTCDay();
+    const iso = d.toISOString().split("T")[0];
+    if (dow !== 0 && dow !== 6 && !holidays.has(iso)) {
+      dias.push(iso);
+    }
+    current += MS_PER_DAY;
+  }
+
+  return dias;
+}
 
 function gerarCurvaSEtapas(
   dataInicio: string,
   dataFim: string | null,
   etapas: EtapaConfig[],
   hojeStr: string,
+  progressoDiario: ProgressoDiarioRow[],
+  diasTrabalhados: string[] = [],
 ): CurvaSResult {
   const totalDias = etapas.reduce((s, e) => s + (e.duracaoDias || 0), 0);
   if (!dataInicio || totalDias === 0 || etapas.length === 0) {
-    return { labels: [], planejado: [], realizado: [], valoresHoje: null };
+    return { labels: [], planejado: [], realizado: [], detalhes: [], valoresHoje: null };
   }
 
-  const fmt = (d: Date) =>
-    d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
+  const fmt = (dateStr: string) => {
+    const d = new Date(dateStr + "T00:00:00Z");
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
+  };
 
-  const inicio = new Date(dataInicio + "T00:00:00Z");
-  const fim = dataFim ? new Date(dataFim + "T00:00:00Z") : null;
+  const fim = dataFim ? dataFim : hojeStr;
+
+  // Determina o conjunto de dias trabalhados a serem plotados
+  let diasPlot: string[];
+  if (diasTrabalhados && diasTrabalhados.length > 0) {
+    diasPlot = [...diasTrabalhados]
+      .filter((d) => d >= dataInicio && d <= fim)
+      .sort((a, b) => a.localeCompare(b));
+  } else {
+    diasPlot = gerarDiasTrabalhadosFallback(dataInicio, fim);
+  }
+
+  if (diasPlot.length === 0) {
+    return { labels: [], planejado: [], realizado: [], detalhes: [], valoresHoje: null };
+  }
+
+  // Data do último registro diário
+  const ultimaDataComDado = progressoDiario.length > 0
+    ? progressoDiario.map((r) => r.data).sort().reverse()[0]
+    : null;
+
   const labels: string[] = [];
   const planejado: (number | null)[] = [];
   const realizado: (number | null)[] = [];
+  const detalhes: DetalhesDia[] = [];
 
-  let ultimaEtapaComProgresso = -1;
-  for (let i = etapas.length - 1; i >= 0; i--) {
-    if ((etapas[i].percentualConcluido ?? 0) > 0) {
-      ultimaEtapaComProgresso = i;
-      break;
-    }
-  }
+  const MS_PER_DAY = 86_400_000;
 
-  labels.push(fmt(inicio));
-  planejado.push(0);
-  realizado.push(0);
+  for (const dateStr of diasPlot) {
+    labels.push(fmt(dateStr));
+    planejado.push(calcularPlanejadoNaData(dateStr, etapas, totalDias, dataInicio));
 
-  let diasAcum = 0;
-  let plAcum = 0;
-  let reAcum = 0;
-  let valoresHoje: { planejado: number; realizado: number } | null = null;
-  let indiceHoje = -1;
-
-  for (let i = 0; i < etapas.length; i++) {
-    const etapa = etapas[i];
-    diasAcum += etapa.duracaoDias || 0;
-
-    const pontoDt = new Date(inicio);
-    pontoDt.setUTCDate(pontoDt.getUTCDate() + diasAcum - 1);
-
-    let pontoFinalDt: Date;
-    if (i === etapas.length - 1 && fim) {
-      pontoFinalDt = fim;
-    } else {
-      pontoFinalDt = pontoDt;
-    }
-
-    const pontoDtStr = pontoFinalDt.toISOString().split("T")[0];
-    const peso = (etapa.duracaoDias / totalDias) * 100;
-    plAcum = Math.min(100, plAcum + peso);
-
-    const pct = etapa.percentualConcluido ?? 0;
-    reAcum = Math.min(100, reAcum + (pct / 100) * peso);
-
-    labels.push(fmt(pontoFinalDt));
-    planejado.push(Math.round(plAcum * 10) / 10);
-
-    if (i > ultimaEtapaComProgresso && ultimaEtapaComProgresso >= 0) {
+    if (ultimaDataComDado === null || dateStr > ultimaDataComDado) {
       realizado.push(null);
     } else {
-      realizado.push(Math.round(reAcum * 10) / 10);
+      realizado.push(calcularRealizadoNaData(dateStr, etapas, totalDias, progressoDiario));
     }
 
-    if (indiceHoje === -1 && pontoDtStr >= hojeStr) {
-      indiceHoje = i + 1;
+    // Identifica etapa ativa neste dia
+    let etapaAtiva = etapas.find((e) => e.dataInicio && e.dataFim && dateStr >= e.dataInicio && dateStr <= e.dataFim);
+    if (!etapaAtiva) {
+      // Fallback: última etapa que já começou, ou primeira etapa
+      const etapasIniciadas = etapas.filter((e) => e.dataInicio && dateStr >= e.dataInicio);
+      etapaAtiva = etapasIniciadas.length > 0 ? etapasIniciadas[etapasIniciadas.length - 1] : etapas[0];
+    }
+
+    let planejadoEtapa = 0;
+    let realizadoEtapa = 0;
+
+    if (etapaAtiva && etapaAtiva.dataInicio && etapaAtiva.dataFim) {
+      const iniMs = new Date(etapaAtiva.dataInicio + "T00:00:00Z").getTime();
+      const fimMs = new Date(etapaAtiva.dataFim + "T00:00:00Z").getTime();
+      const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+      const diaDentro = (curMs - iniMs) / MS_PER_DAY + 1;
+      const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+      planejadoEtapa = Math.min(100, Math.round((diaDentro / totalDiasEtapa) * 1000) / 10);
+
+      const registros = progressoDiario
+        .filter((r) => r.etapa_id === etapaAtiva.id && r.data <= dateStr);
+      realizadoEtapa = Math.min(100, Math.round(registros.reduce((s, r) => s + r.percentual, 0) * 10) / 10);
+    } else if (etapaAtiva) {
+      planejadoEtapa = etapaAtiva.percentualConcluido ?? 0;
+      realizadoEtapa = etapaAtiva.percentualConcluido ?? 0;
+    }
+
+    detalhes.push({
+      etapaId: etapaAtiva?.id ?? 0,
+      etapaNome: etapaAtiva?.nome ?? "—",
+      planejadoEtapa,
+      realizadoEtapa,
+    });
+  }
+
+  // Data de referência para o indicador: hoje se estiver no projeto
+  let dataReferencia = hojeStr;
+  if (diasPlot.length > 0 && dataReferencia < diasPlot[0]) {
+    dataReferencia = diasPlot[0]; // antes do início → usa primeiro dia
+  }
+  if (diasPlot.length > 0 && dataReferencia > diasPlot[diasPlot.length - 1]) {
+    dataReferencia = diasPlot[diasPlot.length - 1]; // depois do fim → usa último dia
+  }
+  // Se hoje não for um dia trabalhado, usa o último dia trabalhado <= hoje
+  if (!diasPlot.includes(dataReferencia)) {
+    const ultimoDiaUtilAteHoje = [...diasPlot].reverse().find((d) => d <= hojeStr);
+    if (ultimoDiaUtilAteHoje) {
+      dataReferencia = ultimoDiaUtilAteHoje;
+    } else if (diasPlot.length > 0) {
+      dataReferencia = diasPlot[0];
     }
   }
 
-  if (hojeStr < dataInicio) {
-    let lastIndex = -1;
-    for (let i = realizado.length - 1; i >= 0; i--) {
-      if (realizado[i] !== null && realizado[i] !== undefined) {
-        lastIndex = i;
-        break;
-      }
-    }
+  // DIÁRIO: último dia com dado (ou último dia do gráfico se não houver dados)
+  const dataReferenciaDiaria = ultimaDataComDado && diasPlot.includes(ultimaDataComDado)
+    ? ultimaDataComDado
+    : (diasPlot[diasPlot.length - 1] ?? dataInicio);
 
-    if (lastIndex > 0) {
-      valoresHoje = {
-        planejado: planejado[lastIndex] ?? 0,
-        realizado: realizado[lastIndex] ?? 0,
-      };
-    } else {
-      valoresHoje = { planejado: 0, realizado: 0 };
-    }
-  } else if (indiceHoje > 0) {
-    valoresHoje = {
-      planejado: planejado[indiceHoje] ?? planejado[planejado.length - 1] ?? 0,
-      realizado: realizado[indiceHoje] ?? realizado[realizado.length - 1] ?? 0,
-    };
-  } else {
-    valoresHoje = {
-      planejado: planejado[planejado.length - 1] ?? 0,
-      realizado: realizado[realizado.length - 1] ?? 0,
-    };
-  }
+  const idxDiario = diasPlot.indexOf(dataReferenciaDiaria);
+  const detalheDiario = idxDiario >= 0 ? detalhes[idxDiario] : null;
 
-  return { labels, planejado, realizado, valoresHoje };
+  const plDiario = detalheDiario?.planejadoEtapa ?? 0;
+  const reDiario = detalheDiario?.realizadoEtapa ?? 0;
+
+  // ETAPAS: visão acumulada total do projeto (100% planejado vs realizado total)
+  const reTotal = ultimaDataComDado
+    ? (calcularRealizadoNaData(ultimaDataComDado, etapas, totalDias, progressoDiario) ?? 0)
+    : 0;
+
+  return {
+    labels,
+    planejado,
+    realizado,
+    detalhes,
+    valoresHoje: {
+      diario: ultimaDataComDado && detalheDiario
+        ? { planejado: plDiario, realizado: reDiario }
+        : null,
+      etapas: { planejado: 100, realizado: reTotal },
+    },
+  };
 }
 
 function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
@@ -174,35 +370,42 @@ function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
 
   const planejado: (number | null)[] = [];
   const realizado: (number | null)[] = [];
+  const detalhes: DetalhesDia[] = [];
 
   for (const label of allLabels) {
     const pls: number[] = [];
     const res: number[] = [];
+    let detalheEscolhido: DetalhesDia | null = null;
     for (const c of curvas) {
       const idx = c.labels.indexOf(label);
       if (idx !== -1 && c.planejado[idx] != null) pls.push(c.planejado[idx] as number);
       if (idx !== -1 && c.realizado[idx] != null) res.push(c.realizado[idx] as number);
+      if (idx !== -1 && detalheEscolhido === null && c.detalhes[idx]) {
+        detalheEscolhido = c.detalhes[idx];
+      }
     }
     planejado.push(pls.length ? Math.round((pls.reduce((s, v) => s + v, 0) / pls.length) * 10) / 10 : null);
     realizado.push(res.length ? Math.round((res.reduce((s, v) => s + v, 0) / res.length) * 10) / 10 : null);
+    detalhes.push(detalheEscolhido ?? { etapaId: 0, etapaNome: "—", planejadoEtapa: 0, realizadoEtapa: 0 });
   }
 
-  // valoresHoje: média do último ponto válido de cada curva
-  const lastPls = curvas.map((c) => {
-    const arr = c.planejado.filter((v): v is number => v != null);
-    return arr[arr.length - 1] ?? 0;
-  });
-  const lastRes = curvas.map((c) => {
-    const arr = c.realizado.filter((v): v is number => v != null);
-    return arr[arr.length - 1] ?? 0;
-  });
+  const diarioPls = curvas.map((c) => c.valoresHoje?.diario?.planejado ?? 0);
+  const diarioRes = curvas.map((c) => c.valoresHoje?.diario?.realizado ?? 0);
+  const etapasPls = curvas.map((c) => c.valoresHoje?.etapas?.planejado ?? 100);
+  const etapasRes = curvas.map((c) => c.valoresHoje?.etapas?.realizado ?? 0);
 
   const valoresHoje = {
-    planejado: Math.round((lastPls.reduce((s, v) => s + v, 0) / lastPls.length) * 10) / 10,
-    realizado: Math.round((lastRes.reduce((s, v) => s + v, 0) / lastRes.length) * 10) / 10,
+    diario: {
+      planejado: Math.round((diarioPls.reduce((s, v) => s + v, 0) / diarioPls.length) * 10) / 10,
+      realizado: Math.round((diarioRes.reduce((s, v) => s + v, 0) / diarioRes.length) * 10) / 10,
+    },
+    etapas: {
+      planejado: Math.round((etapasPls.reduce((s, v) => s + v, 0) / etapasPls.length) * 10) / 10,
+      realizado: Math.round((etapasRes.reduce((s, v) => s + v, 0) / etapasRes.length) * 10) / 10,
+    },
   };
 
-  return { labels: allLabels, planejado, realizado, valoresHoje };
+  return { labels: allLabels, planejado, realizado, detalhes, valoresHoje };
 }
 
 function agruparPorFuncao(cols: ColabRow[]) {
@@ -254,14 +457,20 @@ export async function GET(request: NextRequest) {
       ? db.from("etapas").select("*").eq("centro_custo", centroCusto).order("ordem", { ascending: true })
       : db.from("etapas").select("*").order("ordem", { ascending: true });
 
+    const progressoQuery = centroCusto
+      ? db.from("etapas_progresso_diario").select("centro_custo,etapa_id,data,percentual").eq("centro_custo", centroCusto)
+      : db.from("etapas_progresso_diario").select("centro_custo,etapa_id,data,percentual");
+
     const [
       { data: colabData, error: colabErr },
       configResult,
       { data: etapasRows, error: etapasErr },
+      { data: progressoRows },
     ] = await Promise.all([
       colabQuery,
       configQuery,
       etapasQuery,
+      progressoQuery,
     ]);
 
     if (colabErr) throw new Error(`Falha ao buscar colaboradores: ${colabErr.message}`);
@@ -302,6 +511,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // ── Agrupar progresso diário por centro_custo ─────────────────────────────
+    const progressoPorProjeto = new Map<string, ProgressoDiarioRow[]>();
+    for (const r of (progressoRows ?? []) as Array<{ centro_custo?: string; etapa_id?: number; data?: string; percentual?: number }>) {
+      const cc = r.centro_custo ? String(r.centro_custo) : (centroCusto ?? "__sem_cc__");
+      if (!progressoPorProjeto.has(cc)) progressoPorProjeto.set(cc, []);
+      progressoPorProjeto.get(cc)!.push({
+        etapa_id: Number(r.etapa_id ?? 0),
+        data: String(r.data ?? ""),
+        percentual: Number(r.percentual ?? 0),
+      });
+    }
+
     // ── Curva S ──────────────────────────────────────────────────────────────
     const hoje = new Date().toISOString().split("T")[0];
     let curvaS: CurvaSResult | null = null;
@@ -312,12 +533,15 @@ export async function GET(request: NextRequest) {
       for (const cfg of configsAll) {
         const cc = cfg.centro_custo as string;
         const etapas = etapasPorProjeto.get(cc) ?? [];
+        const progresso = progressoPorProjeto.get(cc) ?? [];
         if (cfg.data_inicio_projeto && etapas.length > 0) {
           const c = gerarCurvaSEtapas(
             cfg.data_inicio_projeto as string,
             cfg.data_fim_projeto as string | null,
             etapas,
             hoje,
+            progresso,
+            (cfg.dias_trabalhados as string[] | undefined) ?? [],
           );
           if (c.labels.length) curvasIndividuais.push(c);
         }
@@ -325,8 +549,8 @@ export async function GET(request: NextRequest) {
       curvaS = calcularCurvaSMedia(curvasIndividuais);
     }
 
-    if (curvaS && curvaS.valoresHoje) {
-      const { planejado, realizado } = curvaS.valoresHoje;
+    if (curvaS && curvaS.valoresHoje?.diario) {
+      const { planejado, realizado } = curvaS.valoresHoje.diario;
       statusProjeto = { ...verificarAtrasoFisico(planejado, realizado), diasAtraso: 0 };
     }
 
@@ -465,6 +689,10 @@ export async function GET(request: NextRequest) {
       ? (etapasPorProjeto.get(centroCusto) ?? [])
       : [];
 
+    const progressoDoCc = centroCusto
+      ? (progressoPorProjeto.get(centroCusto) ?? [])
+      : [];
+
     return NextResponse.json({
       metricas,
       projeto: {
@@ -475,15 +703,45 @@ export async function GET(request: NextRequest) {
         status: statusProjeto,
       },
       etapasCount: etapasExibicao.length,
-      etapas: etapasExibicao.map((e) => ({
-        id: e.id,
-        nome: e.nome,
-        duracaoDias: e.duracaoDias,
-        percentualConcluido: e.percentualConcluido ?? 0,
-        concluida: e.concluida ?? false,
-        dataInicio: e.dataInicio,
-        dataFim: e.dataFim,
-      })),
+      etapas: etapasExibicao.map((e) => {
+        const evolucaoDiaria: Array<{ data: string; previsto: number; realizado: number }> = [];
+        if (e.dataInicio && e.dataFim) {
+          const dias: string[] = [];
+          const cur = new Date(e.dataInicio + "T00:00:00Z");
+          const fim = new Date(e.dataFim + "T00:00:00Z");
+          while (cur <= fim) {
+            dias.push(cur.toISOString().split("T")[0]);
+            cur.setUTCDate(cur.getUTCDate() + 1);
+          }
+          let acum = 0;
+          for (let i = 0; i < dias.length; i++) {
+            const data = dias[i];
+            const previsto = Math.round(((i + 1) / dias.length) * 100);
+            const incrementos = progressoDoCc.filter(
+              (p) => p.etapa_id === e.id && p.data === data,
+            );
+            for (const inc of incrementos) {
+              acum += inc.percentual;
+            }
+            evolucaoDiaria.push({
+              data,
+              previsto,
+              realizado: Math.min(100, Math.round(acum * 10) / 10),
+            });
+          }
+        }
+
+        return {
+          id: e.id,
+          nome: e.nome,
+          duracaoDias: e.duracaoDias,
+          percentualConcluido: e.percentualConcluido ?? 0,
+          concluida: e.concluida ?? false,
+          dataInicio: e.dataInicio,
+          dataFim: e.dataFim,
+          evolucaoDiaria,
+        };
+      }),
       pendencias: pendencias.slice(0, 10),
       graficos: {
         curvaS,

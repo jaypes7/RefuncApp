@@ -3,16 +3,17 @@
  * API: /api/config/reset
  * ============================================================================
  *
- * POST /api/config/reset — Reseta o projeto deletando todos os dados
- * operacionais (mantém: etapas, usuarios_permitidos, logs_auditoria, configuracoes)
+ * POST /api/config/reset — Reseta o projeto deletando os dados operacionais
+ * de um centro de custo específico.
  *
- * Tabelas que serão limpas:
+ * Mantém: etapas, usuarios_permitidos, logs_auditoria, configuracoes,
+ *         configuracoes_hoteis, configuracoes_clinicas.
+ *
+ * Tabelas que serão limpas (filtradas por centro_custo):
  *   - colaboradores
  *   - logistica_controle
  *   - seguranca_fits
  *   - suprimentos_ordens
- *   - configuracoes_hoteis
- *   - configuracoes_clinicas
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -24,22 +25,32 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth("admin");
 
+    const body = await request.json().catch(() => ({}));
+    const centroCusto = body?.centro_custo;
+
+    if (!centroCusto || typeof centroCusto !== "string") {
+      return NextResponse.json(
+        { error: "centro_custo é obrigatório" },
+        { status: 400 },
+      );
+    }
+
     const db = createServerClient();
 
-    // Tabelas a serem limpas com suas respectivas chaves primárias
+    // Tabelas operacionais a serem limpas apenas para o centro de custo informado
     const tablesToClear = [
-      { table: "colaboradores", pk: "cpf" },
+      { table: "colaboradores", pk: "id" },
       { table: "logistica_controle", pk: "id" },
       { table: "seguranca_fits", pk: "id" },
       { table: "suprimentos_ordens", pk: "id" },
-      { table: "configuracoes_hoteis", pk: "id" },
-      { table: "configuracoes_clinicas", pk: "id" },
     ];
 
-    // Executa DELETE para cada tabela usando a chave primária correta
     for (const { table, pk } of tablesToClear) {
-      // Deleta todas as linhas onde a PK não é nula (ou seja, todas as linhas)
-      const { error } = await db.from(table).delete().not(pk, "is", null);
+      const { error } = await db
+        .from(table)
+        .delete()
+        .eq("centro_custo", centroCusto)
+        .not(pk, "is", null);
 
       if (error) {
         console.error(`[/api/config/reset] Erro ao limpar tabela ${table}:`, error);
@@ -51,12 +62,12 @@ export async function POST(request: NextRequest) {
     await registrarLog(
       user.re,
       "CONFIG",
-      `Projeto resetado - Todas as tabelas operacionais foram limpas (colaboradores, logística, segurança, suprimentos, hotéis, clínicas)`,
+      `Projeto resetado - Dados operacionais do centro de custo ${centroCusto} foram limpos (colaboradores, logística, segurança, suprimentos)`,
     );
 
     return NextResponse.json({
       success: true,
-      message: "Projeto resetado com sucesso",
+      message: `Projeto resetado com sucesso para o centro de custo ${centroCusto}`,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

@@ -287,7 +287,7 @@ export function EditColaboradorModal({
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<EditFormData>) => {
       if (!colaborador) throw new Error("Colaborador não selecionado");
-      return colaboradoresApi.atualizar(colaborador.CPF, {
+      return colaboradoresApi.atualizar(colaborador.id || "", {
         ...data,
         CPF: colaborador.CPF,
       });

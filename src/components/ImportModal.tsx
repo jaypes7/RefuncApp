@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,14 @@ import {
 } from "lucide-react";
 
 import { processImport, type RawRow } from "@/services/import-service";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { buildHeaderMap } from "@/lib/import-utils";
 
 // ============================================================================
 // TIPOS
@@ -72,6 +80,11 @@ export function ImportModal({
 
   /** 🟢 NOVO: Guarda o resultado final para mostrar na tela */
   const [importResult, setImportResult] = useState<ImportReport | null>(null);
+
+  /** Controle de centro de custo quando ausente na planilha */
+  const [precisaCentroCusto, setPrecisaCentroCusto] = useState(false);
+  const [centrosDisponiveis, setCentrosDisponiveis] = useState<string[]>([]);
+  const [centroCustoSelecionado, setCentroCustoSelecionado] = useState<string>("");
 
   /**
    * Processa o arquivo XLSX selecionado
@@ -132,6 +145,14 @@ export function ImportModal({
           );
 
           setBufferedRows(rows);
+
+          // Detecta se a planilha possui coluna de centro de custo
+          const headerMap = buildHeaderMap(Object.keys(rows[0] ?? {}));
+          const hasCc = Array.from(headerMap.values()).includes("c_custo");
+          setPrecisaCentroCusto(!hasCc);
+          if (hasCc) {
+            setCentroCustoSelecionado("");
+          }
         } catch (err) {
           console.error("Erro ao ler arquivo:", err);
           toast.error("Erro ao processar a planilha. Verifique o formato.");
@@ -153,7 +174,9 @@ export function ImportModal({
     setIsLoading(true);
 
     try {
-      const report = await processImport(bufferedRows, () => { });
+      const report = await processImport(bufferedRows, {
+        defaultCentroCusto: centroCustoSelecionado || undefined,
+      });
 
       // 🟢 Seta o resultado para a tela mudar
       setImportResult(report);
@@ -175,7 +198,16 @@ export function ImportModal({
     } catch (err: unknown) {
       // ... erro
     }
-  }, [file, validationErrors, bufferedRows, onSuccess]);
+  }, [file, validationErrors, bufferedRows, onSuccess, centroCustoSelecionado]);
+
+  useEffect(() => {
+    if (precisaCentroCusto && centrosDisponiveis.length === 0) {
+      fetch("/api/colaboradores/centros-custo")
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => setCentrosDisponiveis(Array.isArray(data) ? data : []))
+        .catch(() => setCentrosDisponiveis([]));
+    }
+  }, [precisaCentroCusto, centrosDisponiveis.length]);
 
   /**
    * Fecha o modal e limpa o estado
@@ -186,6 +218,9 @@ export function ImportModal({
     setValidationErrors([]);
     setBufferedRows(null);
     setImportResult(null);
+    setPrecisaCentroCusto(false);
+    setCentroCustoSelecionado("");
+    setCentrosDisponiveis([]);
     onOpenChange(false);
   }, [onOpenChange]);
 
@@ -281,12 +316,49 @@ export function ImportModal({
                 </div>
               )}
 
+              {/* 3.5 SELEÇÃO DE CENTRO DE CUSTO (quando ausente na planilha) */}
+              {precisaCentroCusto && previewData && previewData.length > 0 && (
+                <div className="bg-amber-50/50 border border-amber-200 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-amber-900 mb-2">
+                    Vincular dados à qual centro de custo?
+                  </label>
+                  <Select
+                    value={centroCustoSelecionado || undefined}
+                    onValueChange={setCentroCustoSelecionado}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecione um centro de custo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {centrosDisponiveis.map((cc) => (
+                        <SelectItem key={cc} value={cc}>
+                          {cc}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {centrosDisponiveis.length === 0 && (
+                    <p className="text-xs text-amber-700 mt-2">
+                      Carregando centros de custo disponíveis...
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* 4. BOTÕES DE AÇÃO (TELA 1) */}
               <div className="flex justify-end gap-3 pt-4 border-t mt-auto">
                 <Button variant="outline" onClick={handleClose} disabled={isLoading}>
                   Cancelar
                 </Button>
-                <Button onClick={handleImport} disabled={!file || isLoading || validationErrors.length > 0}>
+                <Button
+                  onClick={handleImport}
+                  disabled={
+                    !file ||
+                    isLoading ||
+                    validationErrors.length > 0 ||
+                    (precisaCentroCusto && !centroCustoSelecionado)
+                  }
+                >
                   {isLoading ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</>
                   ) : (

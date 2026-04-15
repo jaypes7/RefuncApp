@@ -136,6 +136,9 @@ export default function ConfiguracoesPage() {
   const [novoProjetoCC, setNovoProjetoCC] = useState("");
   const [novoProjetoNome, setNovoProjetoNome] = useState("");
 
+  // Reset de projeto (centro de custo alvo)
+  const [resetCentroCusto, setResetCentroCusto] = useState("");
+
   // Projeto
   const [projeto, setProjeto] = useState<ConfigProjeto>({
     gerente_operacoes: "",
@@ -688,9 +691,11 @@ export default function ConfiguracoesPage() {
   };
 
   const resetProjetoMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (targetCc: string) => {
       const res = await fetch("/api/config/reset", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centro_custo: targetCc }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -1751,29 +1756,54 @@ export default function ConfiguracoesPage() {
                           ⚠️ Esta ação é irreversível
                         </h4>
                         <p className="text-sm text-amber-800 dark:text-amber-200">
-                          Resetar o projeto limpará todos os dados operacionais (colaboradores, logística,
-                          segurança, suprimentos, hotéis e clínicas). As seguintes informações serão mantidas:
+                          Resetar o projeto limpará os dados operacionais <strong>apenas do centro de custo selecionado</strong>{" "}
+                          (colaboradores, logística, segurança e suprimentos). As seguintes informações serão mantidas:
                         </p>
                         <ul className="text-sm text-amber-800 dark:text-amber-200 list-disc list-inside space-y-1 ml-2">
+                          <li>Centros de custo e configurações do projeto</li>
+                          <li>Cadastro de hotéis e clínicas</li>
                           <li>Etapas do cronograma</li>
-                          <li>Configurações do projeto (datas, gerentes, etc)</li>
                           <li>Usuários permitidos (acessos)</li>
                           <li>Logs de auditoria (histórico de ações)</li>
                         </ul>
                       </div>
+
+                      <div className="space-y-2 max-w-md">
+                        <label className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                          Centro de custo a resetar
+                        </label>
+                        <Select
+                          value={resetCentroCusto}
+                          onValueChange={(v) => setResetCentroCusto(v)}
+                        >
+                          <SelectTrigger className="w-full bg-white dark:bg-background">
+                            <SelectValue placeholder="Selecione um centro de custo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(projetosData || []).map((p) => (
+                              <SelectItem key={p.centro_custo} value={p.centro_custo}>
+                                {p.centro_custo}
+                                {p.nome_cliente ? ` — ${p.nome_cliente}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
                       <Button
                         onClick={() => {
+                          if (!resetCentroCusto) return;
                           if (
                             confirm(
-                              "⚠️ ATENÇÃO: Esta ação é IRREVERSÍVEL e limpará todos os dados operacionais do projeto.\n\n" +
+                              `⚠️ ATENÇÃO: Esta ação é IRREVERSÍVEL e limpará todos os dados operacionais do centro de custo ${resetCentroCusto}.\n\n` +
                               "Tem certeza que deseja continuar?\n\n" +
                               "Digite 'CONFIRMAR' para prosseguir.",
                             )
                           ) {
-                            resetProjetoMutation.mutate();
+                            resetProjetoMutation.mutate(resetCentroCusto);
                           }
                         }}
-                        disabled={resetProjetoMutation.isPending}
+                        disabled={!resetCentroCusto || resetProjetoMutation.isPending}
                         variant="destructive"
                         className="gap-2 bg-red-600 hover:bg-red-700 text-white"
                       >
