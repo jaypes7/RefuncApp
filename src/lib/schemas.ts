@@ -211,6 +211,8 @@ export const TelefoneSchema = z.preprocess(
  * Campos adicionais do banco ficam no bloco "Campos extras (DB)" abaixo.
  */
 export const ColaboradorSchema = z.object({
+  id: z.string().uuid().optional(),
+
   // Colunas 1-5
   IND: z.preprocess(emptyStringToUndefined, z.string().optional()),
   STATUS: z.preprocess(emptyStringToUndefined, StatusEnum.optional().catch(undefined)),
@@ -289,6 +291,8 @@ export const ColaboradorCreateSchema = ColaboradorSchema.refine(
  * Schema explícito para garantir que o preprocess funcione corretamente em todos os campos
  */
 export const ColaboradorUpdateSchema = z.object({
+  id: z.string().uuid().optional(),
+
   // Colunas 1-5
   IND: z.preprocess(emptyStringToUndefined, z.string().optional()),
   STATUS: safeEnum(STATUS_VALUES),

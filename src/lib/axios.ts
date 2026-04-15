@@ -56,6 +56,7 @@ api.interceptors.response.use(
 // ============================================================================
 
 export interface Colaborador {
+  id?: string;
   IND?: string | null;
   STATUS?: string | null;
   ENVIADO_RH?: string | null;
@@ -134,16 +135,19 @@ export const colaboradoresApi = {
   listar: (params?: ListarColaboradoresParams) =>
     api.get<PaginatedResponse<Colaborador>>("/colaboradores", { params }),
 
-  buscar: (cpf: string) =>
-    api.get<{ data: Colaborador }>(`/colaboradores/${cpf}`),
+  buscar: (id: string) =>
+    api.get<{ data: Colaborador }>(`/colaboradores/${id}`),
 
   criar: (colaborador: Partial<Colaborador>) =>
     api.post("/colaboradores", colaborador),
 
-  atualizar: (cpf: string, colaborador: Partial<Colaborador>) =>
-    api.put(`/colaboradores/${cpf}`, colaborador),
+  atualizar: (id: string, colaborador: Partial<Colaborador>) =>
+    api.put(`/colaboradores/${id}`, colaborador),
 
-  remover: (cpf: string) => api.delete(`/colaboradores/${cpf}`),
+  remover: (id: string) => api.delete(`/colaboradores/${id}`),
+
+  realocar: (body: { id: string; novo_centro_custo: string }) =>
+    api.post("/colaboradores/realocar", body),
 };
 
 // ============================================================================
@@ -212,7 +216,10 @@ export interface DashboardData {
       labels: string[];
       planejado: number[];
       realizado?: number[];
-      valoresHoje?: { planejado: number; realizado: number } | null;
+      valoresHoje?: {
+        diario?: { planejado: number; realizado: number } | null;
+        etapas?: { planejado: number; realizado: number } | null;
+      } | null;
     } | null;
     evolucaoPorSetor: {
       rh: { total: number; percentual: number };
@@ -307,7 +314,16 @@ export type DashboardPrincipalData = {
       labels: string[];
       planejado: (number | null)[];
       realizado?: (number | null)[];
-      valoresHoje?: { planejado: number; realizado: number } | null;
+      detalhes?: Array<{
+        etapaId: number;
+        etapaNome: string;
+        planejadoEtapa: number;
+        realizadoEtapa: number;
+      }>;
+      valoresHoje?: {
+        diario?: { planejado: number; realizado: number } | null;
+        etapas?: { planejado: number; realizado: number } | null;
+      } | null;
     } | null;
   };
   etapasCount: number;
@@ -319,6 +335,7 @@ export type DashboardPrincipalData = {
     concluida: boolean;
     dataInicio?: string;
     dataFim?: string;
+    evolucaoDiaria?: Array<{ data: string; previsto: number; realizado: number }>;
   }>;
   agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes" | "distribuicaoMob">;
 };

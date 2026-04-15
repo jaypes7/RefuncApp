@@ -28,6 +28,11 @@ export type { RawRow, ImportError, ImportReport } from "@/lib/import-utils";
 // FUNÇÃO PRINCIPAL
 // ============================================================================
 
+interface ProcessImportOptions {
+  defaultCentroCusto?: string;
+  onProgress?: (done: number, total: number) => void;
+}
+
 /**
  * Envia as linhas brutas da planilha para o backend processar em batch.
  *
@@ -38,17 +43,18 @@ export type { RawRow, ImportError, ImportReport } from "@/lib/import-utils";
  *   4. Registro de log da importação
  *
  * @param rows        Linhas brutas do Excel (chaves = headers originais)
- * @param onProgress  Callback opcional de progresso (chamado no início e fim)
+ * @param options     Opções opcionais: defaultCentroCusto e callback de progresso
  */
 export async function processImport(
   rows: RawRow[],
-  onProgress?: (done: number, total: number) => void
+  options: ProcessImportOptions = {}
 ): Promise<ImportReport> {
+  const { defaultCentroCusto, onProgress } = options;
   onProgress?.(0, rows.length);
 
   const response = await api.post<ImportReport>(
     "/colaboradores/import",
-    { rows }
+    { rows, default_centro_custo: defaultCentroCusto }
   );
 
   onProgress?.(rows.length, rows.length);

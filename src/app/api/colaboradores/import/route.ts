@@ -14,13 +14,14 @@
  *      • CPF existente → dados da planilha sobrescrevem o banco, exceto se a
  *                        célula estiver vazia/nula (preserva dados existentes)
  *      • CPF novo      → insere o objeto completo
- *   5. UPSERT único                            →  .upsert(payload, { onConflict: "cpf" })
+ *   5. UPSERT único                            →  .upsert(payload, { onConflict: "cpf,centro_custo" })
  *      Log único                               →  logImport()
  *
  * Retorna: ImportReport { inseridos, atualizados, ignorados, erros, total }
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { createServerClient } from "@/lib/supabase";
 import {
   buildHeaderMap,
@@ -91,7 +92,10 @@ export async function POST(request: NextRequest) {
 
     // ── Payload ──────────────────────────────────────────────────────────────
     const body = await request.json();
-    const { rows } = body as { rows: RawRow[] };
+    const { rows, default_centro_custo: defaultCentroCusto } = body as {
+      rows: RawRow[];
+      default_centro_custo?: string;
+    };
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(report);
@@ -178,7 +182,11 @@ export async function POST(request: NextRequest) {
         seenCpfs.add(cpf);
 
         // Converte chaves para lowercase e garante o CPF limpo
-        validRows.set(cpf, { ...toLowerKeys(colaborador), cpf });
+        const dbRow: Record<string, unknown> = { ...toLowerKeys(colaborador), cpf };
+        if (!dbRow.centro_custo && defaultCentroCusto) {
+          dbRow.centro_custo = defaultCentroCusto;
+        }
+        validRows.set(cpf, dbRow);
       } catch (err) {
         report.erros.push({
           linha: lineNumber,
@@ -209,11 +217,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Indexa existentes por CPF em O(n) para lookup O(1) no loop abaixo
-    const existingByCpf = new Map<string, Record<string, unknown>>();
+    // Indexa existentes por (cpf, centro_custo) para lookup O(1)
+    const existingKey = (cpf: string, cc: unknown) =>
+      `${cpf}::${String(cc ?? "").trim()}`;
+
+    const existingByKey = new Map<string, Record<string, unknown>>();
     for (const row of existingRows ?? []) {
       const cpf = String(row.cpf ?? "").replace(/\D/g, "");
-      if (cpf) existingByCpf.set(cpf, row as Record<string, unknown>);
+      if (cpf) existingByKey.set(existingKey(cpf, row.centro_custo), row as Record<string, unknown>);
     }
 
     // ── FASE 4: Aplicar regra de MERGE (Overwrite) ───────────────────────────
@@ -227,14 +238,17 @@ export async function POST(request: NextRequest) {
     const upsertPayload: Record<string, unknown>[] = [];
 
     for (const [cpf, newData] of validRows.entries()) {
-      if (existingByCpf.has(cpf)) {
-        // ── UPDATE com merge Overwrite ────────────────────────────────────────
-        const merged = { ...existingByCpf.get(cpf)! };
+      const cc = newData.centro_custo ?? "";
+      const key = existingKey(cpf, cc);
 
-        for (const [key, incomingValue] of Object.entries(newData)) {
+      if (existingByKey.has(key)) {
+        // ── UPDATE com merge Overwrite ────────────────────────────────────────
+        const merged = { ...existingByKey.get(key)! };
+
+        for (const [keyName, incomingValue] of Object.entries(newData)) {
           // Sobrescreve o banco se a célula da planilha não estiver vazia
           if (!isEmpty(incomingValue)) {
-            merged[key] = incomingValue;
+            merged[keyName] = incomingValue;
           }
         }
 
@@ -243,7 +257,7 @@ export async function POST(request: NextRequest) {
         report.atualizados++;
       } else {
         // ── INSERT completo ───────────────────────────────────────────────────
-        upsertPayload.push({ ...newData, cpf });
+        upsertPayload.push({ ...newData, cpf, id: randomUUID() });
         report.inseridos++;
       }
     }
@@ -251,7 +265,7 @@ export async function POST(request: NextRequest) {
     // ── FASE 5: Upsert único — 1 chamada ao Supabase ─────────────────────────
     const { error: upsertError } = await supabase
       .from("colaboradores")
-      .upsert(upsertPayload, { onConflict: "cpf" });
+      .upsert(upsertPayload, { onConflict: "cpf,centro_custo" });
 
     if (upsertError) {
       throw new Error(`Falha no upsert: ${upsertError.message}`);

@@ -287,11 +287,14 @@ export default function DashboardPage() {
   const curveData = useMemo(() => {
     if (!dashboardData?.graficos?.curvaS) return [];
 
-    const { labels, planejado, realizado } = dashboardData.graficos.curvaS;
+    const { labels, planejado, realizado, detalhes } = dashboardData.graficos.curvaS;
     const d = labels.map((mes, index) => ({
       mes,
       previsto: planejado[index] ?? undefined,
       realizado: realizado?.[index] ?? undefined,
+      previstoEtapa: detalhes?.[index]?.planejadoEtapa,
+      realizadoEtapa: detalhes?.[index]?.realizadoEtapa,
+      etapaNome: detalhes?.[index]?.etapaNome,
     }));
 
     // Forward-fill previsto: garante que a linha de meta se estende até o fim
@@ -310,8 +313,8 @@ export default function DashboardPage() {
   // Indicador: usar valores do dia atual retornados pela API
   const indicadorCurvaS = useMemo(() => {
     if (!dashboardData?.graficos?.curvaS?.valoresHoje) return null;
-    const { planejado, realizado } = dashboardData.graficos.curvaS.valoresHoje;
-    return { previsto: planejado, realizado };
+    const { diario, etapas } = dashboardData.graficos.curvaS.valoresHoje;
+    return { diario, etapas };
   }, [dashboardData]);
 
   // Verifica se existe algum progresso real (alguma etapa com % > 0)
@@ -475,7 +478,7 @@ export default function DashboardPage() {
                   )}
                   {configData.DATA_INICIO_PROJETO && (
                     <div>
-                      <p className="text-xs text-muted-foreground">Início</p>
+                      <p className="text-xs text-muted-foreground">Início da mobilização</p>
                       <p className="text-sm font-semibold">
                         {new Date(configData.DATA_INICIO_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                       </p>
@@ -483,7 +486,7 @@ export default function DashboardPage() {
                   )}
                   {configData.DATA_FIM_PROJETO && (
                     <div>
-                      <p className="text-xs text-muted-foreground">Término</p>
+                      <p className="text-xs text-muted-foreground">Término da mobilização</p>
                       <p className="text-sm font-semibold">
                         {new Date(configData.DATA_FIM_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                       </p>
@@ -617,52 +620,74 @@ export default function DashboardPage() {
                       <p className="text-xs text-muted-foreground">
                         Dia {dashboardData?.projeto?.diasCorridos ?? 0} do projeto
                       </p>
-                      {dashboardData?.projeto?.status?.atrasado && (
-                        <p className="text-xs font-medium text-destructive">
-                          ▼ {dashboardData.projeto.status.percentualAtraso.toFixed(1)}% de atraso físico
-                        </p>
-                      )}
-                      {dashboardData?.projeto?.status &&
-                        !dashboardData.projeto.status.atrasado }
                     </div>
                   </div>
-                  {/* Indicador: leitura dos pontos do gráfico na data de hoje */}
-                  {indicadorCurvaS && temProgressoReal && (
-                    <div className="shrink-0 flex flex-col items-end gap-0.5 text-right">
-                      <span className="text-xs text-muted-foreground">
-                        Planejado:{" "}
-                        <span className="font-semibold text-foreground">
-                          {indicadorCurvaS.previsto.toFixed(1)}%
-                        </span>
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Realizado:{" "}
-                        <span
-                          className="font-semibold"
-                          style={{
-                            color:
-                              indicadorCurvaS.realizado >= indicadorCurvaS.previsto
-                                ? "#337246"
-                                : "#DA291B",
-                          }}
-                        >
-                          {indicadorCurvaS.realizado.toFixed(1)}%
-                        </span>
-                      </span>
-                    </div>
-                  )}
-                  {indicadorCurvaS && !temProgressoReal && (
-                    <div className="shrink-0 flex flex-col items-end gap-0.5 text-right">
-                      <span className="text-xs text-muted-foreground">
-                        Planejado:{" "}
-                        <span className="font-semibold text-foreground">
-                          {indicadorCurvaS.previsto.toFixed(1)}%
-                        </span>
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Realizado:{" "}
-                        <span className="font-semibold text-foreground">-</span>
-                      </span>
+                  {/* Indicadores: Diário (Curva S) + Macro (Etapas) */}
+                  {indicadorCurvaS && (
+                    <div className="shrink-0 flex flex-col sm:flex-row items-end sm:items-center gap-3 text-right">
+                      {/* Comparação Diária */}
+                      {indicadorCurvaS.diario && (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                            Diário
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Plan:{" "}
+                            <span className="font-semibold text-foreground">
+                              {indicadorCurvaS.diario.planejado.toFixed(1)}%
+                            </span>
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Real:{" "}
+                            <span
+                              className="font-semibold"
+                              style={{
+                                color:
+                                  indicadorCurvaS.diario.realizado >= indicadorCurvaS.diario.planejado
+                                    ? "#337246"
+                                    : "#DA291B",
+                              }}
+                            >
+                              {temProgressoReal
+                                ? `${indicadorCurvaS.diario.realizado.toFixed(1)}%`
+                                : "-"}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
+                      {indicadorCurvaS.diario && indicadorCurvaS.etapas && (
+                        <div className="hidden sm:block w-px h-8 bg-border/50" />
+                      )}
+
+                      {/* Comparação Macro (Etapas) */}
+                      {indicadorCurvaS.etapas && (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                            Etapas
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Plan:{" "}
+                            <span className="font-semibold text-foreground">
+                              {indicadorCurvaS.etapas.planejado.toFixed(1)}%
+                            </span>
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Real:{" "}
+                            <span
+                              className="font-semibold"
+                              style={{
+                                color:
+                                  indicadorCurvaS.etapas.realizado >= indicadorCurvaS.etapas.planejado
+                                    ? "#337246"
+                                    : "#DA291B",
+                              }}
+                            >
+                              {indicadorCurvaS.etapas.realizado.toFixed(1)}%
+                            </span>
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardHeader>
@@ -726,14 +751,35 @@ export default function DashboardPage() {
                       />
 
                       <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(value, name) => [
-                              `${value}%`,
-                              name === "previsto" ? "Planejado" : "Realizado",
-                            ]}
-                          />
-                        }
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload || !payload.length) return null;
+                          const p = payload[0].payload as {
+                            mes?: string;
+                            previstoEtapa?: number;
+                            realizadoEtapa?: number;
+                            etapaNome?: string;
+                          };
+                          return (
+                            <div className="rounded-lg border bg-background p-2 shadow-sm">
+                              <p className="text-xs text-muted-foreground">{label}</p>
+                              {p.etapaNome && p.etapaNome !== "—" && (
+                                <p className="text-xs font-medium">{p.etapaNome}</p>
+                              )}
+                              <p className="text-xs">
+                                Planejado:{" "}
+                                <span className="font-semibold">
+                                  {p.previstoEtapa?.toFixed(1) ?? 0}%
+                                </span>
+                              </p>
+                              <p className="text-xs">
+                                Realizado:{" "}
+                                <span className="font-semibold">
+                                  {p.realizadoEtapa?.toFixed(1) ?? 0}%
+                                </span>
+                              </p>
+                            </div>
+                          );
+                        }}
                       />
                       <ChartLegend content={<ChartLegendContent />} />
 
@@ -1095,11 +1141,79 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* ── Etapas do Projeto ── */}
+          {dashboardData?.etapas && dashboardData.etapas.length > 0 && (
+            <div className="mb-6">
+              <Card className="glass-card">
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <ListChecks className="h-5 w-5 text-primary" />
+                  <CardTitle>Etapas do Projeto</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {dashboardData.etapas.map((etapa) => (
+                      <div
+                        key={etapa.id}
+                        className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-semibold">{etapa.nome}</span>
+                          {etapa.concluida || etapa.percentualConcluido >= 100 ? (
+                            <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          ) : null}
+                        </div>
+                        {(etapa.dataInicio || etapa.dataFim) && (
+                          <div className="text-xs text-muted-foreground">
+                            {fmtDate(etapa.dataInicio) ?? "—"} - {fmtDate(etapa.dataFim) ?? "—"}
+                          </div>
+                        )}
+                        <div className="text-xs text-muted-foreground">
+                          {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""}
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          {/* Barra Previsto (azul) */}
+                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-blue-500 transition-all"
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  etapa.evolucaoDiaria?.[etapa.evolucaoDiaria.length - 1]?.previsto ??
+                                    etapa.percentualConcluido,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                          {/* Barra Realizado (vermelho) */}
+                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-[#DA291B] transition-all"
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  etapa.evolucaoDiaria?.[etapa.evolucaoDiaria.length - 1]?.realizado ??
+                                    etapa.percentualConcluido,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground text-right mt-1">
+                          Previsto: {etapa.evolucaoDiaria?.[etapa.evolucaoDiaria.length - 1]?.previsto ?? etapa.percentualConcluido}% · Realizado: {etapa.evolucaoDiaria?.[etapa.evolucaoDiaria.length - 1]?.realizado ?? etapa.percentualConcluido}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* ── Status Contratual (com números absolutos) ── */}
           <div className="mb-6">
             <Card className="glass-card">
               <CardHeader>
-                <CardTitle>Status Contratual</CardTitle>
+                <CardTitle>Status Contratação</CardTitle>
               </CardHeader>
               <CardContent>
                 <ChartContainer config={chartConfigStatus} className="h-[260px] 2xl:h-[340px] w-full">
@@ -1143,52 +1257,6 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* ── Etapas do Projeto ── */}
-          {dashboardData?.etapas && dashboardData.etapas.length > 0 && (
-            <div className="mb-6">
-              <Card className="glass-card">
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <ListChecks className="h-5 w-5 text-primary" />
-                  <CardTitle>Etapas do Projeto</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {dashboardData.etapas.map((etapa) => (
-                      <div
-                        key={etapa.id}
-                        className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-4"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-sm font-semibold">{etapa.nome}</span>
-                          {etapa.concluida || etapa.percentualConcluido >= 100 ? (
-                            <Check className="h-4 w-4 text-green-500 shrink-0" />
-                          ) : null}
-                        </div>
-                        {(etapa.dataInicio || etapa.dataFim) && (
-                          <div className="text-xs text-muted-foreground">
-                            {fmtDate(etapa.dataInicio) ?? "—"} - {fmtDate(etapa.dataFim) ?? "—"}
-                          </div>
-                        )}
-                        <div className="text-xs text-muted-foreground">
-                          {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""}
-                        </div>
-                        <div className="mt-1 h-2 w-full rounded-full bg-muted overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-primary transition-all"
-                            style={{ width: `${Math.min(100, etapa.percentualConcluido)}%` }}
-                          />
-                        </div>
-                        <div className="text-xs text-muted-foreground text-right">
-                          {etapa.percentualConcluido.toFixed(0)}%
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
           {/* ── Distribuição por Função CLT ── */}
           {dadosFuncoes.length > 0 && (

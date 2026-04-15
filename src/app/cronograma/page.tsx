@@ -26,6 +26,11 @@ import {
   Check,
   X,
   AlertTriangle,
+  ChevronDown,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Pencil,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -47,6 +52,12 @@ type EtapaCronograma = {
 type ConfigCronograma = {
   etapas: EtapaCronograma[];
   dias_totais: number;
+};
+
+type ProgressoDiarioEntry = {
+  etapa_id: number;
+  data: string; // YYYY-MM-DD
+  percentual: number;
 };
 
 type ApiConfigResponse = {
@@ -94,6 +105,15 @@ export default function CronogramaPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingSaveData, setPendingSaveData] = useState<ConfigCronograma | null>(null);
 
+  // Estado para painel de avanço diário por etapa
+  const [expandedStages, setExpandedStages] = useState<Set<number>>(new Set());
+  // progressoDiario: etapa_id → { "YYYY-MM-DD": percentual | null }
+  const [progressoDiario, setProgressoDiario] = useState<Record<number, Record<string, number | null>>>({});
+
+  // Edição inline do nome da etapa
+  const [editingEtapaId, setEditingEtapaId] = useState<number | null>(null);
+  const [editingEtapaNome, setEditingEtapaNome] = useState("");
+
   const { data: projetoQueryData } = useQuery<ApiConfigResponse>({
     queryKey: ["config", "projeto", centroCusto],
     queryFn: async () => {
@@ -123,18 +143,53 @@ export default function CronogramaPage() {
     enabled: !!centroCusto,
   });
 
+  // Buscar progresso diário das etapas
+  const { data: progressoDiarioData } = useQuery<ProgressoDiarioEntry[]>({
+    queryKey: ["etapas-progresso", centroCusto],
+    queryFn: async () => {
+      const params = centroCusto
+        ? `?centro_custo=${encodeURIComponent(centroCusto)}`
+        : "";
+      const res = await fetch(`/api/etapas/progresso${params}`);
+      if (!res.ok) throw new Error("Falha ao carregar progresso diário");
+      const json = await res.json();
+      return json.data as ProgressoDiarioEntry[];
+    },
+    enabled: !!centroCusto,
+  });
+
+  // Mutation para salvar progresso de um dia específico
+  const progressoMutation = useMutation({
+    mutationFn: async (entry: { etapa_id: number; data: string; percentual: number | null }) => {
+      const res = await fetch("/api/etapas/progresso", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centro_custo: centroCusto, ...entry }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar progresso");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["etapas-progresso"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   useEffect(() => {
     if (!projetoQueryData) return;
     setProjetoData(projetoQueryData);
-    
+
     if (projetoQueryData.ETAPAS_PROJETO?.length) {
-      const novasEtapas = ETAPAS_DEFAULT.map((etapaDefault) => {
-        const salva = projetoQueryData.ETAPAS_PROJETO.find(
-          (e) => e.nome === etapaDefault.nome,
-        );
+      const novasEtapas = ETAPAS_DEFAULT.map((etapaDefault, index) => {
+        const salva = projetoQueryData.ETAPAS_PROJETO[index];
         return salva
           ? {
               ...etapaDefault,
+              nome: salva.nome ?? etapaDefault.nome,
               dias: salva.duracaoDias,
               concluida: salva.concluida ?? false,
               percentual_concluido: salva.percentualConcluido ?? 0,
@@ -147,6 +202,17 @@ export default function CronogramaPage() {
       setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
     }
   }, [projetoQueryData]);
+
+  // Popula progressoDiario quando os dados chegam do servidor
+  useEffect(() => {
+    if (!progressoDiarioData) return;
+    const mapa: Record<number, Record<string, number>> = {};
+    for (const entry of progressoDiarioData) {
+      if (!mapa[entry.etapa_id]) mapa[entry.etapa_id] = {};
+      mapa[entry.etapa_id][entry.data] = entry.percentual;
+    }
+    setProgressoDiario(mapa);
+  }, [progressoDiarioData]);
 
   // Total de dias corridos = fim - início (inclusive)
   const diasCorridosTotal = useMemo(() => {
@@ -227,6 +293,60 @@ export default function CronogramaPage() {
     setPendingSaveData(null);
   };
 
+  // Helpers para avanço diário
+  const toggleExpanded = (id: number) => {
+    setExpandedStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Retorna todos os dias corridos entre duas datas (inclusive), formato YYYY-MM-DD
+  const getDaysInRange = (startDate: string, endDate: string): string[] => {
+    const days: string[] = [];
+    const cur = new Date(startDate + "T00:00:00");
+    const end = new Date(endDate + "T00:00:00");
+    while (cur <= end) {
+      days.push(formatDateISO(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return days;
+  };
+
+  const handleProgressoDiarioChange = (
+    etapa: EtapaCronograma,
+    data: string,
+    percentual: number | null,
+  ) => {
+    const valor = percentual == null ? null : Math.max(0, Math.min(100, percentual));
+
+    // Update otimista local
+    setProgressoDiario((prev) => {
+      const map = { ...(prev[etapa.id] ?? {}) };
+      if (valor == null) {
+        delete map[data];
+      } else {
+        map[data] = valor;
+      }
+      return { ...prev, [etapa.id]: map };
+    });
+
+    // Salvar no servidor
+    progressoMutation.mutate({ etapa_id: etapa.id, data, percentual: valor });
+
+    // Atualizar percentual_concluido da etapa com a SOMA de todos os incrementos válidos
+    const novoMap = { ...(progressoDiario[etapa.id] ?? {}) };
+    if (valor == null) {
+      delete novoMap[data];
+    } else {
+      novoMap[data] = valor;
+    }
+    const soma = Object.values(novoMap).reduce<number>((s, v) => (v == null ? s : s + v), 0);
+    updateEtapaPercentual(etapa.id, Math.min(100, soma));
+  };
+
   const updateEtapaDias = (id: number, dias: number) => {
     const novasEtapas = cronograma.etapas.map((e) =>
       e.id === id ? { ...e, dias: Math.max(0, dias) } : e,
@@ -243,6 +363,33 @@ export default function CronogramaPage() {
     const novoEstado: ConfigCronograma = { etapas: novasEtapas, dias_totais: totalDias };
     setCronograma(novoEstado);
     cronogramaMutation.mutate(novoEstado);
+  };
+
+  const updateEtapaNome = (id: number, nome: string) => {
+    const nomeLimpo = nome.trim();
+    const novasEtapas = cronograma.etapas.map((e) =>
+      e.id === id ? { ...e, nome: nomeLimpo || e.nome } : e,
+    );
+    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
+    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
+  };
+
+  const iniciarEdicaoNome = (etapa: EtapaCronograma) => {
+    setEditingEtapaId(etapa.id);
+    setEditingEtapaNome(etapa.nome);
+  };
+
+  const salvarEdicaoNome = () => {
+    if (editingEtapaId != null) {
+      updateEtapaNome(editingEtapaId, editingEtapaNome);
+    }
+    setEditingEtapaId(null);
+    setEditingEtapaNome("");
+  };
+
+  const cancelarEdicaoNome = () => {
+    setEditingEtapaId(null);
+    setEditingEtapaNome("");
   };
 
   const updateEtapaPercentual = (id: number, pct: number) => {
@@ -450,7 +597,53 @@ export default function CronogramaPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium truncate flex items-center gap-2">
-                            <span className="truncate">{etapa.nome}</span>
+                            {editingEtapaId === etapa.id ? (
+                              <>
+                                <Input
+                                  value={editingEtapaNome}
+                                  onChange={(e) => setEditingEtapaNome(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") salvarEdicaoNome();
+                                    if (e.key === "Escape") cancelarEdicaoNome();
+                                  }}
+                                  onBlur={salvarEdicaoNome}
+                                  autoFocus
+                                  className="glass-input min-w-0 flex-1 h-8 text-sm"
+                                  placeholder="Nome da etapa"
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                  onClick={salvarEdicaoNome}
+                                  title="Salvar nome"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-muted-foreground"
+                                  onClick={cancelarEdicaoNome}
+                                  title="Cancelar"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="truncate">{etapa.nome}</span>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                  onClick={() => iniciarEdicaoNome(etapa)}
+                                  title="Editar nome"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
                             {etapa.concluida && (
                               <Badge
                                 variant="outline"
@@ -577,6 +770,131 @@ export default function CronogramaPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Botão Avanço por dia — só aparece se a etapa tem datas */}
+                      {etapa.data_inicio && etapa.data_fim && (
+                        <div className="ml-12 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(etapa.id)}
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                expandedStages.has(etapa.id) ? "rotate-180" : ""
+                              }`}
+                            />
+                            Avanço por dia
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Painel de avanço diário — colapsa abaixo */}
+                      {etapa.data_inicio && etapa.data_fim && expandedStages.has(etapa.id) && (() => {
+                        const dias = getDaysInRange(etapa.data_inicio, etapa.data_fim);
+                        const totalDias = dias.length;
+                        const etapaProgresso = progressoDiario[etapa.id] ?? {};
+                        // Acumulado corrido — atualizado a cada linha
+                        let acumulado = 0;
+                        return (
+                          <div className="ml-12 mt-2 border border-border/40 rounded-lg overflow-hidden">
+                            <div className="grid grid-cols-5 text-[11px] font-medium text-muted-foreground bg-muted/30 px-3 py-2 border-b border-border/30">
+                              <span>Data</span>
+                              <span className="text-center">Planejado</span>
+                              <span className="text-center">% do dia</span>
+                              <span className="text-center">Acumulado</span>
+                              <span className="text-center">Delta</span>
+                            </div>
+                            {dias.map((dia, idx) => {
+                              const planejado = Math.round(((idx + 1) / totalDias) * 100);
+                              const incremento = etapaProgresso[dia];
+                              // Avança o acumulado apenas se houver entrada neste dia
+                              if (incremento != null) acumulado += incremento;
+                              // "Acumulado" só é exibido em dias com entrada
+                              const realizadoCumulativo = incremento != null
+                                ? Math.min(100, acumulado)
+                                : undefined;
+                              const delta = realizadoCumulativo != null
+                                ? realizadoCumulativo - planejado
+                                : undefined;
+                              const diaSemana = new Date(dia + "T00:00:00").toLocaleDateString("pt-BR", {
+                                weekday: "short",
+                                timeZone: "UTC",
+                              });
+                              const diaMes = new Date(dia + "T00:00:00").toLocaleDateString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                timeZone: "UTC",
+                              });
+                              return (
+                                <div
+                                  key={dia}
+                                  className="grid grid-cols-5 items-center px-3 py-1.5 text-xs border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors"
+                                >
+                                  <span className="text-muted-foreground tabular-nums">
+                                    {diaMes}{" "}
+                                    <span className="text-muted-foreground/60 capitalize">{diaSemana}</span>
+                                  </span>
+                                  <span className="text-center tabular-nums text-muted-foreground">
+                                    {planejado}%
+                                  </span>
+                                  <div className="flex justify-center">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      placeholder="—"
+                                      defaultValue={incremento !== undefined && incremento !== null ? incremento : ""}
+                                      key={`${dia}-${incremento}`}
+                                      onBlur={(e) => {
+                                        const raw = e.target.value.trim();
+                                        if (raw === "") {
+                                          handleProgressoDiarioChange(etapa, dia, null);
+                                        } else {
+                                          const val = parseInt(raw);
+                                          if (!isNaN(val)) {
+                                            handleProgressoDiarioChange(etapa, dia, val);
+                                          }
+                                        }
+                                      }}
+                                      className="w-16 h-6 glass-input text-center text-xs px-1"
+                                    />
+                                  </div>
+                                  <span className="text-center tabular-nums font-medium">
+                                    {realizadoCumulativo !== undefined
+                                      ? `${realizadoCumulativo}%`
+                                      : <span className="text-muted-foreground/40">—</span>}
+                                  </span>
+                                  <div className="flex justify-center">
+                                    {delta !== undefined ? (
+                                      <span
+                                        className={`flex items-center gap-0.5 font-medium tabular-nums ${
+                                          delta > 0
+                                            ? "text-[#337246]"
+                                            : delta < 0
+                                            ? "text-red-400"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {delta > 0 ? (
+                                          <TrendingUp className="w-3 h-3" />
+                                        ) : delta < 0 ? (
+                                          <TrendingDown className="w-3 h-3" />
+                                        ) : (
+                                          <Minus className="w-3 h-3" />
+                                        )}
+                                        {delta > 0 ? "+" : ""}{delta}%
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground/40">—</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}

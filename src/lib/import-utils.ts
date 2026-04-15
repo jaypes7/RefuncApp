@@ -68,7 +68,7 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   vr_status: ["VR", "VALE REFEIÇÃO", "VALE REFEICAO", "VR STATUS"],
   uniforme_tam: ["UNIFORME", "TAMANHO UNIFORME", "TAM UNIFORME", "TAM. UNIFORME"],
   epi_status: ["EPI", "EPIS", "EPIs", "ENTREGA EPI", "ENTREGA DE EPIS", "STATUS EPI"],
-  c_custo: ["CENTRO DE CUSTO", "C CUSTO", "CENTRO_CUSTO", "CC", "C.CUSTO"],
+  c_custo: ["CENTRO DE CUSTO", "C CUSTO", "C. CUSTO", "CENTRO_CUSTO", "CC", "C.CUSTO", "UT"],
   obs_geral: ["OBS", "OBSERVAÇÕES", "OBSERVACOES", "OBS GERAL", "OBSERVAÇÃO GERAL"],
   data_desligamento: ["DATA DEMISSÃO", "DATA DEMISSAO", "DEMISSÃO", "DEMISSAO", "DT DESLIGAMENTO", "DATA DESLIGAMENTO"],
   ind: ["IND", "INDICADOR"],
@@ -137,7 +137,7 @@ export const SCHEMA_TO_API: Record<string, string | null> = {
   vr_status: "VR",
   uniforme_tam: null,
   epi_status: null,
-  c_custo: null,
+  c_custo: "CENTRO_CUSTO",
   obs_geral: null,
   data_desligamento: "DEMISSAO",
   ind: "IND",
@@ -394,6 +394,9 @@ export function rowToColaborador(row: RawRow, headerMap: Map<string, string>): R
     // 👇 ADICIONADO: hotel agora é tratado como texto e convertido para maiúsculo
     } else if (["nome", "funcao", "hotel"].includes(schemaId)) {
       result[apiKey] = sanitizeText(rawValue, { upper: true });
+
+    } else if (schemaId === "c_custo") {
+      result[apiKey] = sanitizeText(rawValue, { upper: false });
       
     } else {
       result[apiKey] = mapStrictEnums(schemaId, sanitizeText(rawValue));
