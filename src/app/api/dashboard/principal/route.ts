@@ -187,6 +187,49 @@ function calcularRealizadoNaData(
   return temAlgumDado ? Math.min(100, Math.round(reAcum * 10) / 10) : null;
 }
 
+/**
+ * Calcula o progresso global REALIZADO suavizado para o gráfico.
+ * Distribui o percentual real acumulado de cada etapa linearmente ao longo
+ * de seus dias (mesma forma geométrica do planejado), criando uma curva
+ * contínua que acompanha o planejado proporcionalmente.
+ */
+function calcularRealizadoSuavizadoNaData(
+  dateStr: string,
+  etapas: EtapaConfig[],
+  totalDias: number,
+  progressoDiario: ProgressoDiarioRow[],
+): number | null {
+  let reAcum = 0;
+  let temAlgumDado = false;
+  const MS_PER_DAY = 86_400_000;
+
+  for (const etapa of etapas) {
+    const peso = (etapa.duracaoDias / totalDias) * 100;
+    const ini = etapa.dataInicio;
+    const fim = etapa.dataFim;
+
+    if (!ini || !fim) continue;
+
+    const registros = progressoDiario.filter((r) => r.etapa_id === etapa.id && r.data <= dateStr);
+    const pctRealAteAgora = Math.min(100, registros.reduce((s, r) => s + r.percentual, 0));
+    if (registros.length > 0) temAlgumDado = true;
+
+    if (dateStr < ini) {
+      continue;
+    } else {
+      const iniMs = new Date(ini + "T00:00:00Z").getTime();
+      const fimMs = new Date(fim + "T00:00:00Z").getTime();
+      const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+      const diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
+      const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+      const frac = Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa));
+      reAcum += frac * peso * (pctRealAteAgora / 100);
+    }
+  }
+
+  return temAlgumDado ? Math.min(100, Math.round(reAcum * 10) / 10) : null;
+}
+
 function gerarDiasTrabalhadosFallback(dataInicio: string, dataFim: string): string[] {
   const inicio = new Date(dataInicio + "T00:00:00Z");
   const fim = new Date(dataFim + "T00:00:00Z");
@@ -271,7 +314,7 @@ function gerarCurvaSEtapas(
     if (ultimaDataComDado === null || dateStr > ultimaDataComDado) {
       realizado.push(null);
     } else {
-      realizado.push(calcularRealizadoNaData(dateStr, etapas, totalDias, progressoDiario));
+      realizado.push(calcularRealizadoSuavizadoNaData(dateStr, etapas, totalDias, progressoDiario));
     }
 
     // Identifica etapa ativa neste dia
@@ -332,11 +375,10 @@ function gerarCurvaSEtapas(
     ? ultimaDataComDado
     : (diasPlot[diasPlot.length - 1] ?? dataInicio);
 
-  const idxDiario = diasPlot.indexOf(dataReferenciaDiaria);
-  const detalheDiario = idxDiario >= 0 ? detalhes[idxDiario] : null;
-
-  const plDiario = detalheDiario?.planejadoEtapa ?? 0;
-  const reDiario = detalheDiario?.realizadoEtapa ?? 0;
+  const plDiario = calcularPlanejadoNaData(dataReferenciaDiaria, etapas, totalDias, dataInicio);
+  const reDiario = ultimaDataComDado
+    ? (calcularRealizadoNaData(dataReferenciaDiaria, etapas, totalDias, progressoDiario) ?? 0)
+    : 0;
 
   // ETAPAS: visão acumulada total do projeto (100% planejado vs realizado total)
   const reTotal = ultimaDataComDado
@@ -349,9 +391,7 @@ function gerarCurvaSEtapas(
     realizado,
     detalhes,
     valoresHoje: {
-      diario: ultimaDataComDado && detalheDiario
-        ? { planejado: plDiario, realizado: reDiario }
-        : null,
+      diario: { planejado: plDiario, realizado: reDiario },
       etapas: { planejado: 100, realizado: reTotal },
     },
   };
