@@ -175,6 +175,7 @@ export default function CronogramaPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["etapas-progresso"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -263,6 +264,7 @@ export default function CronogramaPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"] });
       toast.success("Cronograma atualizado com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -754,7 +756,10 @@ export default function CronogramaPage() {
 
                       {/* Painel de avanço diário — colapsa abaixo */}
                       {etapa.data_inicio && etapa.data_fim && expandedStages.has(etapa.id) && (() => {
-                        const dias = getDaysInRange(etapa.data_inicio, etapa.data_fim);
+                        const diasTrabalhadosSet = new Set(diasTrabalhadosData ?? []);
+                        const dias = getDaysInRange(etapa.data_inicio!, etapa.data_fim!).filter(
+                          (dia) => diasTrabalhadosSet.has(dia),
+                        );
                         const totalDias = dias.length;
                         const etapaProgresso = progressoDiario[etapa.id] ?? {};
                         // Acumulado corrido — atualizado a cada linha

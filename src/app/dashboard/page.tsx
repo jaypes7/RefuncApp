@@ -1145,7 +1145,7 @@ export default function DashboardPage() {
                   <CardTitle>Etapas do Projeto</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-end gap-4 mb-4 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-center gap-4 mb-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                       <span className="inline-block h-1.5 w-4 rounded-full bg-blue-500" />
                       <span>Previsto</span>
@@ -1156,59 +1156,102 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {dashboardData.etapas.map((etapa) => (
-                      <div
-                        key={etapa.id}
-                        className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-4"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-sm font-semibold">{etapa.nome}</span>
-                          {etapa.concluida || etapa.percentualConcluido >= 100 ? (
-                            <Check className="h-4 w-4 text-green-500 shrink-0" />
-                          ) : null}
-                        </div>
-                        {(etapa.dataInicio || etapa.dataFim) && (
+                    {(() => {
+                      const hojeRealStr = new Date().toISOString().split("T")[0];
+                      return dashboardData.etapas.map((etapa) => {
+                        let previstoEtapa = 0;
+                        let realizadoEtapa = 0;
+
+                        if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
+                          // Encontra o último dia em que o realizado AUMENTOU (progresso efetivamente lançado).
+                          // Como realizado é acumulado (carry-forward), buscamos o último índice em que
+                          // o valor cresceu em relação ao anterior, evitando que dias posteriores sem lançamento
+                          // inflem o previsto.
+                          let lastProgressIdx = -1;
+                          let prevRealizado = 0;
+                          for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
+                            if (etapa.evolucaoDiaria[i].realizado > prevRealizado) {
+                              lastProgressIdx = i;
+                              prevRealizado = etapa.evolucaoDiaria[i].realizado;
+                            }
+                          }
+
+                          if (lastProgressIdx !== -1) {
+                            // Usa previsto/realizado do último dia com lançamento real
+                            previstoEtapa = etapa.evolucaoDiaria[lastProgressIdx].previsto;
+                            realizadoEtapa = etapa.evolucaoDiaria[lastProgressIdx].realizado;
+                          } else {
+                            // Sem progresso: usa o previsto do último dia útil até hoje
+                            let lastBeforeToday = -1;
+                            for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
+                              if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
+                              else break;
+                            }
+                            previstoEtapa = lastBeforeToday !== -1 ? etapa.evolucaoDiaria[lastBeforeToday].previsto : 0;
+                            realizadoEtapa = 0;
+                          }
+                        } else {
+                          if ((etapa.dataFim && hojeRealStr >= etapa.dataFim) || etapa.concluida || etapa.percentualConcluido >= 100) {
+                            previstoEtapa = etapa.percentualConcluido ?? 0;
+                            realizadoEtapa = etapa.percentualConcluido ?? 0;
+                          } else {
+                            previstoEtapa = 0;
+                            realizadoEtapa = 0;
+                          }
+                        }
+                        return (
+                          <div
+                            key={etapa.id}
+                            className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-4"
+                          >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-sm font-semibold">{etapa.nome}</span>
+                            {etapa.concluida || etapa.percentualConcluido >= 100 ? (
+                              <Check className="h-4 w-4 text-green-500 shrink-0" />
+                            ) : null}
+                          </div>
+                          {(etapa.dataInicio || etapa.dataFim) && (
+                            <div className="text-xs text-muted-foreground">
+                              {fmtDate(etapa.dataInicio) ?? "—"} - {fmtDate(etapa.dataFim) ?? "—"}
+                            </div>
+                          )}
                           <div className="text-xs text-muted-foreground">
-                            {fmtDate(etapa.dataInicio) ?? "—"} - {fmtDate(etapa.dataFim) ?? "—"}
+                            {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""}
                           </div>
-                        )}
-                        <div className="text-xs text-muted-foreground">
-                          {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""}
-                        </div>
-                        <div className="mt-2 space-y-1">
-                          {/* Barra Previsto (azul) */}
-                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-blue-500 transition-all"
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  etapa.evolucaoDiaria?.[etapa.evolucaoDiaria.length - 1]?.previsto ??
-                                    etapa.percentualConcluido,
-                                )}%`,
-                              }}
-                            />
+                          <div className="mt-2 space-y-1">
+                            {/* Barra Previsto (azul) */}
+                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-blue-500 transition-all"
+                                style={{
+                                  width: `${Math.min(100, previstoEtapa)}%`,
+                                }}
+                              />
+                            </div>
+                            {/* Barra Realizado (vermelho) */}
+                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-[#DA291B] transition-all"
+                                style={{
+                                  width: `${Math.min(100, realizadoEtapa)}%`,
+                                }}
+                              />
+                            </div>
                           </div>
-                          {/* Barra Realizado (vermelho) */}
-                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-[#DA291B] transition-all"
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  etapa.evolucaoDiaria?.[etapa.evolucaoDiaria.length - 1]?.realizado ??
-                                    etapa.percentualConcluido,
-                                )}%`,
-                              }}
-                            />
+                          <div className="text-sm text-muted-foreground text-center mt-1">
+                            <span className="text-muted-foreground">
+                              Previsto: {previstoEtapa}%
+                            </span>
+                            <span className="mx-1">·</span>
+                            <span className="text-muted-foreground">
+                              Realizado: {realizadoEtapa}%
+                            </span>
                           </div>
                         </div>
-                        <div className="text-xs text-muted-foreground text-right mt-1">
-                          Previsto: {etapa.evolucaoDiaria?.[etapa.evolucaoDiaria.length - 1]?.previsto ?? etapa.percentualConcluido}% · Realizado: {etapa.evolucaoDiaria?.[etapa.evolucaoDiaria.length - 1]?.realizado ?? etapa.percentualConcluido}%
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      );
+                    });
+                  })()}
+                </div>
                 </CardContent>
               </Card>
             </div>
