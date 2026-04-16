@@ -178,6 +178,10 @@ export default function DashboardPage() {
 
   const dashboardData: DashboardPrincipalData | undefined = data;
 
+  // Estado para seleção de dia previsto por etapa (cards de etapas)
+  const [selectedDayPerEtapa, setSelectedDayPerEtapa] = useState<Record<number, string>>({});
+  const [selectedCurvaDayIdx, setSelectedCurvaDayIdx] = useState<number>(-1);
+
   // ── Ocorrências manuais ──────────────────────────────────────────────────────
   const queryClient = useQueryClient();
   const [novoTexto, setNovoTexto] = useState("");
@@ -309,6 +313,18 @@ export default function DashboardPage() {
 
     return d;
   }, [dashboardData]);
+
+  const xAxisTicks = useMemo(() => {
+    if (curveData.length === 0) return [];
+    const step = Math.max(1, Math.floor(curveData.length / 10));
+    const lastIdx = curveData.length - 1;
+    const ticks: string[] = [curveData[0].mes];
+    for (let i = step; i <= lastIdx - step; i += step) {
+      ticks.push(curveData[i].mes);
+    }
+    ticks.push(curveData[lastIdx].mes);
+    return ticks;
+  }, [curveData]);
 
   // Indicador: usar valores do dia atual retornados pela API
   const indicadorCurvaS = useMemo(() => {
@@ -631,10 +647,24 @@ export default function DashboardPage() {
                           <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
                             Diário
                           </span>
+                          {curveData.length > 0 && (
+                            <select
+                              value={selectedCurvaDayIdx}
+                              onChange={(e) => setSelectedCurvaDayIdx(Number(e.target.value))}
+                              className="text-[10px] rounded px-1 py-0.5 border border-border bg-background text-foreground mb-0.5"
+                            >
+                              <option value={-1}>Hoje</option>
+                              {curveData.map((d, i) => (
+                                <option key={i} value={i}>{d.mes}</option>
+                              ))}
+                            </select>
+                          )}
                           <span className="text-xs text-muted-foreground">
                             Plan:{" "}
                             <span className="font-semibold text-foreground">
-                              {indicadorCurvaS.diario.planejado.toFixed(1)}%
+                              {selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.previsto != null
+                                ? `${(curveData[selectedCurvaDayIdx].previsto as number).toFixed(1)}%`
+                                : `${indicadorCurvaS.diario.planejado.toFixed(1)}%`}
                             </span>
                           </span>
                           <span className="text-xs text-muted-foreground">
@@ -664,7 +694,7 @@ export default function DashboardPage() {
                       {indicadorCurvaS.etapas && (
                         <div className="flex flex-col items-end gap-0.5">
                           <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                            Etapas
+                            Geral
                           </span>
                           <span className="text-xs text-muted-foreground">
                             Plan:{" "}
@@ -733,7 +763,8 @@ export default function DashboardPage() {
                         tick={CHART_AXIS_TICK}
                         tickLine={false}
                         axisLine={false}
-                        interval={Math.max(0, Math.floor(curveData.length / 10) - 1)}
+                        ticks={xAxisTicks}
+                        interval={0}
                       />
                       <YAxis
                         tick={CHART_AXIS_TICK}
@@ -1145,7 +1176,7 @@ export default function DashboardPage() {
                   <CardTitle>Etapas do Projeto</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-center gap-4 mb-4 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-center gap-4 mb-4 text-base text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                       <span className="inline-block h-1.5 w-4 rounded-full bg-blue-500" />
                       <span>Previsto</span>
@@ -1199,6 +1230,16 @@ export default function DashboardPage() {
                             realizadoEtapa = 0;
                           }
                         }
+
+                        // Dia selecionado para visualização do previsto
+                        const selectedDia = selectedDayPerEtapa[etapa.id] ?? "";
+                        const selectedDayData = selectedDia
+                          ? etapa.evolucaoDiaria?.find((d) => d.data === selectedDia)
+                          : undefined;
+                        const displayPrevisto = selectedDayData != null
+                          ? selectedDayData.previsto
+                          : previstoEtapa;
+
                         return (
                           <div
                             key={etapa.id}
@@ -1218,13 +1259,44 @@ export default function DashboardPage() {
                           <div className="text-xs text-muted-foreground">
                             {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""}
                           </div>
+                          {/* Seletor de dia para ver o previsto */}
+                          {etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0 && (
+                            <select
+                              value={selectedDia}
+                              onChange={(e) =>
+                                setSelectedDayPerEtapa((prev) => ({
+                                  ...prev,
+                                  [etapa.id]: e.target.value,
+                                }))
+                              }
+                              className="text-xs rounded-md px-2 py-1 border border-border bg-background text-foreground"
+                            >
+                              <option value="">Previsto hoje</option>
+                              {etapa.evolucaoDiaria.map((d) => {
+                                const diaMes = new Date(d.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  timeZone: "UTC",
+                                });
+                                const diaSemana = new Date(d.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                  weekday: "short",
+                                  timeZone: "UTC",
+                                });
+                                return (
+                                  <option key={d.data} value={d.data}>
+                                    {diaMes} ({diaSemana})
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          )}
                           <div className="mt-2 space-y-1">
                             {/* Barra Previsto (azul) */}
                             <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                               <div
                                 className="h-full rounded-full bg-blue-500 transition-all"
                                 style={{
-                                  width: `${Math.min(100, previstoEtapa)}%`,
+                                  width: `${Math.min(100, displayPrevisto)}%`,
                                 }}
                               />
                             </div>
@@ -1240,7 +1312,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="text-sm text-muted-foreground text-center mt-1">
                             <span className="text-muted-foreground">
-                              Previsto: {previstoEtapa}%
+                              Previsto: {displayPrevisto}%
                             </span>
                             <span className="mx-1">·</span>
                             <span className="text-muted-foreground">

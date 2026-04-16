@@ -351,12 +351,36 @@ export default function CronogramaPage() {
 
   const updateEtapaConcluida = (id: number, concluida: boolean) => {
     const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, concluida } : e,
+      e.id === id ? { ...e, concluida, ...(concluida ? { percentual_concluido: 100 } : {}) } : e,
     );
     const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
     const novoEstado: ConfigCronograma = { etapas: novasEtapas, dias_totais: totalDias };
     setCronograma(novoEstado);
     cronogramaMutation.mutate(novoEstado);
+
+    if (concluida) {
+      const etapa = cronograma.etapas.find((e) => e.id === id);
+      if (etapa?.data_inicio && etapa?.data_fim) {
+        const diasTrabalhadosSet = new Set(diasTrabalhadosData ?? []);
+        const dias = getDaysInRange(etapa.data_inicio, etapa.data_fim).filter(
+          (dia) => diasTrabalhadosSet.has(dia),
+        );
+        if (dias.length > 0) {
+          const base = Math.round(100 / dias.length);
+          const novoMapa: Record<string, number> = {};
+          dias.forEach((dia, idx) => {
+            novoMapa[dia] = idx === dias.length - 1 ? 100 - base * (dias.length - 1) : base;
+          });
+          setProgressoDiario((prev) => ({
+            ...prev,
+            [id]: { ...(prev[id] ?? {}), ...novoMapa },
+          }));
+          Object.entries(novoMapa).forEach(([dia, valor]) => {
+            progressoMutation.mutate({ etapa_id: id, data: dia, percentual: valor });
+          });
+        }
+      }
+    }
   };
 
   const updateEtapaNome = (id: number, nome: string) => {

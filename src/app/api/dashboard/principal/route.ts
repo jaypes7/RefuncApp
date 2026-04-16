@@ -741,6 +741,21 @@ export async function GET(request: NextRequest) {
       ? (progressoPorProjeto.get(centroCusto) ?? [])
       : [];
 
+    // Dias trabalhados do CC atual (para filtrar finais de semana/feriados na evolucaoDiaria)
+    const diasTrabalhadosDoCc: Set<string> = (() => {
+      if (!centroCusto) return new Set<string>();
+      const cfg = configsAll.find((c) => c.centro_custo === centroCusto);
+      const lista = (cfg?.dias_trabalhados as string[] | undefined) ?? [];
+      if (lista.length > 0) return new Set(lista);
+      // Fallback: gerar dias úteis excluindo fins de semana e feriados
+      const cfgInicio = cfg?.data_inicio_projeto as string | undefined;
+      const cfgFim = cfg?.data_fim_projeto as string | undefined;
+      if (cfgInicio && cfgFim) {
+        return new Set(gerarDiasTrabalhadosFallback(cfgInicio, cfgFim));
+      }
+      return new Set<string>();
+    })();
+
     return NextResponse.json({
       metricas,
       projeto: {
@@ -758,7 +773,11 @@ export async function GET(request: NextRequest) {
           const cur = new Date(e.dataInicio + "T00:00:00Z");
           const fim = new Date(e.dataFim + "T00:00:00Z");
           while (cur <= fim) {
-            dias.push(cur.toISOString().split("T")[0]);
+            const iso = cur.toISOString().split("T")[0];
+            // Inclui apenas dias marcados como trabalhados (ou, se o set estiver vazio, todos os dias)
+            if (diasTrabalhadosDoCc.size === 0 || diasTrabalhadosDoCc.has(iso)) {
+              dias.push(iso);
+            }
             cur.setUTCDate(cur.getUTCDate() + 1);
           }
           let acum = 0;

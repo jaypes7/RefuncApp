@@ -58,6 +58,9 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
   // Busca os projetos cadastrados (fonte única de verdade para a sidebar)
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Aguarda a hidratação do localStorage antes de aplicar qualquer fallback,
+    // evitando sobrescrever o projeto salvo quando centroCusto ainda é null.
+    if (!hasHydrated) return;
 
     fetch("/api/projetos")
       .then((res) => (res.ok ? res.json() : { data: [] }))
@@ -95,7 +98,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .catch(() => setCentrosDisponiveis([]));
-  }, [isGuest, isLinkedUser, isAdmin, centroCusto]);
+  }, [isGuest, isLinkedUser, isAdmin, centroCusto, hasHydrated]);
 
   // Quando o usuário carrega, sobrescreve o filtro com o valor vinculado (fixo)
   useEffect(() => {
