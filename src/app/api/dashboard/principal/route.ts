@@ -216,14 +216,22 @@ function calcularRealizadoSuavizadoNaData(
 
     if (dateStr < ini) {
       continue;
+    } else if (dateStr >= fim) {
+      // Etapa encerrada: contribuição proporcional ao realizado físico total
+      reAcum += (pctRealAteAgora / 100) * peso;
     } else {
       const iniMs = new Date(ini + "T00:00:00Z").getTime();
       const fimMs = new Date(fim + "T00:00:00Z").getTime();
       const curMs = new Date(dateStr + "T00:00:00Z").getTime();
       const diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
       const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
-      const frac = Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa));
-      reAcum += frac * peso * (pctRealAteAgora / 100);
+      const fracTempo = Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa));
+      const planejadoEtapaAteData = fracTempo * 100;
+
+      if (planejadoEtapaAteData > 0) {
+        const fatorRitmo = pctRealAteAgora / planejadoEtapaAteData;
+        reAcum += peso * fracTempo * fatorRitmo;
+      }
     }
   }
 
