@@ -68,7 +68,7 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   vr_status: ["VR", "VALE REFEIÇÃO", "VALE REFEICAO", "VR STATUS"],
   uniforme_tam: ["UNIFORME", "TAMANHO UNIFORME", "TAM UNIFORME", "TAM. UNIFORME"],
   epi_status: ["EPI", "EPIS", "EPIs", "ENTREGA EPI", "ENTREGA DE EPIS", "STATUS EPI"],
-  c_custo: ["CENTRO DE CUSTO", "C CUSTO", "C. CUSTO", "CENTRO_CUSTO", "CC", "C.CUSTO", "UT"],
+  c_custo: ["CENTRO DE CUSTO", "CENTRO CUSTO", "C CUSTO", "C. CUSTO", "CENTRO_CUSTO", "CC", "C.CUSTO", "UT"],
   obs_geral: ["OBS", "OBSERVAÇÕES", "OBSERVACOES", "OBS GERAL", "OBSERVAÇÃO GERAL"],
   data_desligamento: ["DATA DEMISSÃO", "DATA DEMISSAO", "DEMISSÃO", "DEMISSAO", "DT DESLIGAMENTO", "DATA DESLIGAMENTO"],
   ind: ["IND", "INDICADOR"],
