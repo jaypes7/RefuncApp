@@ -73,6 +73,7 @@ export interface Colaborador {
   PRE_ADMISSAO?: string | null;
   MOB?: string | null;
   OP?: string | null;
+  TIPO_CONTRATO?: string | null;
   DATA_ADMISSAO?: string | null;
   CONTRATO?: string | null;
   PORTAL?: string | null;
@@ -564,6 +565,48 @@ export const ocorrenciasApi = {
     api.put<{ data: Ocorrencia }>(`/ocorrencias/${id}`, body),
 
   deletar: (id: number) => api.delete(`/ocorrencias/${id}`),
+};
+
+// ============================================================================
+// FUNÇÕES DE API - BANCO DE TALENTOS
+// ============================================================================
+
+export interface BancoTalento {
+  id: string;
+  pessoa?: string | null;
+  nome: string;
+  idade?: number | null;
+  dt_nasc?: string | null;
+  cpf?: string | null;
+  municipio?: string | null;
+  uf?: string | null;
+  telefone?: string | null;
+  created_at?: string | null;
+}
+
+export interface ListarBancoTalentosParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export const bancoTalentosApi = {
+  listar: (params?: ListarBancoTalentosParams) =>
+    api.get<PaginatedResponse<BancoTalento>>("/banco-talentos", { params }),
+
+  criar: (talento: Omit<BancoTalento, "id" | "created_at">) =>
+    api.post<{ data: BancoTalento }>("/banco-talentos", talento),
+
+  atualizar: (id: string, talento: Partial<Omit<BancoTalento, "id" | "created_at">>) =>
+    api.put<{ data: BancoTalento }>(`/banco-talentos/${id}`, talento),
+
+  remover: (id: string) => api.delete(`/banco-talentos/${id}`),
+
+  importar: (body: { rows: Record<string, unknown>[] }) =>
+    api.post("/banco-talentos/import", body),
+
+  realocar: (body: { id: string; novo_centro_custo: string }) =>
+    api.post("/banco-talentos/realocar", body),
 };
 
 // ============================================================================

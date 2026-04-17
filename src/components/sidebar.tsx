@@ -20,6 +20,7 @@ import {
   Moon,
   CalendarClock,
   Building2,
+  Database,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
@@ -275,6 +276,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               >
                 <Users className="h-4 w-4 shrink-0" />
                 {!collapsed && <span>Central de colaboradores</span>}
+              </span>
+            </Link>
+          </CanAccess>
+
+          {/* Banco de Talentos — visível apenas para admins */}
+          <CanAccess role="admin">
+            <Link href="/banco-talentos">
+              <span
+                className={navItem(pathname === "/banco-talentos")}
+                title={collapsed ? "Banco de Talentos" : undefined}
+              >
+                <Database className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Banco de Talentos</span>}
               </span>
             </Link>
           </CanAccess>

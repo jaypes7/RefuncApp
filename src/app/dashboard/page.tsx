@@ -1239,6 +1239,9 @@ export default function DashboardPage() {
                         const displayPrevisto = selectedDayData != null
                           ? selectedDayData.previsto
                           : previstoEtapa;
+                        const displayRealizado = selectedDayData != null
+                          ? selectedDayData.realizado
+                          : realizadoEtapa;
 
                         return (
                           <div
@@ -1305,7 +1308,7 @@ export default function DashboardPage() {
                               <div
                                 className="h-full rounded-full bg-[#DA291B] transition-all"
                                 style={{
-                                  width: `${Math.min(100, realizadoEtapa)}%`,
+                                  width: `${Math.min(100, displayRealizado)}%`,
                                 }}
                               />
                             </div>
@@ -1316,7 +1319,7 @@ export default function DashboardPage() {
                             </span>
                             <span className="mx-1">·</span>
                             <span className="text-muted-foreground">
-                              Realizado: {realizadoEtapa}%
+                              Realizado: {displayRealizado}%
                             </span>
                           </div>
                         </div>

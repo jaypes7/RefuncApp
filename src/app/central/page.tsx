@@ -54,7 +54,6 @@ import { CARGOS, CARGOS_AGRUPADOS } from "@/constants/cargos";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Status = "Ativo" | "Pendente" | "Inativo" | "Desligado";
-type Setor = "RH" | "Logística" | "Segurança";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -84,11 +83,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const SETOR_CONFIG: Record<Setor, { color: string; bg: string }> = {
-  RH: { color: "text-primary", bg: "bg-primary/10" },
-  Logística: { color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
-  Segurança: { color: "text-[#337246] dark:text-[#4a9960]", bg: "bg-[#337246]/10 dark:bg-[#337246]/15" },
-};
 
 const AVATAR_COLORS = [
   "bg-primary/10 text-primary",
@@ -113,16 +107,6 @@ function formatCPF(cpf: string | number | null | undefined): string {
   return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 }
 
-// Determina setor baseado nos campos do colaborador
-function getSetor(colaborador: Colaborador): Setor {
-  if (colaborador.TREINAMENTO || colaborador.ASO === "Apto") {
-    return "Segurança";
-  }
-  if (colaborador.MOB?.trim() || colaborador.PORTAL === "Liberado") {
-    return "Logística";
-  }
-  return "RH";
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -141,20 +125,6 @@ function StatusBadge({ status }: { status: Status }) {
   );
 }
 
-function SetorBadge({ setor }: { setor: Setor }) {
-  const cfg = SETOR_CONFIG[setor];
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
-        cfg.bg,
-        cfg.color,
-      )}
-    >
-      {setor}
-    </span>
-  );
-}
 
 function AvatarInitials({ name, index }: { name: string; index: number }) {
   return (
@@ -616,7 +586,7 @@ export default function CentralPage() {
                       CPF
                     </TableHead>
                     <TableHead className="w-[10%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Setor
+                      C. Custo
                     </TableHead>
                     <TableHead className="w-[20%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Função
@@ -645,7 +615,6 @@ export default function CentralPage() {
                     </TableRow>
                   ) : (
                     colaboradores.map((colab, index) => {
-                      const setor = getSetor(colab);
                       return (
                         <TableRow
                           key={colab.id}
@@ -662,11 +631,6 @@ export default function CentralPage() {
                                 <span className="font-medium text-foreground truncate" title={colab.NOME || ""}>
                                   {colab.NOME}
                                 </span>
-                                {colab.CENTRO_CUSTO && (
-                                  <span className="inline-flex w-fit items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10 dark:bg-slate-500/10 dark:text-slate-400">
-                                    {colab.CENTRO_CUSTO}
-                                  </span>
-                                )}
                               </div>
                             </div>
                           </TableCell>
@@ -685,9 +649,15 @@ export default function CentralPage() {
                             </span>
                           </TableCell>
 
-                          {/* Setor */}
+                          {/* Centro de Custo */}
                           <TableCell className="py-3">
-                            <SetorBadge setor={setor} />
+                            {colab.CENTRO_CUSTO ? (
+                              <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-500/10 dark:bg-slate-500/10 dark:text-slate-400">
+                                {colab.CENTRO_CUSTO}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
+                            )}
                           </TableCell>
 
                           {/* Função */}
