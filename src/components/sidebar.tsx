@@ -135,7 +135,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         {/* ── Project Selector ───────────────────────────────────────── */}
         <CanAccess role="admin">
-          <div className={cn("mb-4", collapsed && "flex justify-center")}>
+          <div className={cn("mb-4 w-full overflow-hidden", collapsed && "flex justify-center")}>
             {collapsed ? (
               <Popover open={projectOpen} onOpenChange={setProjectOpen}>
                 <PopoverTrigger asChild>
@@ -186,9 +186,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <PopoverTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="w-full justify-between px-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/10"
+                    className="w-full justify-between px-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 overflow-hidden shrink"
+                    title={centroCusto ?? "Todos"}
                   >
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 min-w-0">
                       <Building2 className="h-4 w-4 shrink-0" />
                       <span className="truncate text-left">
                         {centroCusto ?? "Todos"}

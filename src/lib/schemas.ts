@@ -396,6 +396,8 @@ export const EtapaConfigSchema = z.object({
   dataInicio: DateSchema,
   /** Data de fim da etapa (YYYY-MM-DD) — deve estar dentro do intervalo do projeto */
   dataFim: DateSchema,
+  /** Responsável pela etapa */
+  responsavel: z.preprocess(emptyStringToUndefined, z.string().optional()),
 });
 
 export const ConfigUpdateSchema = z.object({

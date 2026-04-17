@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
           percentual_concluido: e.percentualConcluido ?? 0,
           data_inicio: rawEtapa?.dataInicio || null,
           data_fim: rawEtapa?.dataFim || null,
+          responsavel: rawEtapa?.responsavel || null,
           centro_custo: centroCusto,
         };
       });

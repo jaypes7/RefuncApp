@@ -21,14 +21,23 @@ export async function GET(request: NextRequest) {
     const db = createServerClient();
     const { data, error } = await db
       .from("configuracoes")
-      .select("dias_trabalhados")
+      .select("dias_trabalhados, data_inicio_projeto, data_fim_projeto")
       .eq("centro_custo", centroCusto)
       .single();
 
     if (error) throw error;
 
+    const diasTrabalhados = data?.dias_trabalhados || [];
+    const dataInicio = data?.data_inicio_projeto;
+    const dataFim = data?.data_fim_projeto;
+
+    // Filtra apenas os dias dentro do intervalo do projeto
+    const diasFiltrados = dataInicio && dataFim
+      ? diasTrabalhados.filter((d: string) => d >= dataInicio && d <= dataFim)
+      : diasTrabalhados;
+
     return NextResponse.json({ 
-      dias_trabalhados: data?.dias_trabalhados || [] 
+      dias_trabalhados: diasFiltrados 
     });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
@@ -68,6 +77,31 @@ export async function POST(request: NextRequest) {
     }
 
     const db = createServerClient();
+
+    // Busca as datas do projeto para validar o intervalo
+    const { data: configData, error: configError } = await db
+      .from("configuracoes")
+      .select("data_inicio_projeto, data_fim_projeto")
+      .eq("centro_custo", targetCentroCusto)
+      .single();
+
+    if (configError) throw configError;
+
+    const dataInicio = configData?.data_inicio_projeto;
+    const dataFim = configData?.data_fim_projeto;
+
+    if (dataInicio && dataFim) {
+      const foraDoIntervalo = dias_trabalhados.filter(
+        (d: string) => d < dataInicio || d > dataFim
+      );
+      if (foraDoIntervalo.length > 0) {
+        return NextResponse.json(
+          { error: "Existem dias fora do intervalo do projeto", foraDoIntervalo, dataInicio, dataFim },
+          { status: 400 }
+        );
+      }
+    }
+
     const { error } = await db
       .from("configuracoes")
       .update({ 

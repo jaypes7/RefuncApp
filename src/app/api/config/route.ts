@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
       percentualConcluido: e.percentual_concluido ?? 0,
       dataInicio: e.data_inicio ?? undefined,
       dataFim: e.data_fim ?? undefined,
+      responsavel: e.responsavel ?? undefined,
     }));
 
     const config: ConfigResponse = {
