@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       uf: origem.uf,
       telefone: origem.telefone,
       centro_custo: validated.novo_centro_custo,
-      // Demais campos ficam nulos/padrão
+      status: "Ativo",
     };
 
     const { data: inserido, error: insertError } = await supabase
@@ -79,6 +79,16 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       throw new Error(`Erro ao realocar colaborador: ${insertError.message}`);
+    }
+
+    // 4. Inativa o registro no centro de custo antigo
+    const { error: updateError } = await supabase
+      .from("colaboradores")
+      .update({ status: "Inativo" })
+      .eq("id", origem.id);
+
+    if (updateError) {
+      throw new Error(`Erro ao inativar colaborador no centro de custo antigo: ${updateError.message}`);
     }
 
     await logAdicionar(

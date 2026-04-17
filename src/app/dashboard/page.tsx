@@ -644,16 +644,13 @@ export default function DashboardPage() {
                       {/* Comparação Diária */}
                       {indicadorCurvaS.diario && (
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                            Diário
-                          </span>
                           {curveData.length > 0 && (
                             <select
                               value={selectedCurvaDayIdx}
                               onChange={(e) => setSelectedCurvaDayIdx(Number(e.target.value))}
-                              className="text-[10px] rounded px-1 py-0.5 border border-border bg-background text-foreground mb-0.5"
+                              className="text-[10px] uppercase tracking-wide rounded px-1 py-0.5 border border-border bg-background text-muted-foreground font-medium"
                             >
-                              <option value={-1}>Hoje</option>
+                              <option value={-1}>Diário</option>
                               {curveData.map((d, i) => (
                                 <option key={i} value={i}>{d.mes}</option>
                               ))}
@@ -672,15 +669,24 @@ export default function DashboardPage() {
                             <span
                               className="font-semibold"
                               style={{
-                                color:
-                                  indicadorCurvaS.diario.realizado >= indicadorCurvaS.diario.planejado
-                                    ? "#337246"
-                                    : "#DA291B",
+                                color: (() => {
+                                  const plan = selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.previsto != null
+                                    ? (curveData[selectedCurvaDayIdx].previsto as number)
+                                    : indicadorCurvaS.diario.planejado;
+                                  const real = selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.realizado != null
+                                    ? (curveData[selectedCurvaDayIdx].realizado as number)
+                                    : indicadorCurvaS.diario.realizado;
+                                  return real >= plan ? "#337246" : "#DA291B";
+                                })(),
                               }}
                             >
-                              {temProgressoReal
-                                ? `${indicadorCurvaS.diario.realizado.toFixed(1)}%`
-                                : "-"}
+                              {(() => {
+                                if (selectedCurvaDayIdx >= 0) {
+                                  const r = curveData[selectedCurvaDayIdx]?.realizado;
+                                  return r != null ? `${(r as number).toFixed(1)}%` : "-";
+                                }
+                                return temProgressoReal ? `${indicadorCurvaS.diario.realizado.toFixed(1)}%` : "-";
+                              })()}
                             </span>
                           </span>
                         </div>
