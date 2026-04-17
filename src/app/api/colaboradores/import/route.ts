@@ -126,9 +126,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── FASE 2: Sanitizar linhas em memória ──────────────────────────────────
-    // Produz: Map<cpf, record_em_lowercase> — chaves prontas para o Supabase
+    // Produz: Map<cpf::centro_custo, record_em_lowercase> — chaves prontas para o Supabase
     const validRows = new Map<string, Record<string, unknown>>();
-    const seenCpfs = new Set<string>(); // dedup intra-arquivo
+    const seenKeys = new Set<string>(); // dedup intra-arquivo por cpf+centro_custo
 
     rows.forEach((row, idx) => {
       const lineNumber = idx + 1;
@@ -169,24 +169,26 @@ export async function POST(request: NextRequest) {
         // CPF válido + turno "N/A" → importa normalmente como colaborador
         // pendente de turno (rawTurno vazio/"N/A"/"NA" é aceito — não descartado)
 
-        // Duplicata dentro do mesmo arquivo
-        if (seenCpfs.has(cpf)) {
-          report.erros.push({
-            linha: lineNumber,
-            campo: "CPF",
-            motivo: `CPF ${cpf}: duplicado neste arquivo (linha ignorada).`,
-          });
-          return;
-        }
-
-        seenCpfs.add(cpf);
-
         // Converte chaves para lowercase e garante o CPF limpo
         const dbRow: Record<string, unknown> = { ...toLowerKeys(colaborador), cpf };
         if (!dbRow.centro_custo && defaultCentroCusto) {
           dbRow.centro_custo = defaultCentroCusto;
         }
-        validRows.set(cpf, dbRow);
+
+        // Duplicata dentro do mesmo arquivo (mesmo CPF + mesmo centro de custo)
+        const cc = String(dbRow.centro_custo ?? "").trim();
+        const compositeKey = `${cpf}::${cc}`;
+        if (seenKeys.has(compositeKey)) {
+          report.erros.push({
+            linha: lineNumber,
+            campo: "CPF",
+            motivo: `CPF ${cpf} (CC ${cc || "sem CC"}): duplicado neste arquivo (linha ignorada).`,
+          });
+          return;
+        }
+
+        seenKeys.add(compositeKey);
+        validRows.set(compositeKey, dbRow);
       } catch (err) {
         report.erros.push({
           linha: lineNumber,
@@ -203,7 +205,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── FASE 3: Buscar registros existentes — 1 SELECT ───────────────────────
-    const cpfArray = Array.from(validRows.keys());
+    const cpfArray = Array.from(new Set(Array.from(validRows.values()).map((r) => String(r.cpf))));
     const supabase = createServerClient();
 
     const { data: existingRows, error: fetchError } = await supabase
@@ -237,7 +239,8 @@ export async function POST(request: NextRequest) {
     //
     const upsertPayload: Record<string, unknown>[] = [];
 
-    for (const [cpf, newData] of validRows.entries()) {
+    for (const [, newData] of validRows.entries()) {
+      const cpf = String(newData.cpf);
       const cc = newData.centro_custo ?? "";
       const key = existingKey(cpf, cc);
 
