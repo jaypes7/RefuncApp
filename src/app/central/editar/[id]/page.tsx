@@ -122,6 +122,7 @@ const EMPTY: FormData = {
   PRE_ADMISSAO: "",
   MOB: "",
   DATA_ADMISSAO: "",
+  TIPO_CONTRATO: "",
   CONTRATO: "",
   PORTAL: "",
   CRACHA: "",
@@ -149,9 +150,10 @@ const O_EXAME = ["Realizado", "Agendado", "Pendente"];
 const O_CARTA = ["Enviada", "Assinada", "Pendente"];
 const O_ADMISSAO = ["Concluída", "Em andamento", "Pendente"];
 const O_CONTRATO = ["Assinado", "Pendente", "Cancelado"];
+const O_TIPO_CONTRATO = ["Determinado", "Indeterminado"];
 const O_PONTO = ["Cadastrado", "Pendente"];
 const O_TREINAMENTO = ["Concluído", "Em Andamento", "Pendente"];
-const O_PESSOA = ["Física", "Jurídica"];
+const O_PESSOA = ["Masculino", "Feminino"];
 const O_PRE_ADMISSAO = ["Sim", "Não", "Pendente"];
 const O_UF = [
   "AC",
@@ -526,7 +528,7 @@ export default function EditarColaboradorPage() {
                   options={CARGOS as unknown as string[]}
                 />
                 <S
-                  label="Tipo de Pessoa"
+                  label="Sexo"
                   value={form.PESSOA}
                   onChange={s("PESSOA")}
                   options={O_PESSOA}
@@ -538,7 +540,7 @@ export default function EditarColaboradorPage() {
                   placeholder="Ex: Mecânico / Caldeireiro"
                 />
                 <F
-                  label="Nº Oracle"
+                  label="Nº Pessoa"
                   value={form.NUMERO_ORACLE}
                   onChange={t("NUMERO_ORACLE")}
                   placeholder="Número Oracle"
@@ -597,7 +599,7 @@ export default function EditarColaboradorPage() {
                   options={O_STATUS}
                 />
                 <F
-                  label="IND"
+                  label="INDICAÇÃO"
                   value={form.IND}
                   onChange={t("IND")}
                   placeholder="Responsável pela indicação"
@@ -628,6 +630,12 @@ export default function EditarColaboradorPage() {
                 description="Datas de admissão, término e encerramento contratual"
               />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <S
+                  label="Tipo de Contrato"
+                  value={form.TIPO_CONTRATO}
+                  onChange={s("TIPO_CONTRATO")}
+                  options={O_TIPO_CONTRATO}
+                />
                 <F
                   label="Data de Admissão"
                   value={form.DATA_ADMISSAO}

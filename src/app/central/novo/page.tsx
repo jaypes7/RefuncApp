@@ -76,7 +76,7 @@ const step1Schema = z.object({
   municipio: z.string().optional(),
   telefone: z.string().optional(),
   uf: z.string().optional(),
-  pessoa: z.enum(["Física", "Jurídica"]).optional(),
+  pessoa: z.enum(["Masculino", "Feminino"]).optional(),
   ind: z.string().optional(),
 });
 
@@ -88,7 +88,8 @@ const step2Schema = z.object({
   histograma: z.string().optional(),
   numeroOracle: z.string().optional(),
   cartaOferta: z.enum(["Sim", "Não", "Pendente"]).optional(),
-  contrato: z.enum(["CLT", "PJ", "Temporário", "Estagiário"]).optional(),
+  tipoContrato: z.enum(["Determinado", "Indeterminado"]).optional(),
+  contrato: z.enum(["CLT", "PJ", "Estagiário"]).optional(),
   status: z.enum(["Ativo", "Pendente", "Inativo", "Desligado"]).optional(),
   enviadoRh: z.enum(["Sim", "Não", "Pendente"]).optional(),
   vinculado: z.string().optional(),
@@ -254,6 +255,7 @@ export default function OnboardingPage() {
       MOB: data.mob,
       // Colunas 16-20
       OP: data.op,
+      TIPO_CONTRATO: data.tipoContrato,
       DATA_ADMISSAO: data.dataAdmissao,
       CONTRATO: data.contrato,
       PORTAL: data.portal,
@@ -438,6 +440,7 @@ export default function OnboardingPage() {
   const ufValue = watch("uf");
   const pessoaValue = watch("pessoa");
   const cartaOfertaValue = watch("cartaOferta");
+  const tipoContratoValue = watch("tipoContrato");
   const contratoValue = watch("contrato");
   const statusValue = watch("status");
   const enviadoRhValue = watch("enviadoRh");
@@ -853,11 +856,11 @@ export default function OnboardingPage() {
                             htmlFor="pessoa"
                             className="text-sm font-medium text-foreground"
                           >
-                            Pessoa
+                            Sexo
                           </label>
                           <Select
                             value={pessoaValue}
-                            onValueChange={(value: "Física" | "Jurídica") =>
+                            onValueChange={(value: "Masculino" | "Feminino") =>
                               setValue("pessoa", value, {
                                 shouldValidate: true,
                               })
@@ -871,8 +874,8 @@ export default function OnboardingPage() {
                               <SelectValue placeholder="Tipo" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Física">Física</SelectItem>
-                              <SelectItem value="Jurídica">Jurídica</SelectItem>
+                              <SelectItem value="Masculino">Masculino</SelectItem>
+                              <SelectItem value="Feminino">Feminino</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -883,7 +886,7 @@ export default function OnboardingPage() {
                           htmlFor="ind"
                           className="text-sm font-medium text-foreground"
                         >
-                          IND
+                          Indicação
                         </label>
                         <Input
                           id="ind"
@@ -956,6 +959,41 @@ export default function OnboardingPage() {
                     <CardContent className="space-y-8 py-4">
                       <div className="space-y-2">
                         <label
+                          htmlFor="tipoContrato"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Tipo de Contrato
+                        </label>
+                        <Select
+                          value={tipoContratoValue}
+                          onValueChange={(
+                            value: "Determinado" | "Indeterminado",
+                          ) =>
+                            setValue("tipoContrato", value, {
+                              shouldValidate: true,
+                            })
+                          }
+                        >
+                          <SelectTrigger
+                            className={
+                              errors.tipoContrato ? "border-destructive" : ""
+                            }
+                          >
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Determinado">
+                              Determinado
+                            </SelectItem>
+                            <SelectItem value="Indeterminado">
+                              Indeterminado
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label
                           htmlFor="dataAdmissao"
                           className="text-sm font-medium text-foreground"
                         >
@@ -1026,7 +1064,7 @@ export default function OnboardingPage() {
                           htmlFor="numeroOracle"
                           className="text-sm font-medium text-foreground"
                         >
-                          Nº Oracle
+                          Nº Pessoa
                         </label>
                         <Input
                           id="numeroOracle"
@@ -1081,7 +1119,7 @@ export default function OnboardingPage() {
                           <Select
                             value={contratoValue}
                             onValueChange={(
-                              value: "CLT" | "PJ" | "Temporário" | "Estagiário",
+                              value: "CLT" | "PJ" | "Estagiário",
                             ) =>
                               setValue("contrato", value, {
                                 shouldValidate: true,
@@ -1098,9 +1136,6 @@ export default function OnboardingPage() {
                             <SelectContent>
                               <SelectItem value="CLT">CLT</SelectItem>
                               <SelectItem value="PJ">PJ</SelectItem>
-                              <SelectItem value="Temporário">
-                                Temporário
-                              </SelectItem>
                               <SelectItem value="Estagiário">
                                 Estagiário
                               </SelectItem>
