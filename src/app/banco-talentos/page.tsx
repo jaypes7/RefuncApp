@@ -194,9 +194,16 @@ export default function BancoTalentosPage() {
                 <Database className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  Banco de Talentos
-                </h1>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                    Banco de Talentos
+                  </h1>
+                  {pagination && (
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                      {pagination.total} colaboradores cadastrados
+                    </span>
+                  )}
+                </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   Base global de colaboradores disponíveis para alocação.
                 </p>

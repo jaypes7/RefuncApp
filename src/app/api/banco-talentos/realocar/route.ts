@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       idade: talento.idade,
       dt_nascimento: talento.dt_nasc,
       centro_custo: validated.novo_centro_custo,
+      status: "Ativo",
     };
 
     const { data: inserido, error: insertError } = await supabase

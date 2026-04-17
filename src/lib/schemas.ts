@@ -252,7 +252,7 @@ export const ColaboradorSchema = z.object({
   NOME: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
   FUNCAO_CLT: z.preprocess(emptyStringToUndefined, z.string().optional()),
   HISTOGRAMA: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  IDADE: z.coerce.number().min(16).max(99).optional().nullable(),
+  IDADE: z.preprocess(emptyStringToUndefined, z.coerce.number().min(16).max(99).optional().nullable()),
   DT_NASCIMENTO: DateSchema,
 
   // Colunas 31-35
@@ -332,7 +332,7 @@ export const ColaboradorUpdateSchema = z.object({
   NOME: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").optional(),
   FUNCAO_CLT: z.preprocess(emptyStringToUndefined, z.string().optional()),
   HISTOGRAMA: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  IDADE: z.coerce.number().min(16).max(99).optional().nullable(),
+  IDADE: z.preprocess(emptyStringToUndefined, z.coerce.number().min(16).max(99).optional().nullable()),
   DT_NASCIMENTO: DateSchema,
 
   // Colunas 31-35
