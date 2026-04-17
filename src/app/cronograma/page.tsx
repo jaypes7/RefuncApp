@@ -31,6 +31,7 @@ import {
   TrendingDown,
   Minus,
   Pencil,
+  User,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ type EtapaCronograma = {
   concluida?: boolean;
   data_inicio?: string;
   data_fim?: string;
+  responsavel?: string | null;
 };
 
 type ConfigCronograma = {
@@ -66,7 +68,7 @@ type ApiConfigResponse = {
   DATA_FIM_PROJETO: string | null;
   ETAPA_ATUAL: number;
   META_ADMISSOES: number;
-  ETAPAS_PROJETO: Array<{ id: number; nome: string; duracaoDias: number; concluida?: boolean; percentualConcluido?: number; dataInicio?: string; dataFim?: string }>;
+  ETAPAS_PROJETO: Array<{ id: number; nome: string; duracaoDias: number; concluida?: boolean; percentualConcluido?: number; dataInicio?: string; dataFim?: string; responsavel?: string | null }>;
   GERENTE_OPERACOES: string | null;
   GERENTE_CONTRATO: string | null;
   NOME_CLIENTE: string | null;
@@ -88,6 +90,33 @@ const ETAPAS_DEFAULT: EtapaCronograma[] = [
   { id: 10, nome: "Liberação de EPIs",          dias: 3,  percentual_concluido: 0 },
   { id: 11, nome: "Início de Campo",            dias: 3,  percentual_concluido: 0 },
 ];
+
+// Retorna todos os dias corridos entre duas datas (inclusive), formato YYYY-MM-DD
+function getDaysInRange(startDate: string, endDate: string): string[] {
+  const days: string[] = [];
+  const cur = new Date(startDate + "T00:00:00");
+  const end = new Date(endDate + "T00:00:00");
+  while (cur <= end) {
+    days.push(formatDateISO(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+
+// Calcula dias úteis de uma etapa a partir das datas e do calendário
+function calcularDiasUteisEtapa(
+  dataInicio: string | undefined,
+  dataFim: string | undefined,
+  diasTrabalhadosData: string[] | undefined,
+): number {
+  if (!dataInicio || !dataFim) return 0;
+  if (diasTrabalhadosData && diasTrabalhadosData.length > 0) {
+    const diasTrabalhadosSet = new Set(diasTrabalhadosData);
+    return getDaysInRange(dataInicio, dataFim).filter((dia) => diasTrabalhadosSet.has(dia)).length;
+  }
+  // Fallback: usa cálculo de dias úteis padrão quando calendário ainda não carregou
+  return calculateWorkingDays(dataInicio, dataFim);
+}
 
 export default function CronogramaPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -187,22 +216,26 @@ export default function CronogramaPage() {
     if (projetoQueryData.ETAPAS_PROJETO?.length) {
       const novasEtapas = ETAPAS_DEFAULT.map((etapaDefault, index) => {
         const salva = projetoQueryData.ETAPAS_PROJETO[index];
-        return salva
-          ? {
-              ...etapaDefault,
-              nome: salva.nome ?? etapaDefault.nome,
-              dias: salva.duracaoDias,
-              concluida: salva.concluida ?? false,
-              percentual_concluido: salva.percentualConcluido ?? 0,
-              data_inicio: salva.dataInicio,
-              data_fim: salva.dataFim,
-            }
-          : { ...etapaDefault, concluida: false };
+        if (!salva) return { ...etapaDefault, concluida: false };
+        // Se existirem datas salvas, deriva dias do calendário; senão, usa duracaoDias
+        const diasSalvos = salva.dataInicio && salva.dataFim
+          ? calcularDiasUteisEtapa(salva.dataInicio, salva.dataFim, diasTrabalhadosData)
+          : salva.duracaoDias;
+        return {
+          ...etapaDefault,
+          nome: salva.nome ?? etapaDefault.nome,
+          dias: diasSalvos,
+          concluida: salva.concluida ?? false,
+          percentual_concluido: salva.percentualConcluido ?? 0,
+          data_inicio: salva.dataInicio,
+          data_fim: salva.dataFim,
+          responsavel: salva.responsavel ?? null,
+        };
       });
       const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
       setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
     }
-  }, [projetoQueryData]);
+  }, [projetoQueryData, diasTrabalhadosData]);
 
   // Popula progressoDiario quando os dados chegam do servidor
   useEffect(() => {
@@ -218,17 +251,21 @@ export default function CronogramaPage() {
   // Total de dias corridos = fim - início (inclusive)
   const diasCorridosTotal = useMemo(() => {
     if (!projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO) return null;
-    const start = new Date(projetoData.DATA_INICIO_PROJETO);
-    const end = new Date(projetoData.DATA_FIM_PROJETO);
+    const start = new Date(projetoData.DATA_INICIO_PROJETO + "T00:00:00");
+    const end = new Date(projetoData.DATA_FIM_PROJETO + "T00:00:00");
     const diffTime = Math.abs(end.getTime() - start.getTime());
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   }, [projetoData?.DATA_INICIO_PROJETO, projetoData?.DATA_FIM_PROJETO]);
 
-  // Total de dias úteis = dias marcados no calendário
+  // Total de dias úteis = dias marcados no calendário DENTRO do intervalo do projeto
   const diasUteisTotal = useMemo<number | null>(() => {
-    if (!diasTrabalhadosData) return null;
-    return diasTrabalhadosData.length;
-  }, [diasTrabalhadosData]);
+    if (!diasTrabalhadosData || !projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO) return null;
+    const inicio = projetoData.DATA_INICIO_PROJETO;
+    const fim = projetoData.DATA_FIM_PROJETO;
+    return diasTrabalhadosData.filter(
+      (d) => d >= inicio && d <= fim
+    ).length;
+  }, [diasTrabalhadosData, projetoData?.DATA_INICIO_PROJETO, projetoData?.DATA_FIM_PROJETO]);
 
   const scheduleValidation = useMemo(() => {
     if (diasUteisTotal === null) return null;
@@ -248,6 +285,7 @@ export default function CronogramaPage() {
           percentualConcluido: e.percentual_concluido ?? 0,
           dataInicio: e.data_inicio || null,
           dataFim: e.data_fim || null,
+          responsavel: e.responsavel || null,
         })),
       };
 
@@ -305,17 +343,7 @@ export default function CronogramaPage() {
     });
   };
 
-  // Retorna todos os dias corridos entre duas datas (inclusive), formato YYYY-MM-DD
-  const getDaysInRange = (startDate: string, endDate: string): string[] => {
-    const days: string[] = [];
-    const cur = new Date(startDate + "T00:00:00");
-    const end = new Date(endDate + "T00:00:00");
-    while (cur <= end) {
-      days.push(formatDateISO(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-    return days;
-  };
+
 
   const handleProgressoDiarioChange = (
     etapa: EtapaCronograma,
@@ -420,16 +448,33 @@ export default function CronogramaPage() {
   };
 
   const updateEtapaDataInicio = (id: number, data: string) => {
-    const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, data_inicio: data } : e,
-    );
+    const novasEtapas = cronograma.etapas.map((e) => {
+      if (e.id !== id) return e;
+      const novaInicio = data;
+      const novaFim = e.data_fim;
+      const dias = novaInicio && novaFim ? calcularDiasUteisEtapa(novaInicio, novaFim, diasTrabalhadosData) : e.dias;
+      return { ...e, data_inicio: novaInicio, dias };
+    });
     const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
     setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
   };
 
   const updateEtapaDataFim = (id: number, data: string) => {
+    const novasEtapas = cronograma.etapas.map((e) => {
+      if (e.id !== id) return e;
+      const novaInicio = e.data_inicio;
+      const novaFim = data;
+      const dias = novaInicio && novaFim ? calcularDiasUteisEtapa(novaInicio, novaFim, diasTrabalhadosData) : e.dias;
+      return { ...e, data_fim: novaFim, dias };
+    });
+    const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
+    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
+  };
+
+  const updateEtapaResponsavel = (id: number, responsavel: string) => {
+    const valor = responsavel.trim() || null;
     const novasEtapas = cronograma.etapas.map((e) =>
-      e.id === id ? { ...e, data_fim: data } : e,
+      e.id === id ? { ...e, responsavel: valor } : e,
     );
     const totalDias = novasEtapas.reduce((sum, e) => sum + e.dias, 0);
     setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
@@ -439,9 +484,11 @@ export default function CronogramaPage() {
     if (!projetoData?.DATA_INICIO_PROJETO) return null;
     let cursor = projetoData.DATA_INICIO_PROJETO;
     return cronograma.etapas.map((e) => {
-      const startDate = cursor;
-      const endDate = formatDateISO(addWorkingDays(startDate, Math.max(0, e.dias - 1)));
+      // Se a etapa tem datas manuais, usa-as; senão, calcula sequencialmente a partir do cursor
+      const startDate = e.data_inicio || cursor;
+      const endDate = e.data_fim || formatDateISO(addWorkingDays(startDate, Math.max(0, e.dias - 1)));
       const { calendarDays, workingDays } = calculateWorkingDaysDetailed(startDate, endDate);
+      // Avança o cursor para o próximo dia útil após o fim desta etapa
       cursor = formatDateISO(addWorkingDays(endDate, 1));
       return { id: e.id, startDate, endDate, calendarDays, workingDays };
     });
@@ -703,7 +750,7 @@ export default function CronogramaPage() {
                       </div>
 
                       <div className="flex items-end gap-4 ml-12 pt-2 border-t border-border/30">
-                        <div className="flex-1 flex gap-4">
+                        <div className="flex-1 flex flex-wrap gap-4">
                           <div className="flex flex-col gap-1">
                             <label className="text-xs font-medium text-muted-foreground">
                               Data de Início
@@ -738,6 +785,21 @@ export default function CronogramaPage() {
                                   ? "border-red-500/50 bg-red-500/5"
                                   : ""
                               }`}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                              <User className="w-3 h-3" />
+                              Responsável
+                            </label>
+                            <Input
+                              type="text"
+                              value={etapa.responsavel || ""}
+                              onChange={(e) =>
+                                updateEtapaResponsavel(etapa.id, e.target.value)
+                              }
+                              placeholder="Nome do responsável"
+                              className="glass-input"
                             />
                           </div>
                         </div>

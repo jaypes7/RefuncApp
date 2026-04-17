@@ -314,6 +314,15 @@ export default function DashboardPage() {
     return d;
   }, [dashboardData]);
 
+  // Previsto fica sempre completo; realizado é nulado após o dia selecionado
+  const chartDisplayData = useMemo(() => {
+    if (selectedCurvaDayIdx < 0) return curveData;
+    return curveData.map((d, i) => ({
+      ...d,
+      realizado: i <= selectedCurvaDayIdx ? d.realizado : undefined,
+    }));
+  }, [curveData, selectedCurvaDayIdx]);
+
   const xAxisTicks = useMemo(() => {
     if (curveData.length === 0) return [];
     const step = Math.max(1, Math.floor(curveData.length / 10));
@@ -738,7 +747,7 @@ export default function DashboardPage() {
                   ) : (
                   <ChartContainer config={chartConfigCurvaS} className="h-[350px] 2xl:h-[480px] w-full">
                     <AreaChart
-                      data={curveData}
+                      data={chartDisplayData}
                       margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
                     >
                       <defs>
@@ -837,6 +846,7 @@ export default function DashboardPage() {
                           activeDot={{ r: 7, fill: "#DA291B", stroke: "#fff", strokeWidth: 2 }}
                         />
                       )}
+
                     </AreaChart>
                   </ChartContainer>
                   )}
