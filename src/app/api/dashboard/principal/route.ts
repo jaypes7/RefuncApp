@@ -555,7 +555,9 @@ export async function GET(request: NextRequest) {
     // ── Agrupar progresso diário por centro_custo ─────────────────────────────
     const progressoPorProjeto = new Map<string, ProgressoDiarioRow[]>();
     for (const r of (progressoRows ?? []) as Array<{ centro_custo?: string; etapa_id?: number; data?: string; percentual?: number }>) {
-      const cc = r.centro_custo ? String(r.centro_custo) : (centroCusto ?? "__sem_cc__");
+      const cc = r.centro_custo
+        ? String(r.centro_custo)
+        : (Array.isArray(centroCusto) ? (centroCusto[0] ?? "__sem_cc__") : (centroCusto ?? "__sem_cc__"));
       if (!progressoPorProjeto.has(cc)) progressoPorProjeto.set(cc, []);
       progressoPorProjeto.get(cc)!.push({
         etapa_id: Number(r.etapa_id ?? 0),
