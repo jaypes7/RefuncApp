@@ -36,8 +36,8 @@ export async function GET(request: NextRequest) {
       .order("data", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (centroCusto) {
-      query = query.eq("centro_custo", centroCusto);
+    if (centroCusto?.length) {
+      query = query.in("centro_custo", centroCusto);
     }
 
     const { data, error } = await query;

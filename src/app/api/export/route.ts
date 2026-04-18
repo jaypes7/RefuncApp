@@ -171,10 +171,8 @@ export async function GET(request: NextRequest) {
     // Monta a query base
     let query = supabase.from("colaboradores").select("*");
 
-    // Filtro por centro de custo (suporta multi-select via vírgula)
-    const ccs = centroCusto?.split(",").filter(Boolean);
-    if (ccs?.length) {
-      query = query.in("centro_custo", ccs);
+    if (centroCusto?.length) {
+      query = query.in("centro_custo", centroCusto);
     }
 
     const { data: rows, error } = await query;

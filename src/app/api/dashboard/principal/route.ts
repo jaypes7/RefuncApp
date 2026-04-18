@@ -495,19 +495,16 @@ export async function GET(request: NextRequest) {
     let colabQuery = db
       .from("colaboradores")
       .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao");
-    if (centroCusto) colabQuery = colabQuery.eq("centro_custo", centroCusto);
+    if (centroCusto?.length) colabQuery = colabQuery.in("centro_custo", centroCusto);
 
-    const configQuery = centroCusto
-      ? db.from("configuracoes").select("*").eq("centro_custo", centroCusto).single()
-      : db.from("configuracoes").select("*");
+    let configQuery = db.from("configuracoes").select("*");
+    if (centroCusto?.length) configQuery = configQuery.in("centro_custo", centroCusto) as typeof configQuery;
 
-    const etapasQuery = centroCusto
-      ? db.from("etapas").select("*").eq("centro_custo", centroCusto).order("ordem", { ascending: true })
-      : db.from("etapas").select("*").order("ordem", { ascending: true });
+    let etapasQuery = db.from("etapas").select("*").order("ordem", { ascending: true });
+    if (centroCusto?.length) etapasQuery = etapasQuery.in("centro_custo", centroCusto) as typeof etapasQuery;
 
-    const progressoQuery = centroCusto
-      ? db.from("etapas_progresso_diario").select("centro_custo,etapa_id,data,percentual").eq("centro_custo", centroCusto)
-      : db.from("etapas_progresso_diario").select("centro_custo,etapa_id,data,percentual");
+    let progressoQuery = db.from("etapas_progresso_diario").select("centro_custo,etapa_id,data,percentual");
+    if (centroCusto?.length) progressoQuery = progressoQuery.in("centro_custo", centroCusto) as typeof progressoQuery;
 
     const [
       { data: colabData, error: colabErr },
@@ -525,11 +522,7 @@ export async function GET(request: NextRequest) {
     if (etapasErr) console.error("[Dashboard/Principal] etapas:", etapasErr.message);
 
     // ── Configs e Etapas ─────────────────────────────────────────────────────
-    const configsAll = (
-      centroCusto
-        ? (configResult.data ? [configResult.data] : [])
-        : (configResult.data ?? [])
-    ) as Array<Record<string, unknown>>;
+    const configsAll = (configResult.data ?? []) as Array<Record<string, unknown>>;
 
     const etapasRaw = (etapasRows ?? []) as Array<{
       id?: number;
@@ -733,18 +726,19 @@ export async function GET(request: NextRequest) {
     );
 
     // Etapas concatenadas para exibição (apenas quando um CC específico)
-    const etapasExibicao = centroCusto
-      ? (etapasPorProjeto.get(centroCusto) ?? [])
+    const ccAtivo = Array.isArray(centroCusto) ? centroCusto[0] : centroCusto;
+    const etapasExibicao = ccAtivo
+      ? (etapasPorProjeto.get(ccAtivo) ?? [])
       : [];
 
-    const progressoDoCc = centroCusto
-      ? (progressoPorProjeto.get(centroCusto) ?? [])
+    const progressoDoCc = ccAtivo
+      ? (progressoPorProjeto.get(ccAtivo) ?? [])
       : [];
 
     // Dias trabalhados do CC atual (para filtrar finais de semana/feriados na evolucaoDiaria)
     const diasTrabalhadosDoCc: Set<string> = (() => {
-      if (!centroCusto) return new Set<string>();
-      const cfg = configsAll.find((c) => c.centro_custo === centroCusto);
+      if (!ccAtivo) return new Set<string>();
+      const cfg = configsAll.find((c) => c.centro_custo === ccAtivo);
       const lista = (cfg?.dias_trabalhados as string[] | undefined) ?? [];
       if (lista.length > 0) return new Set(lista);
       // Fallback: gerar dias úteis excluindo fins de semana e feriados

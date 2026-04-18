@@ -422,6 +422,8 @@ export const ConfigProjetoSchema = z.object({
   gerenteContrato: z.string().optional(),
   nomeCliente: z.string().optional(),
   centroCusto: z.coerce.string().optional(), // Aceita number ou string
+  // Centro de custo original do registro sendo editado (para UPDATE correto)
+  centroCustoOriginal: z.coerce.string().optional(),
   // ── Campos novos (Supabase) ─────────────────────────────────────────────
   colaboradores_previstos: z.coerce.number().positive().optional(),
   orcado_suprimentos: z.coerce.number().nonnegative().optional(),
@@ -620,8 +622,8 @@ export const UsuariosPermitidosSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   /** Nível de acesso no sistema */
   perfil: PerfilEnum.default("user"),
-  /** Centro de custo vinculado (obrigatório para perfil guest) */
-  centro_custo: z.string().optional().nullable(),
+  /** Centros de custo vinculados (obrigatório para perfil user/guest) */
+  centro_custo: z.array(z.string()).optional().nullable(),
   /** Timestamp ISO da autorização (preenchido automaticamente pelo banco) */
   autorizado_em: z.string().datetime().optional(),
 });

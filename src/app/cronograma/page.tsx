@@ -269,9 +269,26 @@ export default function CronogramaPage() {
 
   const scheduleValidation = useMemo(() => {
     if (diasUteisTotal === null) return null;
+
+    const todasComDatas = cronograma.etapas.every(e => e.data_inicio && e.data_fim);
+    if (todasComDatas && diasTrabalhadosData?.length) {
+      // Etapas com sobreposição de datas seriam contadas múltiplas vezes em uma soma
+      // simples. Calculamos a união dos dias úteis únicos cobertos por todas as etapas.
+      const diasTrabalhadosSet = new Set(diasTrabalhadosData);
+      const diasCobertos = new Set<string>();
+      for (const etapa of cronograma.etapas) {
+        if (etapa.data_inicio && etapa.data_fim) {
+          getDaysInRange(etapa.data_inicio, etapa.data_fim)
+            .filter(d => diasTrabalhadosSet.has(d))
+            .forEach(d => diasCobertos.add(d));
+        }
+      }
+      return validateScheduleTotal([diasCobertos.size], diasUteisTotal);
+    }
+
     const stepsDays = cronograma.etapas.map((e) => e.dias);
     return validateScheduleTotal(stepsDays, diasUteisTotal);
-  }, [cronograma.etapas, diasUteisTotal]);
+  }, [cronograma.etapas, diasUteisTotal, diasTrabalhadosData]);
 
   const cronogramaMutation = useMutation({
     mutationFn: async (data: ConfigCronograma) => {

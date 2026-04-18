@@ -45,7 +45,7 @@ export interface JWTPayload {
   re: string;
   nome?: string;
   perfil?: string;
-  centro_custo?: string;
+  centro_custo?: string[];
   iat?: number;
   exp?: number;
 }
@@ -182,7 +182,13 @@ export async function requireAuth(requiredRole?: UserRole): Promise<JWTPayload> 
 export function resolveCentroCusto(
   currentUser: JWTPayload,
   ccParam?: string | null,
-): string | undefined {
-  if (currentUser.perfil === "admin") return ccParam || undefined;
-  return currentUser.centro_custo || undefined;
+): string[] | undefined {
+  if (currentUser.perfil === "admin") {
+    if (!ccParam) return undefined;
+    return ccParam.split(",").filter(Boolean);
+  }
+  const cc = currentUser.centro_custo;
+  if (!cc) return undefined;
+  // Compat: tokens antigos (pré-migração) podem ter string em vez de array
+  return Array.isArray(cc) ? cc : [cc as unknown as string];
 }

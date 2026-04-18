@@ -199,7 +199,7 @@ export default function BancoTalentosPage() {
                     Banco de Talentos
                   </h1>
                   {pagination && (
-                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-medium text-primary">
                       {pagination.total} colaboradores cadastrados
                     </span>
                   )}

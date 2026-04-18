@@ -34,12 +34,12 @@ export async function GET() {
       .select("centro_custo, nome_cliente, data_inicio_projeto, data_fim_projeto")
       .order("centro_custo", { ascending: true });
 
-    // Users e guests só veem o projeto do seu centro de custo vinculado
-    if (currentUser.perfil !== "admin" && currentUser.centro_custo) {
-      query = query.eq("centro_custo", currentUser.centro_custo);
-    } else if (currentUser.perfil !== "admin") {
-      // user/guest sem centro_custo vinculado → lista vazia
-      return NextResponse.json({ data: [] });
+    // Users e guests só veem os projetos dos seus centros de custo vinculados
+    if (currentUser.perfil !== "admin") {
+      const cc = currentUser.centro_custo;
+      const ccs = Array.isArray(cc) ? cc : cc ? [cc] : [];
+      if (ccs.length === 0) return NextResponse.json({ data: [] });
+      query = query.in("centro_custo", ccs);
     }
 
     const { data, error } = await query;

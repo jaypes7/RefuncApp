@@ -42,7 +42,18 @@ import {
   Check,
   X,
   Key,
+  ChevronsUpDown,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -70,7 +81,7 @@ type ProjetoResumo = {
 
 type ConfigClinica = { id?: number; nome: string };
 type ConfigHotel = { id?: string; nome: string; qt_vagas: number; vagas_ocupadas: number; vagas_disponiveis: number };
-type ConfigAcesso = { id?: string; re: string; nome: string; perfil: string; centro_custo?: string | null; precisa_redefinir_senha?: boolean };
+type ConfigAcesso = { id?: string; re: string; nome: string; perfil: string; centro_custo?: string[] | null; precisa_redefinir_senha?: boolean };
 
 type LogEntry = {
   id: string;
@@ -304,14 +315,16 @@ export default function ConfiguracoesPage() {
   const [acessoRE, setAcessoRE] = useState("");
   const [acessoNome, setAcessoNome] = useState("");
   const [acessoRole, setAcessoRole] = useState("");
-  const [acessoCentroCusto, setAcessoCentroCusto] = useState("");
+  const [acessoCentroCusto, setAcessoCentroCusto] = useState<string[]>([]);
+  const [ccPopoverOpen, setCcPopoverOpen] = useState(false);
 
   // Acessos - edição inline
   const [editingAcessoId, setEditingAcessoId] = useState<string | null>(null);
   const [editingAcessoRE, setEditingAcessoRE] = useState("");
   const [editingAcessoNome, setEditingAcessoNome] = useState("");
   const [editingAcessoPerfil, setEditingAcessoPerfil] = useState("");
-  const [editingAcessoCentroCusto, setEditingAcessoCentroCusto] = useState("");
+  const [editingAcessoCentroCusto, setEditingAcessoCentroCusto] = useState<string[]>([]);
+  const [editCcPopoverOpen, setEditCcPopoverOpen] = useState(false);
 
   // Clínicas - input para adicionar nova
   const [clinicaInput, setClinicaInput] = useState("");
@@ -470,6 +483,9 @@ export default function ConfiguracoesPage() {
         gerenteContrato: data.gerente_contrato,
         nomeCliente: data.nome_cliente,
         centroCusto: data.centro_custo,
+        centroCustoOriginal: data.centro_custo !== (projetoData?.CENTRO_CUSTO || "")
+          ? (projetoData?.CENTRO_CUSTO || "")
+          : data.centro_custo,
         dataInicio: data.data_inicio,
         dataFim: data.data_fim,
       };
@@ -590,7 +606,7 @@ export default function ConfiguracoesPage() {
   });
 
   const addAcessoMutation = useMutation({
-    mutationFn: async (data: { re: string; nome: string; perfil: string; centro_custo?: string }) => {
+    mutationFn: async (data: { re: string; nome: string; perfil: string; centro_custo?: string[] }) => {
       const res = await fetch("/api/config/acessos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -604,7 +620,7 @@ export default function ConfiguracoesPage() {
       setAcessoRE("");
       setAcessoNome("");
       setAcessoRole("");
-      setAcessoCentroCusto("");
+      setAcessoCentroCusto([]);
       toast.success("Acesso configurado com sucesso!");
     },
     onError: () => toast.error("Erro ao configurar acesso"),
@@ -629,7 +645,7 @@ export default function ConfiguracoesPage() {
   });
 
   const updateAcessoMutation = useMutation({
-    mutationFn: async (payload: { id: string; re: string; nome: string; perfil: string; centro_custo?: string }) => {
+    mutationFn: async (payload: { id: string; re: string; nome: string; perfil: string; centro_custo?: string[] }) => {
       const res = await fetch(`/api/config/acessos?id=${payload.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -647,7 +663,7 @@ export default function ConfiguracoesPage() {
       setEditingAcessoRE("");
       setEditingAcessoNome("");
       setEditingAcessoPerfil("");
-      setEditingAcessoCentroCusto("");
+      setEditingAcessoCentroCusto([]);
       toast.success("Acesso atualizado com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -678,7 +694,7 @@ export default function ConfiguracoesPage() {
     setEditingAcessoRE(acesso.re);
     setEditingAcessoNome(acesso.nome);
     setEditingAcessoPerfil(acesso.perfil);
-    setEditingAcessoCentroCusto(acesso.centro_custo || "");
+    setEditingAcessoCentroCusto(acesso.centro_custo ?? []);
   };
 
   // Handler para cancelar edição de acesso
@@ -687,7 +703,7 @@ export default function ConfiguracoesPage() {
     setEditingAcessoRE("");
     setEditingAcessoNome("");
     setEditingAcessoPerfil("");
-    setEditingAcessoCentroCusto("");
+    setEditingAcessoCentroCusto([]);
   };
 
   const resetProjetoMutation = useMutation({
@@ -1188,22 +1204,49 @@ export default function ConfiguracoesPage() {
                             <span className="text-destructive ml-1">*</span>
                           )}
                         </label>
-                        <Select
-                          value={acessoCentroCusto}
-                          onValueChange={(v) => setAcessoCentroCusto(v)}
-                        >
-                          <SelectTrigger className="glass-input">
-                            <SelectValue placeholder="Selecione o projeto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(projetosData || []).map((p) => (
-                              <SelectItem key={p.centro_custo} value={p.centro_custo}>
-                                {p.centro_custo}
-                                {p.nome_cliente ? ` — ${p.nome_cliente}` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Popover open={ccPopoverOpen} onOpenChange={setCcPopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <button className="glass-input w-full flex items-center justify-between px-3 py-2 text-sm rounded-md border border-input bg-transparent h-10">
+                              <span className={acessoCentroCusto.length === 0 ? "text-muted-foreground" : ""}>
+                                {acessoCentroCusto.length === 0
+                                  ? "Selecione os projetos"
+                                  : acessoCentroCusto.length === 1
+                                  ? acessoCentroCusto[0]
+                                  : `${acessoCentroCusto.length} centros selecionados`}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Buscar projeto..." />
+                              <CommandList>
+                                <CommandEmpty>Nenhum projeto encontrado.</CommandEmpty>
+                                <CommandGroup>
+                                  {(projetosData || []).map((p) => {
+                                    const isSelected = acessoCentroCusto.includes(p.centro_custo);
+                                    return (
+                                      <CommandItem
+                                        key={p.centro_custo}
+                                        onSelect={() =>
+                                          setAcessoCentroCusto(
+                                            isSelected
+                                              ? acessoCentroCusto.filter((v) => v !== p.centro_custo)
+                                              : [...acessoCentroCusto, p.centro_custo],
+                                          )
+                                        }
+                                      >
+                                        <Checkbox checked={isSelected} className="mr-2" />
+                                        {p.centro_custo}
+                                        {p.nome_cliente ? ` — ${p.nome_cliente}` : ""}
+                                      </CommandItem>
+                                    );
+                                  })}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </div>
 
@@ -1213,14 +1256,14 @@ export default function ConfiguracoesPage() {
                           re: acessoRE,
                           nome: acessoNome,
                           perfil: acessoRole,
-                          centro_custo: acessoCentroCusto.trim() || undefined,
+                          centro_custo: acessoCentroCusto.length > 0 ? acessoCentroCusto : undefined,
                         })
                       }
                       disabled={
                         !acessoRE?.trim() ||
                         !acessoNome?.trim() ||
                         !acessoRole ||
-                        ((acessoRole === "user" || acessoRole === "guest") && !acessoCentroCusto.trim()) ||
+                        ((acessoRole === "user" || acessoRole === "guest") && acessoCentroCusto.length === 0) ||
                         addAcessoMutation.isPending
                       }
                       className="gap-2 w-full"
@@ -1281,22 +1324,49 @@ export default function ConfiguracoesPage() {
                                     onChange={(e) => setEditingAcessoNome(e.target.value)}
                                     placeholder="Nome completo"
                                   />
-                                  <Select
-                                    value={editingAcessoCentroCusto}
-                                    onValueChange={(v) => setEditingAcessoCentroCusto(v)}
-                                  >
-                                    <SelectTrigger className="glass-input h-8 text-sm w-full">
-                                      <SelectValue placeholder="Selecione o projeto" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {(projetosData || []).map((p) => (
-                                        <SelectItem key={p.centro_custo} value={p.centro_custo}>
-                                          {p.centro_custo}
-                                          {p.nome_cliente ? ` — ${p.nome_cliente}` : ""}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <Popover open={editCcPopoverOpen} onOpenChange={setEditCcPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                      <button className="glass-input w-full flex items-center justify-between px-3 py-1.5 text-sm rounded-md border border-input bg-transparent h-8">
+                                        <span className={editingAcessoCentroCusto.length === 0 ? "text-muted-foreground" : ""}>
+                                          {editingAcessoCentroCusto.length === 0
+                                            ? "Selecione os projetos"
+                                            : editingAcessoCentroCusto.length === 1
+                                            ? editingAcessoCentroCusto[0]
+                                            : `${editingAcessoCentroCusto.length} centros selecionados`}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                      <Command>
+                                        <CommandInput placeholder="Buscar projeto..." />
+                                        <CommandList>
+                                          <CommandEmpty>Nenhum projeto encontrado.</CommandEmpty>
+                                          <CommandGroup>
+                                            {(projetosData || []).map((p) => {
+                                              const isSelected = editingAcessoCentroCusto.includes(p.centro_custo);
+                                              return (
+                                                <CommandItem
+                                                  key={p.centro_custo}
+                                                  onSelect={() =>
+                                                    setEditingAcessoCentroCusto(
+                                                      isSelected
+                                                        ? editingAcessoCentroCusto.filter((v) => v !== p.centro_custo)
+                                                        : [...editingAcessoCentroCusto, p.centro_custo],
+                                                    )
+                                                  }
+                                                >
+                                                  <Checkbox checked={isSelected} className="mr-2" />
+                                                  {p.centro_custo}
+                                                  {p.nome_cliente ? ` — ${p.nome_cliente}` : ""}
+                                                </CommandItem>
+                                              );
+                                            })}
+                                          </CommandGroup>
+                                        </CommandList>
+                                      </Command>
+                                    </PopoverContent>
+                                  </Popover>
                                   <div className="flex gap-1 pt-1">
                                     <Button
                                       size="sm"
@@ -1306,7 +1376,7 @@ export default function ConfiguracoesPage() {
                                         !editingAcessoRE?.trim() ||
                                         !editingAcessoNome?.trim() ||
                                         !editingAcessoPerfil ||
-                                        ((editingAcessoPerfil === "user" || editingAcessoPerfil === "guest") && !editingAcessoCentroCusto.trim()) ||
+                                        ((editingAcessoPerfil === "user" || editingAcessoPerfil === "guest") && editingAcessoCentroCusto.length === 0) ||
                                         updateAcessoMutation.isPending
                                       }
                                       onClick={() =>
@@ -1316,7 +1386,7 @@ export default function ConfiguracoesPage() {
                                           re: editingAcessoRE,
                                           nome: editingAcessoNome,
                                           perfil: editingAcessoPerfil,
-                                          centro_custo: editingAcessoCentroCusto.trim() || undefined,
+                                          centro_custo: editingAcessoCentroCusto.length > 0 ? editingAcessoCentroCusto : undefined,
                                         })
                                       }
                                     >
@@ -1347,8 +1417,8 @@ export default function ConfiguracoesPage() {
                                         RE: {acesso.re} •{" "}
                                         {ROLES.find((r) => r.value === acesso.perfil)
                                           ?.label || acesso.perfil}
-                                        {acesso.centro_custo && (
-                                          <> • C.C.: {acesso.centro_custo}</>
+                                        {acesso.centro_custo && acesso.centro_custo.length > 0 && (
+                                          <> • C.C.: {acesso.centro_custo.join(", ")}</>
                                         )}
                                       </span>
                                     </div>

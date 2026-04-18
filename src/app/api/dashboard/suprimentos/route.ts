@@ -52,34 +52,28 @@ export async function GET(request: NextRequest) {
       .select(
         "id,ordem_compra,descricao,fornecedor,status,status_ordem,valor_oc,valores,entregue_obra,total_req_previstas",
       );
-    if (centroCusto) {
-      ordensQuery = ordensQuery.eq("centro_custo", centroCusto);
+    if (centroCusto?.length) {
+      ordensQuery = ordensQuery.in("centro_custo", centroCusto);
     }
 
-    const configQuery = centroCusto
-      ? db.from("configuracoes").select("orcado_suprimentos").eq("centro_custo", centroCusto).single()
-      : db.from("configuracoes").select("orcado_suprimentos");
+    let configQuery = db.from("configuracoes").select("orcado_suprimentos");
+    if (centroCusto?.length) configQuery = configQuery.in("centro_custo", centroCusto) as typeof configQuery;
 
     const [
       { data: ordensData, error: ordensErr },
-      configResult,
+      { data: configRows, error: configError },
     ] = await Promise.all([ordensQuery, configQuery]);
 
     if (ordensErr) throw new Error(ordensErr.message);
 
-    const configError = (configResult as { error?: { message: string; code?: string } }).error;
-    const configData = (configResult as { data?: unknown }).data;
-
-    if (configError && configError.code !== "PGRST116") {
+    if (configError) {
       console.error("[Dashboard/Suprimentos] config:", configError.message);
     }
 
-    const orcado = centroCusto
-      ? Number((configData as { orcado_suprimentos?: number })?.orcado_suprimentos ?? 0)
-      : ((configData ?? []) as Array<{ orcado_suprimentos?: number }>).reduce(
-          (s, c) => s + Number(c.orcado_suprimentos ?? 0),
-          0,
-        );
+    const orcado = ((configRows ?? []) as Array<{ orcado_suprimentos?: number }>).reduce(
+      (s, c) => s + Number(c.orcado_suprimentos ?? 0),
+      0,
+    );
 
     const rows = (ordensData ?? []) as Array<Record<string, unknown>>;
 

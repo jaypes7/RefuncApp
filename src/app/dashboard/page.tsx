@@ -1192,13 +1192,13 @@ export default function DashboardPage() {
                   <CardTitle>Etapas do Projeto</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-center gap-4 mb-4 text-base text-muted-foreground">
+                  <div className="flex items-center justify-center gap-4 mb-4 text-lg text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                      <span className="inline-block h-1.5 w-4 rounded-full bg-blue-500" />
+                      <span className="inline-block h-2 w-4 rounded-full bg-blue-500" />
                       <span>Previsto</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="inline-block h-1.5 w-4 rounded-full bg-[#DA291B]" />
+                      <span className="inline-block h-2 w-4 rounded-full bg-[#DA291B]" />
                       <span>Realizado</span>
                     </div>
                   </div>
@@ -1276,7 +1276,7 @@ export default function DashboardPage() {
                             </div>
                           )}
                           <div className="text-xs text-muted-foreground">
-                            {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""}
+                            {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""} trabalhado{etapa.duracaoDias !== 1 ? "s" : ""}
                           </div>
                           {/* Seletor de dia para ver o previsto */}
                           {etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0 && (
