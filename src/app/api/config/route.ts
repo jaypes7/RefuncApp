@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const ccParam = searchParams.get("centro_custo") || undefined;
-    const centroCustoParam = resolveCentroCusto(currentUser, ccParam);
+    const centroCustoParam = resolveCentroCusto(currentUser, ccParam)?.[0];
 
     const supabase = createServerClient();
 

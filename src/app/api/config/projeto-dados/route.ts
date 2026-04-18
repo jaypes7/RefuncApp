@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       gerenteContrato,
       nomeCliente,
       centroCusto,
+      centroCustoOriginal,
       colaboradores_previstos,
       orcado_suprimentos,
       feriados_projeto,
@@ -49,31 +50,48 @@ export async function POST(request: NextRequest) {
 
     const targetCentroCusto = centroCusto ?? "09.06.0001.171";
 
-    // Upsert apenas os campos do projeto — as etapas não são tocadas
-    const { error } = await supabase
-      .from("configuracoes")
-      .upsert(
-        {
-          centro_custo: targetCentroCusto,
-          data_inicio_projeto: dataInicioFmt,
-          data_fim_projeto: dataFimFmt,
-          dias_totais_projeto: diasTotais,
-          gerente_operacoes: gerenteOperacoes ?? null,
-          gerente_contrato: gerenteContrato ?? null,
-          nome_cliente: nomeCliente ?? null,
-          colaboradores_previstos: colaboradores_previstos ?? null,
-          orcado_suprimentos: orcado_suprimentos ?? null,
-          feriados_projeto:
-            feriados_projeto && feriados_projeto.length > 0
-              ? feriados_projeto.map((d) =>
-                  d instanceof Date ? d.toISOString().split("T")[0] : String(d),
-                )
-              : null,
-        },
-        { onConflict: "centro_custo" },
-      );
+    const payload = {
+      centro_custo: targetCentroCusto,
+      data_inicio_projeto: dataInicioFmt,
+      data_fim_projeto: dataFimFmt,
+      dias_totais_projeto: diasTotais,
+      gerente_operacoes: gerenteOperacoes ?? null,
+      gerente_contrato: gerenteContrato ?? null,
+      nome_cliente: nomeCliente ?? null,
+      colaboradores_previstos: colaboradores_previstos ?? null,
+      orcado_suprimentos: orcado_suprimentos ?? null,
+      feriados_projeto:
+        feriados_projeto && feriados_projeto.length > 0
+          ? feriados_projeto.map((d) =>
+              d instanceof Date ? d.toISOString().split("T")[0] : String(d),
+            )
+          : null,
+    };
+
+    let error;
+
+    if (centroCustoOriginal) {
+      // Modo edição: atualiza o registro existente pelo centro de custo original
+      const { error: updateError } = await supabase
+        .from("configuracoes")
+        .update(payload)
+        .eq("centro_custo", centroCustoOriginal);
+      error = updateError;
+    } else {
+      // Modo criação/upsert legado
+      const { error: upsertError } = await supabase
+        .from("configuracoes")
+        .upsert(payload, { onConflict: "centro_custo" });
+      error = upsertError;
+    }
 
     if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: "Centro de custo já existe" },
+          { status: 409 },
+        );
+      }
       throw new Error(`Erro ao salvar no Supabase: ${error.message}`);
     }
 

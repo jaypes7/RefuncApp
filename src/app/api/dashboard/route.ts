@@ -144,35 +144,28 @@ function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
   return { labels: allLabels, planejado, realizado };
 }
 
-async function getConfig(centroCusto?: string): Promise<ConfigDB> {
+async function getConfig(centroCusto?: string[]): Promise<ConfigDB> {
   const supabase = createServerClient();
 
-  const configQuery = centroCusto
-    ? supabase.from("configuracoes").select("*").eq("centro_custo", centroCusto).single()
-    : supabase.from("configuracoes").select("*");
+  let configQuery = supabase.from("configuracoes").select("*");
+  if (centroCusto?.length) configQuery = configQuery.in("centro_custo", centroCusto) as typeof configQuery;
 
-  const etapasQuery = centroCusto
-    ? supabase.from("etapas").select("*").eq("centro_custo", centroCusto).order("ordem", { ascending: true })
-    : supabase.from("etapas").select("*").order("ordem", { ascending: true });
+  let etapasQuery = supabase.from("etapas").select("*").order("ordem", { ascending: true });
+  if (centroCusto?.length) etapasQuery = etapasQuery.in("centro_custo", centroCusto) as typeof etapasQuery;
 
   const [
-    configResult,
+    { data: configRows, error: configError },
     { data: etapasRows, error: etapasError },
   ] = await Promise.all([configQuery, etapasQuery]);
 
-  const configError = (configResult as { error?: { message: string; code?: string } }).error;
-  const configRow = (configResult as { data?: unknown }).data;
-
-  if (configError && configError.code !== "PGRST116") {
+  if (configError) {
     console.error("[Dashboard] Erro ao buscar config:", configError.message);
   }
   if (etapasError) {
     console.error("[Dashboard] Erro ao buscar etapas:", etapasError.message);
   }
 
-  const configsAll = centroCusto
-    ? (configRow ? [configRow as Record<string, unknown>] : [])
-    : (configRow as Record<string, unknown>[] ?? []);
+  const configsAll = (configRows ?? []) as Record<string, unknown>[];
 
   const etapasRaw = (etapasRows ?? []) as Array<{
     id?: number;
@@ -201,25 +194,7 @@ async function getConfig(centroCusto?: string): Promise<ConfigDB> {
     });
   }
 
-  // Se há centroCusto específico, retorna normalmente
-  if (centroCusto) {
-    const cfg = configsAll[0] ?? {};
-    const rawMeta = Number(cfg.meta_admissoes ?? 0);
-    const rawPrev = Number(cfg.colaboradores_previstos ?? 0);
-    return {
-      dataInicio: (cfg.data_inicio_projeto as string) ?? null,
-      dataFim: (cfg.data_fim_projeto as string) ?? null,
-      etapas: etapasPorProjeto.get(centroCusto) ?? [],
-      metaAdmissoes: rawMeta > 0 ? rawMeta : rawPrev,
-      colaboradoresPrevistos: rawPrev,
-      orcadoSuprimentos: Number(cfg.orcado_suprimentos ?? 0),
-      feriados: Array.isArray(cfg.feriados_projeto)
-        ? (cfg.feriados_projeto as string[]).map((d) => new Date(d))
-        : [],
-    };
-  }
-
-  // Agregação "Todos"
+  // Agregação (funciona para um ou múltiplos centros de custo)
   const dataInicio = configsAll.length
     ? configsAll.map((c) => c.data_inicio_projeto as string | null).filter(Boolean).sort()[0] ?? null
     : null;
@@ -251,7 +226,7 @@ async function getConfig(centroCusto?: string): Promise<ConfigDB> {
   };
 }
 
-async function getSuprimentos(centroCusto?: string): Promise<
+async function getSuprimentos(centroCusto?: string[]): Promise<
   Array<{
     ordemCompra: string;
     totalReqPrevistas: number;
@@ -262,8 +237,8 @@ async function getSuprimentos(centroCusto?: string): Promise<
 > {
   const supabase = createServerClient();
   let query = supabase.from("suprimentos_ordens").select("*");
-  if (centroCusto) {
-    query = query.eq("centro_custo", centroCusto);
+  if (centroCusto?.length) {
+    query = query.in("centro_custo", centroCusto);
   }
   const { data, error } = await query;
 
@@ -281,11 +256,11 @@ async function getSuprimentos(centroCusto?: string): Promise<
   }));
 }
 
-async function getHoteis(centroCusto?: string): Promise<Array<{ nome: string; vagas_totais: number }>> {
+async function getHoteis(centroCusto?: string[]): Promise<Array<{ nome: string; vagas_totais: number }>> {
   const supabase = createServerClient();
   let query = supabase.from("configuracoes_hoteis").select("nome, qt_vagas");
-  if (centroCusto) {
-    query = query.eq("centro_custo", centroCusto);
+  if (centroCusto?.length) {
+    query = query.in("centro_custo", centroCusto);
   }
   const { data, error } = await query;
   if (error) {
@@ -475,13 +450,13 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
 
     let colabQuery = supabase.from("colaboradores").select("*");
-    if (centroCusto) {
-      colabQuery = colabQuery.eq("centro_custo", centroCusto);
+    if (centroCusto?.length) {
+      colabQuery = colabQuery.in("centro_custo", centroCusto);
     }
 
     let logisticaQuery = supabase.from("logistica_controle").select("turno_trabalho, hotel");
-    if (centroCusto) {
-      logisticaQuery = logisticaQuery.eq("centro_custo", centroCusto);
+    if (centroCusto?.length) {
+      logisticaQuery = logisticaQuery.in("centro_custo", centroCusto);
     }
 
     const [

@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     let query = db
       .from("colaboradores")
       .select("cpf,nome,funcao_clt,idade,status,data_admissao,termino,aso,uf");
-    if (centroCusto) query = query.eq("centro_custo", centroCusto);
+    if (centroCusto?.length) query = query.in("centro_custo", centroCusto);
     const { data, error } = await query;
 
     if (error) throw new Error(error.message);

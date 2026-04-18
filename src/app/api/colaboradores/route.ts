@@ -237,9 +237,8 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Filtro por centro de custo ────────────────────────────────────────
-    const ccs = centroCusto?.split(",").filter(Boolean);
-    if (ccs?.length) {
-      query = query.in("centro_custo", ccs);
+    if (centroCusto?.length) {
+      query = query.in("centro_custo", centroCusto);
     }
 
     // ── Paginação server-side (.range é inclusivo em ambos os extremos) ───

@@ -63,11 +63,11 @@ export async function GET(request: NextRequest) {
 
     // Se há filtro de centro de custo, busca os CPFs vinculados primeiro
     let cpfFilter: string[] | null = null;
-    if (centroCusto) {
+    if (centroCusto?.length) {
       const { data: colabRows } = await db
         .from("colaboradores")
         .select("cpf")
-        .eq("centro_custo", centroCusto);
+        .in("centro_custo", centroCusto);
       cpfFilter = (colabRows ?? []).map((r) => r.cpf as string).filter(Boolean);
     }
 
