@@ -80,11 +80,24 @@ type ProgressoDiarioRow = {
  *
  * Fallback para o modo legado (baseado em duracaoDias) se as etapas não tiverem datas.
  */
+function contarDiasTrabalhadosNoIntervalo(
+  dataInicio: string,
+  dataFim: string,
+  diasTrabalhados: string[],
+): number {
+  let count = 0;
+  for (const d of diasTrabalhados) {
+    if (d >= dataInicio && d <= dataFim) count++;
+  }
+  return count;
+}
+
 function calcularPlanejadoNaData(
   dateStr: string,
   etapas: EtapaConfig[],
   totalDias: number,
   dataInicioProjeto: string,
+  diasTrabalhados: string[] = [],
 ): number {
   // Verifica se todas as etapas têm datas configuradas
   const todasComDatas = etapas.every((e) => e.dataInicio && e.dataFim);
@@ -104,13 +117,20 @@ function calcularPlanejadoNaData(
         plAcum += peso;
       } else {
         // Dentro da etapa: interpolação linear proporcional aos dias decorridos
-        const MS_PER_DAY = 86_400_000;
-        const iniMs = new Date(ini + "T00:00:00Z").getTime();
-        const fimMs = new Date(fim + "T00:00:00Z").getTime();
-        const curMs = new Date(dateStr + "T00:00:00Z").getTime();
-        const diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
-        const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
-        const frac = Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa));
+        let diasDecorridos: number;
+        let totalDiasEtapa: number;
+        if (diasTrabalhados.length > 0) {
+          diasDecorridos = contarDiasTrabalhadosNoIntervalo(ini, dateStr, diasTrabalhados);
+          totalDiasEtapa = contarDiasTrabalhadosNoIntervalo(ini, fim, diasTrabalhados);
+        } else {
+          const MS_PER_DAY = 86_400_000;
+          const iniMs = new Date(ini + "T00:00:00Z").getTime();
+          const fimMs = new Date(fim + "T00:00:00Z").getTime();
+          const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+          diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
+          totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+        }
+        const frac = totalDiasEtapa > 0 ? Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa)) : 0;
         plAcum += frac * peso;
       }
     }
@@ -138,13 +158,20 @@ function calcularPlanejadoNaData(
     if (dateStr >= fimEtapaStr) {
       plAcum += peso;
     } else {
-      const MS_PER_DAY = 86_400_000;
-      const iniMs = iniEtapaDt.getTime();
-      const fimMs = fimEtapaDt.getTime();
-      const curMs = new Date(dateStr + "T00:00:00Z").getTime();
-      const diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
-      const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
-      const frac = fimMs > iniMs ? Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa)) : 0;
+      let diasDecorridos: number;
+      let totalDiasEtapa: number;
+      if (diasTrabalhados.length > 0) {
+        diasDecorridos = contarDiasTrabalhadosNoIntervalo(iniEtapaStr, dateStr, diasTrabalhados);
+        totalDiasEtapa = contarDiasTrabalhadosNoIntervalo(iniEtapaStr, fimEtapaStr, diasTrabalhados);
+      } else {
+        const MS_PER_DAY = 86_400_000;
+        const iniMs = iniEtapaDt.getTime();
+        const fimMs = fimEtapaDt.getTime();
+        const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+        diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
+        totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+      }
+      const frac = totalDiasEtapa > 0 ? Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa)) : 0;
       plAcum += frac * peso;
     }
   }
@@ -198,10 +225,10 @@ function calcularRealizadoSuavizadoNaData(
   etapas: EtapaConfig[],
   totalDias: number,
   progressoDiario: ProgressoDiarioRow[],
+  diasTrabalhados: string[] = [],
 ): number | null {
   let reAcum = 0;
   let temAlgumDado = false;
-  const MS_PER_DAY = 86_400_000;
 
   for (const etapa of etapas) {
     const peso = (etapa.duracaoDias / totalDias) * 100;
@@ -220,12 +247,20 @@ function calcularRealizadoSuavizadoNaData(
       // Etapa encerrada: contribuição proporcional ao realizado físico total
       reAcum += (pctRealAteAgora / 100) * peso;
     } else {
-      const iniMs = new Date(ini + "T00:00:00Z").getTime();
-      const fimMs = new Date(fim + "T00:00:00Z").getTime();
-      const curMs = new Date(dateStr + "T00:00:00Z").getTime();
-      const diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
-      const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
-      const fracTempo = Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa));
+      let diasDecorridos: number;
+      let totalDiasEtapa: number;
+      if (diasTrabalhados.length > 0) {
+        diasDecorridos = contarDiasTrabalhadosNoIntervalo(ini, dateStr, diasTrabalhados);
+        totalDiasEtapa = contarDiasTrabalhadosNoIntervalo(ini, fim, diasTrabalhados);
+      } else {
+        const MS_PER_DAY = 86_400_000;
+        const iniMs = new Date(ini + "T00:00:00Z").getTime();
+        const fimMs = new Date(fim + "T00:00:00Z").getTime();
+        const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+        diasDecorridos = (curMs - iniMs) / MS_PER_DAY + 1;
+        totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+      }
+      const fracTempo = totalDiasEtapa > 0 ? Math.max(0, Math.min(1, diasDecorridos / totalDiasEtapa)) : 0;
       const planejadoEtapaAteData = fracTempo * 100;
 
       if (planejadoEtapaAteData > 0) {
@@ -317,12 +352,12 @@ function gerarCurvaSEtapas(
 
   for (const dateStr of diasPlot) {
     labels.push(fmt(dateStr));
-    planejado.push(calcularPlanejadoNaData(dateStr, etapas, totalDias, dataInicio));
+    planejado.push(calcularPlanejadoNaData(dateStr, etapas, totalDias, dataInicio, diasTrabalhados));
 
     if (ultimaDataComDado === null || dateStr > ultimaDataComDado) {
       realizado.push(null);
     } else {
-      realizado.push(calcularRealizadoSuavizadoNaData(dateStr, etapas, totalDias, progressoDiario));
+      realizado.push(calcularRealizadoSuavizadoNaData(dateStr, etapas, totalDias, progressoDiario, diasTrabalhados));
     }
 
     // Identifica etapa ativa neste dia
@@ -337,12 +372,21 @@ function gerarCurvaSEtapas(
     let realizadoEtapa = 0;
 
     if (etapaAtiva && etapaAtiva.dataInicio && etapaAtiva.dataFim) {
-      const iniMs = new Date(etapaAtiva.dataInicio + "T00:00:00Z").getTime();
-      const fimMs = new Date(etapaAtiva.dataFim + "T00:00:00Z").getTime();
-      const curMs = new Date(dateStr + "T00:00:00Z").getTime();
-      const diaDentro = (curMs - iniMs) / MS_PER_DAY + 1;
-      const totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
-      planejadoEtapa = Math.min(100, Math.round((diaDentro / totalDiasEtapa) * 1000) / 10);
+      let diaDentro: number;
+      let totalDiasEtapa: number;
+      if (diasTrabalhados.length > 0) {
+        diaDentro = contarDiasTrabalhadosNoIntervalo(etapaAtiva.dataInicio, dateStr, diasTrabalhados);
+        totalDiasEtapa = contarDiasTrabalhadosNoIntervalo(etapaAtiva.dataInicio, etapaAtiva.dataFim, diasTrabalhados);
+      } else {
+        const iniMs = new Date(etapaAtiva.dataInicio + "T00:00:00Z").getTime();
+        const fimMs = new Date(etapaAtiva.dataFim + "T00:00:00Z").getTime();
+        const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+        diaDentro = (curMs - iniMs) / MS_PER_DAY + 1;
+        totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+      }
+      planejadoEtapa = totalDiasEtapa > 0
+        ? Math.min(100, Math.round((diaDentro / totalDiasEtapa) * 1000) / 10)
+        : 0;
 
       const registros = progressoDiario
         .filter((r) => r.etapa_id === etapaAtiva.id && r.data <= dateStr);
@@ -383,7 +427,7 @@ function gerarCurvaSEtapas(
     ? ultimaDataComDado
     : (diasPlot[diasPlot.length - 1] ?? dataInicio);
 
-  const plDiario = calcularPlanejadoNaData(dataReferenciaDiaria, etapas, totalDias, dataInicio);
+  const plDiario = calcularPlanejadoNaData(dataReferenciaDiaria, etapas, totalDias, dataInicio, diasTrabalhados);
   const reDiario = ultimaDataComDado
     ? (calcularRealizadoNaData(dataReferenciaDiaria, etapas, totalDias, progressoDiario) ?? 0)
     : 0;

@@ -13,9 +13,16 @@ import { LoginSchema } from "@/lib/schemas";
 import { createServerClient } from "@/lib/supabase";
 import { generateToken, setAuthCookie } from "@/lib/auth";
 import { comparePassword } from "@/lib/password";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: proteção contra brute force no login
+    const { rateLimited } = await checkRateLimit(request, "auth-login");
+    if (rateLimited) {
+      return rateLimitResponse("auth-login");
+    }
+
     if (!process.env.JWT_SECRET) {
       console.error("[API Login] JWT_SECRET não configurado");
       return NextResponse.json(
