@@ -112,7 +112,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           {!collapsed && (
             <div>
               <h2 className="text-[11px] font-bold tracking-widest uppercase text-white">
-                MobilizaçãoAPP
+                Gestão de mobilização de contratos
               </h2>
               <p className="text-[10px] text-white/40 tracking-wide">
                 v2.5.0
