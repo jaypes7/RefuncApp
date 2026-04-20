@@ -11,6 +11,7 @@ import { requireAuth } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
 import { hashPassword } from "@/lib/password";
 import { z } from "zod";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const ResetPasswordSchema = z.object({
   novaSenha: z.string().min(6, "A senha deve ter pelo menos 6 caracteres"),
@@ -18,6 +19,12 @@ const ResetPasswordSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: proteção contra brute force no reset de senha
+    const { rateLimited } = await checkRateLimit(request, "auth-reset-pass");
+    if (rateLimited) {
+      return rateLimitResponse("auth-reset-pass");
+    }
+
     const user = await requireAuth();
     const body = await request.json();
     const { novaSenha } = ResetPasswordSchema.parse(body);

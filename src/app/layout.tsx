@@ -16,8 +16,8 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "RefuncApp - Gestão de RH",
-  description: "Sistema de gestão de recursos humanos",
+  title: "RefuncApp - Gestão de Mobilização",
+  description: "Sistema de gestão de mobilização de contratos",
 };
 
 export default function RootLayout({
