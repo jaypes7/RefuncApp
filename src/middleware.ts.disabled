@@ -1,0 +1,83 @@
+/**
+ * ============================================================================
+ * MIDDLEWARE DE AUTENTICAÇÃO
+ * ============================================================================
+ *
+ * Protege rotas de API verificando o JWT no cookie.
+ * Rotas públicas (/api/auth/*) são ignoradas.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { verifyToken } from "./lib/auth";
+
+// ============================================================================
+// CONFIGURAÇÃO
+// ============================================================================
+
+// Rotas que não precisam de autenticação
+const PUBLIC_ROUTES = [
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/callback",
+];
+
+// ============================================================================
+// MIDDLEWARE
+// ============================================================================
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Ignora durante build (prerenderização)
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.next();
+  }
+
+  // Ignora rotas públicas
+  if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // Applica proteção apenas em rotas de API
+  if (pathname.startsWith("/api/")) {
+    const token = request.cookies.get("token")?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Não autorizado - Token não encontrado" },
+        { status: 401 }
+      );
+    }
+
+    const payload = await verifyToken(token);
+
+    if (!payload) {
+      return NextResponse.json(
+        { error: "Não autorizado - Token inválido" },
+        { status: 401 }
+      );
+    }
+
+    // Adiciona informações do usuário no header para uso nas rotas
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-user-re", payload.re);
+    if (payload.nome) requestHeaders.set("x-user-nome", payload.nome);
+    if (payload.perfil) requestHeaders.set("x-user-perfil", payload.perfil);
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  }
+
+  return NextResponse.next();
+}
+
+// ============================================================================
+// CONFIGURAÇÃO DO MATCHER
+// ============================================================================
+
+export const config = {
+  matcher: "/api/:path*",
+};
