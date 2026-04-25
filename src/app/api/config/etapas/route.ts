@@ -5,8 +5,11 @@
  *
  * POST: Substitui todas as etapas do cronograma (delete + insert).
  *       Preserva os dados do projeto (configuracoes) intocados.
+<<<<<<< HEAD
  *       Limpa progresso diario de etapas removidas.
  *       Gera IDs reais para etapas novas (id <= 0).
+=======
+>>>>>>> origin/main
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -42,9 +45,14 @@ export async function POST(request: NextRequest) {
     // Validar que as datas das etapas estão dentro do intervalo do projeto
     if (projectStartDate && projectEndDate) {
       for (const etapa of etapas) {
+<<<<<<< HEAD
         const rawEtapa = body.etapas?.find((e: any) => e.id === etapa.id);
         const dataInicio = (rawEtapa?.dataInicio as string | undefined) || null;
         const dataFim = (rawEtapa?.dataFim as string | undefined) || null;
+=======
+        const dataInicio = (body.etapas?.find((e: any) => e.id === etapa.id)?.dataInicio as string | undefined) || null;
+        const dataFim = (body.etapas?.find((e: any) => e.id === etapa.id)?.dataFim as string | undefined) || null;
+>>>>>>> origin/main
 
         if (dataInicio) {
           if (dataInicio < projectStartDate || dataInicio > projectEndDate) {
@@ -79,6 +87,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+<<<<<<< HEAD
     // --- IDs antigos para limpar progresso órfão depois ---
     const { data: etapasAntigas } = await supabase
       .from("etapas")
@@ -109,6 +118,8 @@ export async function POST(request: NextRequest) {
       return e;
     });
 
+=======
+>>>>>>> origin/main
     // Remove apenas as etapas do centro de custo e insere a nova lista
     const { error: delError } = await supabase
       .from("etapas")
@@ -119,6 +130,7 @@ export async function POST(request: NextRequest) {
       throw new Error(`Erro ao remover etapas: ${delError.message}`);
     }
 
+<<<<<<< HEAD
     // --- Limpar progresso diário das etapas removidas ---
     if (idsRemovidos.length > 0) {
       const { error: delProgressError } = await supabase
@@ -137,6 +149,13 @@ export async function POST(request: NextRequest) {
         const rawEtapa = body.etapas?.find((raw: any) => raw.id === e.id || idMap[String(raw.id)] === e.id);
         return {
           id: e.id,
+=======
+    if (etapas.length > 0) {
+      const payload = etapas.map((e, idx) => {
+        const rawEtapa = body.etapas?.find((raw: any) => raw.id === e.id);
+        return {
+          id: e.id ?? idx + 1,
+>>>>>>> origin/main
           nome: e.nome,
           dias: e.duracaoDias,
           ordem: idx + 1,
@@ -162,13 +181,21 @@ export async function POST(request: NextRequest) {
       user.re,
       "Cronograma",
       undefined,
+<<<<<<< HEAD
       `Etapas atualizadas: ${etapasComIdReal.length} etapa(s)`,
+=======
+      `Etapas atualizadas: ${etapas.length} etapa(s)`,
+>>>>>>> origin/main
     );
 
     return NextResponse.json({
       success: true,
       message: "Etapas do cronograma atualizadas",
+<<<<<<< HEAD
       data: { etapas: etapasComIdReal, idMap },
+=======
+      data: { etapas },
+>>>>>>> origin/main
     });
   } catch (error) {
     console.error("[POST /config/etapas]", error);

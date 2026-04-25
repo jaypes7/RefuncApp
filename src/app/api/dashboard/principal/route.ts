@@ -55,8 +55,11 @@ type DetalhesDia = {
   etapaNome: string;
   planejadoEtapa: number;
   realizadoEtapa: number;
+<<<<<<< HEAD
   mediaPlanejadoEtapas: number;
   mediaRealizadoEtapas: number;
+=======
+>>>>>>> origin/main
 };
 
 type CurvaSResult = {
@@ -356,12 +359,17 @@ function gerarCurvaSEtapas(
     labels.push(fmt(dateStr));
     planejado.push(calcularPlanejadoNaData(dateStr, etapas, totalDias, dataInicio, diasTrabalhados));
 
+<<<<<<< HEAD
     if (dateStr > hojeStr) {
+=======
+    if (ultimaDataComDado === null || dateStr > ultimaDataComDado) {
+>>>>>>> origin/main
       realizado.push(null);
     } else {
       realizado.push(calcularRealizadoSuavizadoNaData(dateStr, etapas, totalDias, progressoDiario, diasTrabalhados));
     }
 
+<<<<<<< HEAD
     // Identifica TODAS as etapas ativas neste dia
     const etapasAtivas = etapas.filter(
       (e) => e.dataInicio && e.dataFim && dateStr >= e.dataInicio && dateStr <= e.dataFim,
@@ -372,10 +380,17 @@ function gerarCurvaSEtapas(
     if (etapasAtivas.length > 0) {
       etapaAtiva = etapasAtivas[0];
     } else {
+=======
+    // Identifica etapa ativa neste dia
+    let etapaAtiva = etapas.find((e) => e.dataInicio && e.dataFim && dateStr >= e.dataInicio && dateStr <= e.dataFim);
+    if (!etapaAtiva) {
+      // Fallback: última etapa que já começou, ou primeira etapa
+>>>>>>> origin/main
       const etapasIniciadas = etapas.filter((e) => e.dataInicio && dateStr >= e.dataInicio);
       etapaAtiva = etapasIniciadas.length > 0 ? etapasIniciadas[etapasIniciadas.length - 1] : etapas[0];
     }
 
+<<<<<<< HEAD
     // Calcula planejado/realizado de uma etapa específica (para tooltip do gráfico)
     function calcularPlanejadoEtapa(etapa: EtapaConfig, data: string): number {
       if (!etapa.dataInicio || !etapa.dataFim) return etapa.percentualConcluido ?? 0;
@@ -434,6 +449,34 @@ function gerarCurvaSEtapas(
     } else if (etapaAtiva) {
       mediaPlanejadoEtapas = planejadoEtapa;
       mediaRealizadoEtapas = realizadoEtapa;
+=======
+    let planejadoEtapa = 0;
+    let realizadoEtapa = 0;
+
+    if (etapaAtiva && etapaAtiva.dataInicio && etapaAtiva.dataFim) {
+      let diaDentro: number;
+      let totalDiasEtapa: number;
+      if (diasTrabalhados.length > 0) {
+        diaDentro = contarDiasTrabalhadosNoIntervalo(etapaAtiva.dataInicio, dateStr, diasTrabalhados);
+        totalDiasEtapa = contarDiasTrabalhadosNoIntervalo(etapaAtiva.dataInicio, etapaAtiva.dataFim, diasTrabalhados);
+      } else {
+        const iniMs = new Date(etapaAtiva.dataInicio + "T00:00:00Z").getTime();
+        const fimMs = new Date(etapaAtiva.dataFim + "T00:00:00Z").getTime();
+        const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+        diaDentro = (curMs - iniMs) / MS_PER_DAY + 1;
+        totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
+      }
+      planejadoEtapa = totalDiasEtapa > 0
+        ? Math.min(100, Math.round((diaDentro / totalDiasEtapa) * 1000) / 10)
+        : 0;
+
+      const registros = progressoDiario
+        .filter((r) => r.etapa_id === etapaAtiva.id && r.data <= dateStr);
+      realizadoEtapa = Math.min(100, Math.round(registros.reduce((s, r) => s + r.percentual, 0) * 10) / 10);
+    } else if (etapaAtiva) {
+      planejadoEtapa = etapaAtiva.percentualConcluido ?? 0;
+      realizadoEtapa = etapaAtiva.percentualConcluido ?? 0;
+>>>>>>> origin/main
     }
 
     detalhes.push({
@@ -441,8 +484,11 @@ function gerarCurvaSEtapas(
       etapaNome: etapaAtiva?.nome ?? "—",
       planejadoEtapa,
       realizadoEtapa,
+<<<<<<< HEAD
       mediaPlanejadoEtapas,
       mediaRealizadoEtapas,
+=======
+>>>>>>> origin/main
     });
   }
 
@@ -510,12 +556,16 @@ function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
     const pls: number[] = [];
     const res: number[] = [];
     let detalheEscolhido: DetalhesDia | null = null;
+<<<<<<< HEAD
     const mediasPl: number[] = [];
     const mediasRe: number[] = [];
+=======
+>>>>>>> origin/main
     for (const c of curvas) {
       const idx = c.labels.indexOf(label);
       if (idx !== -1 && c.planejado[idx] != null) pls.push(c.planejado[idx] as number);
       if (idx !== -1 && c.realizado[idx] != null) res.push(c.realizado[idx] as number);
+<<<<<<< HEAD
       if (idx !== -1 && c.detalhes[idx]) {
         if (detalheEscolhido === null) {
           detalheEscolhido = c.detalhes[idx];
@@ -524,10 +574,15 @@ function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
           mediasPl.push(c.detalhes[idx].mediaPlanejadoEtapas);
           mediasRe.push(c.detalhes[idx].mediaRealizadoEtapas);
         }
+=======
+      if (idx !== -1 && detalheEscolhido === null && c.detalhes[idx]) {
+        detalheEscolhido = c.detalhes[idx];
+>>>>>>> origin/main
       }
     }
     planejado.push(pls.length ? Math.round((pls.reduce((s, v) => s + v, 0) / pls.length) * 10) / 10 : null);
     realizado.push(res.length ? Math.round((res.reduce((s, v) => s + v, 0) / res.length) * 10) / 10 : null);
+<<<<<<< HEAD
 
     const mediaPl = mediasPl.length ? Math.round((mediasPl.reduce((s, v) => s + v, 0) / mediasPl.length) * 10) / 10 : 0;
     const mediaRe = mediasRe.length ? Math.round((mediasRe.reduce((s, v) => s + v, 0) / mediasRe.length) * 10) / 10 : 0;
@@ -537,6 +592,9 @@ function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
         ? { ...detalheEscolhido, mediaPlanejadoEtapas: mediaPl, mediaRealizadoEtapas: mediaRe }
         : { etapaId: 0, etapaNome: "—", planejadoEtapa: 0, realizadoEtapa: 0, mediaPlanejadoEtapas: mediaPl, mediaRealizadoEtapas: mediaRe },
     );
+=======
+    detalhes.push(detalheEscolhido ?? { etapaId: 0, etapaNome: "—", planejadoEtapa: 0, realizadoEtapa: 0 });
+>>>>>>> origin/main
   }
 
   const diarioPls = curvas.map((c) => c.valoresHoje?.diario?.planejado ?? 0);

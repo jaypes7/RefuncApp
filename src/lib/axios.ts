@@ -320,8 +320,11 @@ export type DashboardPrincipalData = {
         etapaNome: string;
         planejadoEtapa: number;
         realizadoEtapa: number;
+<<<<<<< HEAD
         mediaPlanejadoEtapas?: number;
         mediaRealizadoEtapas?: number;
+=======
+>>>>>>> origin/main
       }>;
       valoresHoje?: {
         diario?: { planejado: number; realizado: number } | null;
@@ -570,6 +573,7 @@ export const ocorrenciasApi = {
 };
 
 // ============================================================================
+<<<<<<< HEAD
 // FUNÇÕES DE API - PENDÊNCIAS MANUAIS
 // ============================================================================
 
@@ -596,6 +600,8 @@ export const pendenciasApi = {
 };
 
 // ============================================================================
+=======
+>>>>>>> origin/main
 // FUNÇÕES DE API - BANCO DE TALENTOS
 // ============================================================================
 
@@ -616,9 +622,12 @@ export interface ListarBancoTalentosParams {
   page?: number;
   limit?: number;
   search?: string;
+<<<<<<< HEAD
   pessoa?: string;
   cpf?: string;
   municipio?: string;
+=======
+>>>>>>> origin/main
 }
 
 export const bancoTalentosApi = {

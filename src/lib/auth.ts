@@ -177,8 +177,12 @@ export async function requireAuth(requiredRole?: UserRole): Promise<JWTPayload> 
 /**
  * Resolve o centro de custo efetivo para a requisição.
  * Admin respeita o parâmetro enviado pelo cliente (pode ser null = todos).
+<<<<<<< HEAD
  * User/Guest respeitam o ccParam se estiver entre os centros autorizados;
  * caso contrário, usam todos os centros do perfil.
+=======
+ * User/Guest são sempre restritos ao centro_custo do seu perfil.
+>>>>>>> origin/main
  */
 export function resolveCentroCusto(
   currentUser: JWTPayload,
@@ -191,6 +195,7 @@ export function resolveCentroCusto(
   const cc = currentUser.centro_custo;
   if (!cc) return undefined;
   // Compat: tokens antigos (pré-migração) podem ter string em vez de array
+<<<<<<< HEAD
   const autorizados = Array.isArray(cc) ? cc : [cc as unknown as string];
 
   // Se o frontend enviou um ccParam específico e ele está autorizado, use-o
@@ -201,4 +206,7 @@ export function resolveCentroCusto(
   }
 
   return autorizados;
+=======
+  return Array.isArray(cc) ? cc : [cc as unknown as string];
+>>>>>>> origin/main
 }

@@ -21,7 +21,10 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+<<<<<<< HEAD
   ReferenceDot,
+=======
+>>>>>>> origin/main
 } from "recharts";
 import {
   Users,
@@ -38,17 +41,27 @@ import {
   Check,
   ListChecks,
   MessageSquare,
+<<<<<<< HEAD
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, pendenciasApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente, type PendenciaManual } from "@/lib/axios";
+=======
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente } from "@/lib/axios";
+>>>>>>> origin/main
 import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
+<<<<<<< HEAD
 import { cn } from "@/lib/utils";
+=======
+>>>>>>> origin/main
 
 // ============================================================================
 // CONFIGURAÇÃO DOS GRÁFICOS
@@ -97,6 +110,7 @@ function fmtDate(v: string | undefined | null): string | null {
 // Paleta de cores para o pie de funções
 const PIE_COLORS = MANSERV_PIE_COLORS;
 
+<<<<<<< HEAD
 function isEtapaAtrasada(etapa: DashboardPrincipalData["etapas"][number]): boolean {
   const hojeRealStr = new Date().toISOString().split("T")[0];
 
@@ -133,6 +147,8 @@ function isEtapaAtrasada(etapa: DashboardPrincipalData["etapas"][number]): boole
   return false;
 }
 
+=======
+>>>>>>> origin/main
 // ============================================================================
 // LOADING SKELETON
 // ============================================================================
@@ -327,6 +343,7 @@ export default function DashboardPage() {
     setEditandoComentarioData("");
   };
 
+<<<<<<< HEAD
   // ── Pendências manuais ───────────────────────────────────────────────────────
   const [painelPendenciasAberto, setPainelPendenciasAberto] = useState(false);
   const [novoTextoPendencia, setNovoTextoPendencia] = useState("");
@@ -352,6 +369,8 @@ export default function DashboardPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pendencias-manuais"] }),
   });
 
+=======
+>>>>>>> origin/main
   // Gera dados da Curva S dinamicamente
   const curveData = useMemo(() => {
     if (!dashboardData?.graficos?.curvaS) return [];
@@ -363,8 +382,11 @@ export default function DashboardPage() {
       realizado: realizado?.[index] ?? undefined,
       previstoEtapa: detalhes?.[index]?.planejadoEtapa,
       realizadoEtapa: detalhes?.[index]?.realizadoEtapa,
+<<<<<<< HEAD
       mediaPlanejadoEtapas: detalhes?.[index]?.mediaPlanejadoEtapas,
       mediaRealizadoEtapas: detalhes?.[index]?.mediaRealizadoEtapas,
+=======
+>>>>>>> origin/main
       etapaNome: detalhes?.[index]?.etapaNome,
     }));
 
@@ -381,12 +403,20 @@ export default function DashboardPage() {
     return d;
   }, [dashboardData]);
 
+<<<<<<< HEAD
   // Array compartilhado: realizado vira null após o dia selecionado
+=======
+  // Previsto fica sempre completo; realizado é nulado após o dia selecionado
+>>>>>>> origin/main
   const chartDisplayData = useMemo(() => {
     if (selectedCurvaDayIdx < 0) return curveData;
     return curveData.map((d, i) => ({
       ...d,
+<<<<<<< HEAD
       realizado: i <= selectedCurvaDayIdx ? d.realizado : null,
+=======
+      realizado: i <= selectedCurvaDayIdx ? d.realizado : undefined,
+>>>>>>> origin/main
     }));
   }, [curveData, selectedCurvaDayIdx]);
 
@@ -416,6 +446,7 @@ export default function DashboardPage() {
     return realizado.some((v) => v !== null && v > 0);
   }, [dashboardData]);
 
+<<<<<<< HEAD
   // Coordenadas do ponto selecionado no gráfico
   const pontoSelecionado = useMemo(() => {
     if (selectedCurvaDayIdx < 0 || curveData.length === 0) return null;
@@ -424,6 +455,8 @@ export default function DashboardPage() {
     return { x: dia.mes, y: dia.realizado };
   }, [curveData, selectedCurvaDayIdx]);
 
+=======
+>>>>>>> origin/main
   // Dados para gráfico de rosca (Status) — inclui Desligado
   const dadosStatus = useMemo(() => {
     if (!dashboardData?.graficos?.statusCount) return [];
@@ -455,25 +488,39 @@ export default function DashboardPage() {
 
   // Cálculos dos KPIs
   const kpis = useMemo(() => {
+<<<<<<< HEAD
     const etapasAtrasadas = dashboardData?.etapas?.filter((e) => isEtapaAtrasada(e)).length ?? 0;
     const totalPendencias = etapasAtrasadas + pendenciasManuais.length;
 
+=======
+>>>>>>> origin/main
     if (!dashboardData?.metricas) {
       return {
         total: 0,
         asoPercentual: 0,
+<<<<<<< HEAD
         pendenciasSetoriais: totalPendencias,
         etapasAtrasadas,
+=======
+        pendenciasSetoriais: 0,
+>>>>>>> origin/main
       };
     }
 
     return {
       total: dashboardData.metricas.totalCadastrados,
       asoPercentual: dashboardData.metricas.percentualASO,
+<<<<<<< HEAD
       pendenciasSetoriais: totalPendencias,
       etapasAtrasadas,
     };
   }, [dashboardData, pendenciasManuais]);
+=======
+      pendenciasSetoriais:
+        dashboardData.pendencias?.filter((p) => p.status === "Atrasado").length ?? 0,
+    };
+  }, [dashboardData]);
+>>>>>>> origin/main
 
   if (isLoading) {
     return (
@@ -671,6 +718,7 @@ export default function DashboardPage() {
             </Card>
 
             {/* Pendências setoriais */}
+<<<<<<< HEAD
             <Card
               className={cn(
                 "glass-card transition-colors",
@@ -804,6 +852,22 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
+=======
+            <Card className="glass-card">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
+                  Pendências setoriais
+                </CardTitle>
+                <AlertCircle className="h-4 w-4 text-destructive" />
+              </CardHeader>
+              <CardContent>
+                <div className="big-number text-[40px] text-destructive">
+                  {kpis.pendenciasSetoriais}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Etapas atrasadas
+                </p>
+>>>>>>> origin/main
               </CardContent>
             </Card>
           </div>
@@ -866,6 +930,7 @@ export default function DashboardPage() {
                           <span className="text-xs text-muted-foreground">
                             Plan:{" "}
                             <span className="font-semibold text-foreground">
+<<<<<<< HEAD
                               {(() => {
                                 if (selectedCurvaDayIdx >= 0) {
                                   const dia = curveData[selectedCurvaDayIdx];
@@ -875,6 +940,11 @@ export default function DashboardPage() {
                                 }
                                 return `${indicadorCurvaS.diario.planejado.toFixed(1)}%`;
                               })()}
+=======
+                              {selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.previsto != null
+                                ? `${(curveData[selectedCurvaDayIdx].previsto as number).toFixed(1)}%`
+                                : `${indicadorCurvaS.diario.planejado.toFixed(1)}%`}
+>>>>>>> origin/main
                             </span>
                           </span>
                           <span className="text-xs text-muted-foreground">
@@ -883,6 +953,7 @@ export default function DashboardPage() {
                               className="font-semibold"
                               style={{
                                 color: (() => {
+<<<<<<< HEAD
                                   let plan: number | null = null;
                                   let real: number | null = null;
                                   if (selectedCurvaDayIdx >= 0) {
@@ -894,15 +965,29 @@ export default function DashboardPage() {
                                     real = indicadorCurvaS.diario.realizado;
                                   }
                                   return real != null && plan != null && real >= plan ? "#337246" : "#DA291B";
+=======
+                                  const plan = selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.previsto != null
+                                    ? (curveData[selectedCurvaDayIdx].previsto as number)
+                                    : indicadorCurvaS.diario.planejado;
+                                  const real = selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.realizado != null
+                                    ? (curveData[selectedCurvaDayIdx].realizado as number)
+                                    : indicadorCurvaS.diario.realizado;
+                                  return real >= plan ? "#337246" : "#DA291B";
+>>>>>>> origin/main
                                 })(),
                               }}
                             >
                               {(() => {
                                 if (selectedCurvaDayIdx >= 0) {
+<<<<<<< HEAD
                                   const dia = curveData[selectedCurvaDayIdx];
                                   const v = dia?.realizado;
                                   if (v != null) return `${(v as number).toFixed(1)}%`;
                                   return "-";
+=======
+                                  const r = curveData[selectedCurvaDayIdx]?.realizado;
+                                  return r != null ? `${(r as number).toFixed(1)}%` : "-";
+>>>>>>> origin/main
                                 }
                                 return temProgressoReal ? `${indicadorCurvaS.diario.realizado.toFixed(1)}%` : "-";
                               })()}
@@ -1057,6 +1142,7 @@ export default function DashboardPage() {
                         />
                       )}
 
+<<<<<<< HEAD
                       {pontoSelecionado && (
                         <ReferenceDot
                           x={pontoSelecionado.x}
@@ -1068,6 +1154,8 @@ export default function DashboardPage() {
                         />
                       )}
 
+=======
+>>>>>>> origin/main
                     </AreaChart>
                   </ChartContainer>
                   )}

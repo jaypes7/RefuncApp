@@ -32,10 +32,13 @@ import {
   Minus,
   Pencil,
   User,
+<<<<<<< HEAD
   ArrowUp,
   ArrowDown,
   Plus,
   Trash2,
+=======
+>>>>>>> origin/main
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -138,10 +141,13 @@ export default function CronogramaPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingSaveData, setPendingSaveData] = useState<ConfigCronograma | null>(null);
 
+<<<<<<< HEAD
   // Estado para modal de confirmação ao remover etapa
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [pendingRemoveId, setPendingRemoveId] = useState<number | null>(null);
 
+=======
+>>>>>>> origin/main
   // Estado para painel de avanço diário por etapa
   const [expandedStages, setExpandedStages] = useState<Set<number>>(new Set());
   // progressoDiario: etapa_id → { "YYYY-MM-DD": percentual | null }
@@ -151,9 +157,12 @@ export default function CronogramaPage() {
   const [editingEtapaId, setEditingEtapaId] = useState<number | null>(null);
   const [editingEtapaNome, setEditingEtapaNome] = useState("");
 
+<<<<<<< HEAD
   // Contador para IDs temporários de novas etapas (negativos)
   const [nextTempId, setNextTempId] = useState(-1);
 
+=======
+>>>>>>> origin/main
   const { data: projetoQueryData } = useQuery<ApiConfigResponse>({
     queryKey: ["config", "projeto", centroCusto],
     queryFn: async () => {
@@ -224,6 +233,7 @@ export default function CronogramaPage() {
     if (!projetoQueryData) return;
     setProjetoData(projetoQueryData);
 
+<<<<<<< HEAD
     // Sempre que o banco retornar etapas (mesmo vazio), usá-lo como fonte de verdade.
     // ETAPAS_DEFAULT só serve como seed inicial quando não há projeto carregado.
     if (projetoQueryData.ETAPAS_PROJETO) {
@@ -245,6 +255,27 @@ export default function CronogramaPage() {
             };
           })
         : [];
+=======
+    if (projetoQueryData.ETAPAS_PROJETO?.length) {
+      const novasEtapas = ETAPAS_DEFAULT.map((etapaDefault, index) => {
+        const salva = projetoQueryData.ETAPAS_PROJETO[index];
+        if (!salva) return { ...etapaDefault, concluida: false };
+        // Se existirem datas salvas, deriva dias do calendário; senão, usa duracaoDias
+        const diasSalvos = salva.dataInicio && salva.dataFim
+          ? calcularDiasUteisEtapa(salva.dataInicio, salva.dataFim, diasTrabalhadosData)
+          : salva.duracaoDias;
+        return {
+          ...etapaDefault,
+          nome: salva.nome ?? etapaDefault.nome,
+          dias: diasSalvos,
+          concluida: salva.concluida ?? false,
+          percentual_concluido: salva.percentualConcluido ?? 0,
+          data_inicio: salva.dataInicio,
+          data_fim: salva.dataFim,
+          responsavel: salva.responsavel ?? null,
+        };
+      });
+>>>>>>> origin/main
       const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
       setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
     }
@@ -280,10 +311,20 @@ export default function CronogramaPage() {
     ).length;
   }, [diasTrabalhadosData, projetoData?.DATA_INICIO_PROJETO, projetoData?.DATA_FIM_PROJETO]);
 
+<<<<<<< HEAD
   // Soma das etapas considerando sobreposição de datas (união de dias úteis únicos)
   const somaEtapasDisplay = useMemo(() => {
     const todasComDatas = cronograma.etapas.every(e => e.data_inicio && e.data_fim);
     if (todasComDatas && diasTrabalhadosData?.length) {
+=======
+  const scheduleValidation = useMemo(() => {
+    if (diasUteisTotal === null) return null;
+
+    const todasComDatas = cronograma.etapas.every(e => e.data_inicio && e.data_fim);
+    if (todasComDatas && diasTrabalhadosData?.length) {
+      // Etapas com sobreposição de datas seriam contadas múltiplas vezes em uma soma
+      // simples. Calculamos a união dos dias úteis únicos cobertos por todas as etapas.
+>>>>>>> origin/main
       const diasTrabalhadosSet = new Set(diasTrabalhadosData);
       const diasCobertos = new Set<string>();
       for (const etapa of cronograma.etapas) {
@@ -293,6 +334,7 @@ export default function CronogramaPage() {
             .forEach(d => diasCobertos.add(d));
         }
       }
+<<<<<<< HEAD
       return diasCobertos.size;
     }
     return cronograma.etapas.reduce((s, e) => s + e.dias, 0);
@@ -302,6 +344,14 @@ export default function CronogramaPage() {
     if (diasUteisTotal === null) return null;
     return validateScheduleTotal([somaEtapasDisplay], diasUteisTotal);
   }, [somaEtapasDisplay, diasUteisTotal]);
+=======
+      return validateScheduleTotal([diasCobertos.size], diasUteisTotal);
+    }
+
+    const stepsDays = cronograma.etapas.map((e) => e.dias);
+    return validateScheduleTotal(stepsDays, diasUteisTotal);
+  }, [cronograma.etapas, diasUteisTotal, diasTrabalhadosData]);
+>>>>>>> origin/main
 
   const cronogramaMutation = useMutation({
     mutationFn: async (data: ConfigCronograma) => {
@@ -330,6 +380,7 @@ export default function CronogramaPage() {
       }
       return res.json();
     },
+<<<<<<< HEAD
     onSuccess: (data) => {
       const idMap: Record<string, number> = data?.data?.idMap ?? {};
 
@@ -359,6 +410,9 @@ export default function CronogramaPage() {
         });
       }
 
+=======
+    onSuccess: () => {
+>>>>>>> origin/main
       queryClient.invalidateQueries({ queryKey: ["config"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-principal"] });
       toast.success("Cronograma atualizado com sucesso!");
@@ -436,7 +490,10 @@ export default function CronogramaPage() {
   };
 
   const updateEtapaConcluida = (id: number, concluida: boolean) => {
+<<<<<<< HEAD
     if (id < 0) return; // não permite marcar etapas não salvas como concluídas
+=======
+>>>>>>> origin/main
     const novasEtapas = cronograma.etapas.map((e) =>
       e.id === id ? { ...e, concluida, ...(concluida ? { percentual_concluido: 100 } : {}) } : e,
     );
@@ -539,6 +596,7 @@ export default function CronogramaPage() {
     setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
   };
 
+<<<<<<< HEAD
   // --- Adicionar / Remover / Reordenar etapas ---
   const adicionarEtapa = () => {
     const novoId = nextTempId;
@@ -599,6 +657,8 @@ export default function CronogramaPage() {
     });
   };
 
+=======
+>>>>>>> origin/main
   const etapasDatas = useMemo(() => {
     if (!projetoData?.DATA_INICIO_PROJETO) return null;
     let cursor = projetoData.DATA_INICIO_PROJETO;
@@ -704,7 +764,11 @@ export default function CronogramaPage() {
                 <div className="flex items-center justify-between p-4 bg-primary/10 rounded-lg border border-primary/20">
                   <span className="font-medium">Soma das Etapas:</span>
                   <span className="text-2xl font-bold text-primary tabular-nums">
+<<<<<<< HEAD
                     {somaEtapasDisplay} dias úteis
+=======
+                    {cronograma.etapas.reduce((s, e) => s + e.dias, 0)} dias úteis
+>>>>>>> origin/main
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -757,6 +821,7 @@ export default function CronogramaPage() {
                 )}
               </div>
 
+<<<<<<< HEAD
               {/* Alerta: reordenar sem datas altera o cronograma planejado */}
               {cronograma.etapas.some((e) => !e.data_inicio || !e.data_fim) && (
                 <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-sm text-yellow-400">
@@ -782,6 +847,10 @@ export default function CronogramaPage() {
 
               <div className="space-y-4">
                 {cronograma.etapas.map((etapa, index) => {
+=======
+              <div className="space-y-4">
+                {cronograma.etapas.map((etapa) => {
+>>>>>>> origin/main
                   const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
                   return (
                     <div
@@ -800,7 +869,11 @@ export default function CronogramaPage() {
                               : "bg-primary/10 text-primary"
                           }`}
                         >
+<<<<<<< HEAD
                           {index + 1}
+=======
+                          {etapa.id}
+>>>>>>> origin/main
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium truncate flex items-center gap-2">
@@ -875,19 +948,28 @@ export default function CronogramaPage() {
                             ) : null;
                           })()}
                         </div>
+<<<<<<< HEAD
                         <div className="flex items-center gap-2">
+=======
+                        <div className="flex items-center gap-3">
+>>>>>>> origin/main
                           <div className="flex flex-col items-center gap-0.5">
                             <Switch
                               checked={etapa.concluida ?? false}
                               onCheckedChange={(checked: boolean) =>
                                 updateEtapaConcluida(etapa.id, checked)
                               }
+<<<<<<< HEAD
                               disabled={cronogramaMutation.isPending || etapa.id < 0}
+=======
+                              disabled={cronogramaMutation.isPending}
+>>>>>>> origin/main
                             />
                             <span className="text-[10px] text-muted-foreground">
                               Concluída
                             </span>
                           </div>
+<<<<<<< HEAD
                           <div className="flex flex-col gap-0.5">
                             <Button
                               size="icon"
@@ -920,6 +1002,8 @@ export default function CronogramaPage() {
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
+=======
+>>>>>>> origin/main
                         </div>
                       </div>
 
@@ -935,8 +1019,12 @@ export default function CronogramaPage() {
                               onChange={(e) =>
                                 updateEtapaDataInicio(etapa.id, e.target.value)
                               }
+<<<<<<< HEAD
                               disabled={etapa.id < 0 || !projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO}
                               title={etapa.id < 0 ? "Salve o cronograma para definir datas" : undefined}
+=======
+                              disabled={!projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO}
+>>>>>>> origin/main
                               className={`glass-input ${
                                 dateError?.dataInicio || dateError?.dataStartGreaterThanEnd
                                   ? "border-red-500/50 bg-red-500/5"
@@ -954,8 +1042,12 @@ export default function CronogramaPage() {
                               onChange={(e) =>
                                 updateEtapaDataFim(etapa.id, e.target.value)
                               }
+<<<<<<< HEAD
                               disabled={etapa.id < 0 || !projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO}
                               title={etapa.id < 0 ? "Salve o cronograma para definir datas" : undefined}
+=======
+                              disabled={!projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO}
+>>>>>>> origin/main
                               className={`glass-input ${
                                 dateError?.dataFim || dateError?.dataStartGreaterThanEnd
                                   ? "border-red-500/50 bg-red-500/5"
@@ -998,8 +1090,13 @@ export default function CronogramaPage() {
                         )}
                       </div>
 
+<<<<<<< HEAD
                       {/* Botão Avanço por dia — só aparece se a etapa tem datas e id real */}
                       {etapa.id > 0 && etapa.data_inicio && etapa.data_fim && (
+=======
+                      {/* Botão Avanço por dia — só aparece se a etapa tem datas */}
+                      {etapa.data_inicio && etapa.data_fim && (
+>>>>>>> origin/main
                         <div className="ml-12 pt-1">
                           <button
                             type="button"
@@ -1015,6 +1112,7 @@ export default function CronogramaPage() {
                           </button>
                         </div>
                       )}
+<<<<<<< HEAD
                       {etapa.id < 0 && (
                         <div className="ml-12 pt-1 text-xs text-yellow-400">
                           <span className="flex items-center gap-1.5">
@@ -1023,6 +1121,8 @@ export default function CronogramaPage() {
                           </span>
                         </div>
                       )}
+=======
+>>>>>>> origin/main
 
                       {/* Painel de avanço diário — colapsa abaixo */}
                       {etapa.data_inicio && etapa.data_fim && expandedStages.has(etapa.id) && (() => {
@@ -1138,6 +1238,7 @@ export default function CronogramaPage() {
                 })}
               </div>
 
+<<<<<<< HEAD
               <div className="flex items-center justify-end">
                 <div className="flex items-center gap-3">
                   {hasDateErrors && (
@@ -1155,6 +1256,23 @@ export default function CronogramaPage() {
                     Salvar Cronograma
                   </Button>
                 </div>
+=======
+              <div className="flex justify-end gap-3">
+                {hasDateErrors && (
+                  <div className="flex items-center gap-2 text-sm text-red-400">
+                    <AlertCircle className="w-4 h-4" />
+                    Corrija os erros de data para salvar
+                  </div>
+                )}
+                <Button
+                  onClick={() => handleSaveClick(cronograma)}
+                  disabled={cronogramaMutation.isPending || hasDateErrors}
+                  className="gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Salvar Cronograma
+                </Button>
+>>>>>>> origin/main
               </div>
             </CardContent>
           </Card>
@@ -1183,6 +1301,7 @@ export default function CronogramaPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+<<<<<<< HEAD
 
           {/* Modal de confirmação ao remover etapa */}
           <Dialog open={showRemoveModal} onOpenChange={setShowRemoveModal}>
@@ -1207,6 +1326,8 @@ export default function CronogramaPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+=======
+>>>>>>> origin/main
         </div>
       </CanAccess>
     </ProtectedRoute>

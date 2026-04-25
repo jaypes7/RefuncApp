@@ -53,8 +53,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { logout } = useAuth();
   const { theme, setTheme } = useTheme();
+<<<<<<< HEAD
   const { centroCusto, setCentroCusto, centrosDisponiveis } = useFilter();
   const { user } = useAuth();
+=======
+  const { centroCusto, setCentroCusto, centrosDisponiveis, isLocked } = useFilter();
+>>>>>>> origin/main
   const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
@@ -135,6 +139,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
 
         {/* ── Project Selector ───────────────────────────────────────── */}
+<<<<<<< HEAD
         <div className={cn("mb-4 w-full overflow-hidden", collapsed && "flex justify-center")}>
           {collapsed ? (
             <Popover open={projectOpen} onOpenChange={setProjectOpen}>
@@ -151,6 +156,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <PopoverContent side="right" align="start" className="w-56 p-1">
                 <div className="max-h-64 overflow-y-auto">
                   {user?.perfil === "admin" && (
+=======
+        <CanAccess role="admin">
+          <div className={cn("mb-4 w-full overflow-hidden", collapsed && "flex justify-center")}>
+            {collapsed ? (
+              <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10"
+                    title={centroCusto ?? "Todos"}
+                  >
+                    <Building2 className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent side="right" align="start" className="w-56 p-1">
+                  <div className="max-h-64 overflow-y-auto">
+>>>>>>> origin/main
                     <button
                       onClick={() => {
                         setCentroCusto(null);
@@ -165,6 +188,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     >
                       Todos
                     </button>
+<<<<<<< HEAD
                   )}
                   {(user?.perfil === "admin" ? centrosDisponiveis : (Array.isArray(user?.centro_custo) ? user.centro_custo : user?.centro_custo ? [user.centro_custo] : [])).map((cc) => (
                     <button
@@ -203,6 +227,44 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <PopoverContent className="w-56 p-1">
                 <div className="max-h-64 overflow-y-auto">
                   {user?.perfil === "admin" && (
+=======
+                    {centrosDisponiveis.map((cc) => (
+                      <button
+                        key={cc}
+                        onClick={() => handleSelectProject(cc)}
+                        className={cn(
+                          "w-full rounded px-2 py-1.5 text-left text-sm",
+                          cc === centroCusto
+                            ? "bg-[#ff460a]/10 text-[#ff460a] font-medium"
+                            : "hover:bg-accent"
+                        )}
+                      >
+                        {cc}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-between px-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 overflow-hidden shrink"
+                    title={centroCusto ?? "Todos"}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Building2 className="h-4 w-4 shrink-0" />
+                      <span className="truncate text-left">
+                        {centroCusto ?? "Todos"}
+                      </span>
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-1">
+                  <div className="max-h-64 overflow-y-auto">
+>>>>>>> origin/main
                     <button
                       onClick={() => {
                         setCentroCusto(null);
@@ -221,6 +283,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     >
                       Todos
                     </button>
+<<<<<<< HEAD
                   )}
                   {(user?.perfil === "admin" ? centrosDisponiveis : (Array.isArray(user?.centro_custo) ? user.centro_custo : user?.centro_custo ? [user.centro_custo] : [])).map((cc) => (
                     <button
@@ -241,6 +304,28 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </Popover>
           )}
         </div>
+=======
+                    {centrosDisponiveis.map((cc) => (
+                      <button
+                        key={cc}
+                        onClick={() => handleSelectProject(cc)}
+                        className={cn(
+                          "w-full rounded px-2 py-1.5 text-left text-sm",
+                          cc === centroCusto
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "hover:bg-accent"
+                        )}
+                      >
+                        {cc}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
+        </CanAccess>
+>>>>>>> origin/main
 
         {/* ── Navigation ─────────────────────────────────────────────── */}
         <nav className="flex-1 space-y-px">

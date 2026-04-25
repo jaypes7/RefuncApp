@@ -22,9 +22,12 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20")));
     const search = searchParams.get("search") ?? "";
+<<<<<<< HEAD
     const pessoa = searchParams.get("pessoa") ?? "";
     const cpf = searchParams.get("cpf") ?? "";
     const municipio = searchParams.get("municipio") ?? "";
+=======
+>>>>>>> origin/main
     const offset = (page - 1) * limit;
 
     const supabase = createServerClient();
@@ -38,6 +41,7 @@ export async function GET(request: NextRequest) {
     if (search) {
       query = query.or(`nome.ilike.%${search}%,cpf.ilike.%${search}%,pessoa.ilike.%${search}%`);
     }
+<<<<<<< HEAD
     if (pessoa) {
       const vals = pessoa.split(",").filter(Boolean);
       if (vals.length === 1) {
@@ -62,6 +66,8 @@ export async function GET(request: NextRequest) {
         query = query.or(vals.map((v) => `municipio.ilike.%${v}%`).join(","));
       }
     }
+=======
+>>>>>>> origin/main
 
     const { data, error, count } = await query;
 

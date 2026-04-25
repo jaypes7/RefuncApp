@@ -5,7 +5,10 @@ import {
   useCallback,
   useContext,
   useEffect,
+<<<<<<< HEAD
   useMemo,
+=======
+>>>>>>> origin/main
   useState,
 } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +50,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
 
   const [centrosDisponiveis, setCentrosDisponiveis] = useState<string[]>([]);
 
+<<<<<<< HEAD
   // Lista de centros de custo permitidos para o usuário atual (memoizada)
   const userCentros = useMemo(() => {
     const cc = user?.centro_custo;
@@ -55,6 +59,8 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     return [];
   }, [user?.centro_custo]);
 
+=======
+>>>>>>> origin/main
   // Efeito de hidratação: lê localStorage apenas no cliente
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -65,9 +71,16 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Busca os projetos cadastrados (fonte única de verdade para a sidebar)
+<<<<<<< HEAD
   // Este useEffect NÃO altera centroCusto — apenas busca a lista.
   useEffect(() => {
     if (typeof window === "undefined") return;
+=======
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Aguarda a hidratação do localStorage antes de aplicar qualquer fallback,
+    // evitando sobrescrever o projeto salvo quando centroCusto ainda é null.
+>>>>>>> origin/main
     if (!hasHydrated) return;
 
     fetch("/api/projetos")
@@ -78,6 +91,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
           .filter(Boolean)
           .sort();
         setCentrosDisponiveis(list);
+<<<<<<< HEAD
       })
       .catch(() => setCentrosDisponiveis([]));
   }, [hasHydrated]);
@@ -137,6 +151,50 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         else localStorage.removeItem(STORAGE_KEY);
         return;
       }
+=======
+
+        // Guest / user vinculado: nunca altera auto-seleção
+        if (isGuest || isLinkedUser) return;
+
+        // Admin: não força seleção automática — permite "Todos" (null)
+        if (isAdmin) {
+          // Se o centro salvo não existe mais na lista, limpa
+          if (centroCusto && list.length > 0 && !list.includes(centroCusto)) {
+            _setCentroCusto(null);
+            localStorage.removeItem(STORAGE_KEY);
+          }
+          return;
+        }
+
+        // User não vinculado (sem centro_custo): fallback para o primeiro projeto
+        if (list.length > 0 && !centroCusto) {
+          _setCentroCusto(list[0]);
+          localStorage.setItem(STORAGE_KEY, list[0]);
+          return;
+        }
+
+        // Se o centro atual não existe mais, reseta para o primeiro
+        if (centroCusto && list.length > 0 && !list.includes(centroCusto)) {
+          _setCentroCusto(list[0]);
+          localStorage.setItem(STORAGE_KEY, list[0]);
+        }
+      })
+      .catch(() => setCentrosDisponiveis([]));
+  }, [isGuest, isLinkedUser, isAdmin, centroCusto, hasHydrated]);
+
+  // Quando o usuário carrega, sobrescreve o filtro com o valor vinculado (fixo)
+  useEffect(() => {
+    if (authLoading) return;
+    if ((isGuest || isLinkedUser) && user?.centro_custo) {
+      _setCentroCusto(user.centro_custo);
+      localStorage.setItem(STORAGE_KEY, user.centro_custo);
+    }
+  }, [authLoading, isGuest, isLinkedUser, user?.centro_custo]);
+
+  const setCentroCusto = useCallback(
+    (v: string | null) => {
+      if (isGuest || isLinkedUser) return; // filtrados não podem mudar
+>>>>>>> origin/main
       _setCentroCusto(v);
       if (v) {
         localStorage.setItem(STORAGE_KEY, v);
@@ -144,7 +202,11 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem(STORAGE_KEY);
       }
     },
+<<<<<<< HEAD
     [isGuest, isLinkedUser, userCentros],
+=======
+    [isGuest, isLinkedUser],
+>>>>>>> origin/main
   );
 
   return (
@@ -153,7 +215,11 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         centroCusto,
         setCentroCusto,
         centrosDisponiveis,
+<<<<<<< HEAD
         isLocked: false,
+=======
+        isLocked: isGuest || isLinkedUser,
+>>>>>>> origin/main
       }}
     >
       {children}
