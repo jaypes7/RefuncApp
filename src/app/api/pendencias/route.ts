@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * API: /api/ocorrencias
+ * API: /api/pendencias
  * ============================================================================
- * GET  → lista todas as ocorrências (order: data DESC, created_at DESC)
- * POST → cria uma ocorrência nova
+ * GET  → lista todas as pendências manuais (order: created_at DESC)
+ * POST → cria uma pendência manual nova
  */
 
 export const dynamic = "force-dynamic";
@@ -14,11 +14,8 @@ import { z, ZodError } from "zod";
 import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
 
-const OcorrenciaCreateSchema = z.object({
+const PendenciaCreateSchema = z.object({
   texto: z.string().trim().min(1, "Texto obrigatório"),
-  data: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
 });
 
 export async function GET(request: NextRequest) {
@@ -31,9 +28,8 @@ export async function GET(request: NextRequest) {
     const centroCusto = resolveCentroCusto(currentUser, ccParam);
 
     let query = db
-      .from("ocorrencias")
-      .select("id, texto, data, created_at, centro_custo")
-      .order("data", { ascending: false })
+      .from("pendencias_manuais")
+      .select("id, texto, created_at, centro_custo")
       .order("created_at", { ascending: false });
 
     if (centroCusto?.length) {
@@ -49,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
-    console.error("[GET /api/ocorrencias]", error);
+    console.error("[GET /api/pendencias]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
@@ -58,9 +54,8 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth("user");
     const body = await request.json();
-    const { texto, data } = OcorrenciaCreateSchema.parse(body);
+    const { texto } = PendenciaCreateSchema.parse(body);
 
-    // Extrai centro_custo do body e normaliza para string única
     const ccBody = (body as { centro_custo?: string | string[] }).centro_custo;
     const ccAtivo = Array.isArray(ccBody) && ccBody.length > 0
       ? ccBody[0]
@@ -68,9 +63,9 @@ export async function POST(request: NextRequest) {
 
     const db = createServerClient();
     const { data: row, error } = await db
-      .from("ocorrencias")
-      .insert({ texto, data, centro_custo: ccAtivo || null })
-      .select("id, texto, data, created_at")
+      .from("pendencias_manuais")
+      .insert({ texto, centro_custo: ccAtivo || null })
+      .select("id, texto, created_at")
       .single();
 
     if (error) throw error;
@@ -89,7 +84,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    console.error("[POST /api/ocorrencias]", error);
+    console.error("[POST /api/pendencias]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }

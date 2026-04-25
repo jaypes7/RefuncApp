@@ -320,6 +320,8 @@ export type DashboardPrincipalData = {
         etapaNome: string;
         planejadoEtapa: number;
         realizadoEtapa: number;
+        mediaPlanejadoEtapas?: number;
+        mediaRealizadoEtapas?: number;
       }>;
       valoresHoje?: {
         diario?: { planejado: number; realizado: number } | null;
@@ -568,6 +570,32 @@ export const ocorrenciasApi = {
 };
 
 // ============================================================================
+// FUNÇÕES DE API - PENDÊNCIAS MANUAIS
+// ============================================================================
+
+export interface PendenciaManual {
+  id: number;
+  texto: string;
+  created_at: string;
+  centro_custo?: string;
+}
+
+export const pendenciasApi = {
+  listar: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<{ data: PendenciaManual[] }>(`/pendencias${params}`);
+  },
+
+  criar: (body: { texto: string; centro_custo?: string }) =>
+    api.post<{ data: PendenciaManual }>("/pendencias", body),
+
+  atualizar: (id: number, body: { texto: string; centro_custo?: string }) =>
+    api.put<{ data: PendenciaManual }>(`/pendencias/${id}`, body),
+
+  deletar: (id: number) => api.delete(`/pendencias/${id}`),
+};
+
+// ============================================================================
 // FUNÇÕES DE API - BANCO DE TALENTOS
 // ============================================================================
 
@@ -588,6 +616,9 @@ export interface ListarBancoTalentosParams {
   page?: number;
   limit?: number;
   search?: string;
+  pessoa?: string;
+  cpf?: string;
+  municipio?: string;
 }
 
 export const bancoTalentosApi = {

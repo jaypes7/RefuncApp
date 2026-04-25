@@ -55,6 +55,8 @@ type DetalhesDia = {
   etapaNome: string;
   planejadoEtapa: number;
   realizadoEtapa: number;
+  mediaPlanejadoEtapas: number;
+  mediaRealizadoEtapas: number;
 };
 
 type CurvaSResult = {
@@ -354,46 +356,84 @@ function gerarCurvaSEtapas(
     labels.push(fmt(dateStr));
     planejado.push(calcularPlanejadoNaData(dateStr, etapas, totalDias, dataInicio, diasTrabalhados));
 
-    if (ultimaDataComDado === null || dateStr > ultimaDataComDado) {
+    if (dateStr > hojeStr) {
       realizado.push(null);
     } else {
       realizado.push(calcularRealizadoSuavizadoNaData(dateStr, etapas, totalDias, progressoDiario, diasTrabalhados));
     }
 
-    // Identifica etapa ativa neste dia
-    let etapaAtiva = etapas.find((e) => e.dataInicio && e.dataFim && dateStr >= e.dataInicio && dateStr <= e.dataFim);
-    if (!etapaAtiva) {
-      // Fallback: última etapa que já começou, ou primeira etapa
+    // Identifica TODAS as etapas ativas neste dia
+    const etapasAtivas = etapas.filter(
+      (e) => e.dataInicio && e.dataFim && dateStr >= e.dataInicio && dateStr <= e.dataFim,
+    );
+
+    // Fallback quando nenhuma etapa está ativa no dia
+    let etapaAtiva: EtapaConfig | undefined;
+    if (etapasAtivas.length > 0) {
+      etapaAtiva = etapasAtivas[0];
+    } else {
       const etapasIniciadas = etapas.filter((e) => e.dataInicio && dateStr >= e.dataInicio);
       etapaAtiva = etapasIniciadas.length > 0 ? etapasIniciadas[etapasIniciadas.length - 1] : etapas[0];
     }
 
-    let planejadoEtapa = 0;
-    let realizadoEtapa = 0;
-
-    if (etapaAtiva && etapaAtiva.dataInicio && etapaAtiva.dataFim) {
+    // Calcula planejado/realizado de uma etapa específica (para tooltip do gráfico)
+    function calcularPlanejadoEtapa(etapa: EtapaConfig, data: string): number {
+      if (!etapa.dataInicio || !etapa.dataFim) return etapa.percentualConcluido ?? 0;
       let diaDentro: number;
       let totalDiasEtapa: number;
       if (diasTrabalhados.length > 0) {
-        diaDentro = contarDiasTrabalhadosNoIntervalo(etapaAtiva.dataInicio, dateStr, diasTrabalhados);
-        totalDiasEtapa = contarDiasTrabalhadosNoIntervalo(etapaAtiva.dataInicio, etapaAtiva.dataFim, diasTrabalhados);
+        diaDentro = contarDiasTrabalhadosNoIntervalo(etapa.dataInicio, data, diasTrabalhados);
+        totalDiasEtapa = contarDiasTrabalhadosNoIntervalo(etapa.dataInicio, etapa.dataFim, diasTrabalhados);
       } else {
-        const iniMs = new Date(etapaAtiva.dataInicio + "T00:00:00Z").getTime();
-        const fimMs = new Date(etapaAtiva.dataFim + "T00:00:00Z").getTime();
-        const curMs = new Date(dateStr + "T00:00:00Z").getTime();
+        const iniMs = new Date(etapa.dataInicio + "T00:00:00Z").getTime();
+        const fimMs = new Date(etapa.dataFim + "T00:00:00Z").getTime();
+        const curMs = new Date(data + "T00:00:00Z").getTime();
         diaDentro = (curMs - iniMs) / MS_PER_DAY + 1;
         totalDiasEtapa = (fimMs - iniMs) / MS_PER_DAY + 1;
       }
-      planejadoEtapa = totalDiasEtapa > 0
+      return totalDiasEtapa > 0
         ? Math.min(100, Math.round((diaDentro / totalDiasEtapa) * 1000) / 10)
         : 0;
+    }
 
-      const registros = progressoDiario
-        .filter((r) => r.etapa_id === etapaAtiva.id && r.data <= dateStr);
-      realizadoEtapa = Math.min(100, Math.round(registros.reduce((s, r) => s + r.percentual, 0) * 10) / 10);
+    function calcularRealizadoEtapa(etapa: EtapaConfig, data: string): number {
+      const registros = progressoDiario.filter((r) => r.etapa_id === etapa.id && r.data <= data);
+      return Math.min(100, Math.round(registros.reduce((s, r) => s + r.percentual, 0) * 10) / 10);
+    }
+
+    let planejadoEtapa = 0;
+    let realizadoEtapa = 0;
+    let mediaPlanejadoEtapas = 0;
+    let mediaRealizadoEtapas = 0;
+
+    if (etapaAtiva) {
+      if (etapaAtiva.dataInicio && etapaAtiva.dataFim) {
+        planejadoEtapa = calcularPlanejadoEtapa(etapaAtiva, dateStr);
+        realizadoEtapa = calcularRealizadoEtapa(etapaAtiva, dateStr);
+      } else {
+        planejadoEtapa = etapaAtiva.percentualConcluido ?? 0;
+        realizadoEtapa = etapaAtiva.percentualConcluido ?? 0;
+      }
+    }
+
+    // Média de TODAS as etapas ativas no dia
+    if (etapasAtivas.length > 0) {
+      let somaPl = 0;
+      let somaRe = 0;
+      for (const etapa of etapasAtivas) {
+        if (etapa.dataInicio && etapa.dataFim) {
+          somaPl += calcularPlanejadoEtapa(etapa, dateStr);
+          somaRe += calcularRealizadoEtapa(etapa, dateStr);
+        } else {
+          somaPl += etapa.percentualConcluido ?? 0;
+          somaRe += etapa.percentualConcluido ?? 0;
+        }
+      }
+      mediaPlanejadoEtapas = Math.round((somaPl / etapasAtivas.length) * 10) / 10;
+      mediaRealizadoEtapas = Math.round((somaRe / etapasAtivas.length) * 10) / 10;
     } else if (etapaAtiva) {
-      planejadoEtapa = etapaAtiva.percentualConcluido ?? 0;
-      realizadoEtapa = etapaAtiva.percentualConcluido ?? 0;
+      mediaPlanejadoEtapas = planejadoEtapa;
+      mediaRealizadoEtapas = realizadoEtapa;
     }
 
     detalhes.push({
@@ -401,6 +441,8 @@ function gerarCurvaSEtapas(
       etapaNome: etapaAtiva?.nome ?? "—",
       planejadoEtapa,
       realizadoEtapa,
+      mediaPlanejadoEtapas,
+      mediaRealizadoEtapas,
     });
   }
 
@@ -468,17 +510,33 @@ function calcularCurvaSMedia(curvas: CurvaSResult[]): CurvaSResult | null {
     const pls: number[] = [];
     const res: number[] = [];
     let detalheEscolhido: DetalhesDia | null = null;
+    const mediasPl: number[] = [];
+    const mediasRe: number[] = [];
     for (const c of curvas) {
       const idx = c.labels.indexOf(label);
       if (idx !== -1 && c.planejado[idx] != null) pls.push(c.planejado[idx] as number);
       if (idx !== -1 && c.realizado[idx] != null) res.push(c.realizado[idx] as number);
-      if (idx !== -1 && detalheEscolhido === null && c.detalhes[idx]) {
-        detalheEscolhido = c.detalhes[idx];
+      if (idx !== -1 && c.detalhes[idx]) {
+        if (detalheEscolhido === null) {
+          detalheEscolhido = c.detalhes[idx];
+        }
+        if (c.detalhes[idx].mediaPlanejadoEtapas > 0 || c.detalhes[idx].mediaRealizadoEtapas > 0) {
+          mediasPl.push(c.detalhes[idx].mediaPlanejadoEtapas);
+          mediasRe.push(c.detalhes[idx].mediaRealizadoEtapas);
+        }
       }
     }
     planejado.push(pls.length ? Math.round((pls.reduce((s, v) => s + v, 0) / pls.length) * 10) / 10 : null);
     realizado.push(res.length ? Math.round((res.reduce((s, v) => s + v, 0) / res.length) * 10) / 10 : null);
-    detalhes.push(detalheEscolhido ?? { etapaId: 0, etapaNome: "—", planejadoEtapa: 0, realizadoEtapa: 0 });
+
+    const mediaPl = mediasPl.length ? Math.round((mediasPl.reduce((s, v) => s + v, 0) / mediasPl.length) * 10) / 10 : 0;
+    const mediaRe = mediasRe.length ? Math.round((mediasRe.reduce((s, v) => s + v, 0) / mediasRe.length) * 10) / 10 : 0;
+
+    detalhes.push(
+      detalheEscolhido
+        ? { ...detalheEscolhido, mediaPlanejadoEtapas: mediaPl, mediaRealizadoEtapas: mediaRe }
+        : { etapaId: 0, etapaNome: "—", planejadoEtapa: 0, realizadoEtapa: 0, mediaPlanejadoEtapas: mediaPl, mediaRealizadoEtapas: mediaRe },
+    );
   }
 
   const diarioPls = curvas.map((c) => c.valoresHoje?.diario?.planejado ?? 0);

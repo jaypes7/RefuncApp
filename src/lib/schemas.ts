@@ -385,7 +385,7 @@ export const ConfigSchema = z.object({
 });
 
 export const EtapaConfigSchema = z.object({
-  id: z.number().min(1).max(20),
+  id: z.number().int(),
   nome: z.string().min(1),
   duracaoDias: z.number().nonnegative(),
   /** Indica se a etapa já foi concluída (persiste no banco) */
@@ -432,7 +432,7 @@ export const ConfigProjetoSchema = z.object({
 
 // Schema para salvar apenas as etapas do cronograma (sem dados do projeto)
 export const ConfigEtapasSchema = z.object({
-  etapas: z.array(EtapaConfigSchema).min(1).max(20),
+  etapas: z.array(EtapaConfigSchema).min(1),
 });
 
 /**

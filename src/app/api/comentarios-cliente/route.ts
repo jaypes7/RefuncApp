@@ -60,12 +60,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { texto, data } = ComentarioCreateSchema.parse(body);
 
-    const centroCusto = (body as { centro_custo?: string }).centro_custo;
+    const ccBody = (body as { centro_custo?: string | string[] }).centro_custo;
+    const ccAtivo = Array.isArray(ccBody) && ccBody.length > 0
+      ? ccBody[0]
+      : (typeof ccBody === "string" ? ccBody : null);
 
     const db = createServerClient();
     const { data: row, error } = await db
       .from("comentarios_cliente")
-      .insert({ texto, data, centro_custo: centroCusto || null })
+      .insert({ texto, data, centro_custo: ccAtivo || null })
       .select("id, texto, data, created_at")
       .single();
 
