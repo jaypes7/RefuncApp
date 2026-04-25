@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,6 +47,14 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
 
   const [centrosDisponiveis, setCentrosDisponiveis] = useState<string[]>([]);
 
+  // Lista de centros de custo permitidos para o usuário atual (memoizada)
+  const userCentros = useMemo(() => {
+    const cc = user?.centro_custo;
+    if (Array.isArray(cc)) return cc;
+    if (typeof cc === "string" && cc) return [cc];
+    return [];
+  }, [user?.centro_custo]);
+
   // Efeito de hidratação: lê localStorage apenas no cliente
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -56,10 +65,9 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Busca os projetos cadastrados (fonte única de verdade para a sidebar)
+  // Este useEffect NÃO altera centroCusto — apenas busca a lista.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Aguarda a hidratação do localStorage antes de aplicar qualquer fallback,
-    // evitando sobrescrever o projeto salvo quando centroCusto ainda é null.
     if (!hasHydrated) return;
 
     fetch("/api/projetos")
@@ -70,48 +78,65 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
           .filter(Boolean)
           .sort();
         setCentrosDisponiveis(list);
-
-        // Guest / user vinculado: nunca altera auto-seleção
-        if (isGuest || isLinkedUser) return;
-
-        // Admin: não força seleção automática — permite "Todos" (null)
-        if (isAdmin) {
-          // Se o centro salvo não existe mais na lista, limpa
-          if (centroCusto && list.length > 0 && !list.includes(centroCusto)) {
-            _setCentroCusto(null);
-            localStorage.removeItem(STORAGE_KEY);
-          }
-          return;
-        }
-
-        // User não vinculado (sem centro_custo): fallback para o primeiro projeto
-        if (list.length > 0 && !centroCusto) {
-          _setCentroCusto(list[0]);
-          localStorage.setItem(STORAGE_KEY, list[0]);
-          return;
-        }
-
-        // Se o centro atual não existe mais, reseta para o primeiro
-        if (centroCusto && list.length > 0 && !list.includes(centroCusto)) {
-          _setCentroCusto(list[0]);
-          localStorage.setItem(STORAGE_KEY, list[0]);
-        }
       })
       .catch(() => setCentrosDisponiveis([]));
-  }, [isGuest, isLinkedUser, isAdmin, centroCusto, hasHydrated]);
+  }, [hasHydrated]);
 
-  // Quando o usuário carrega, sobrescreve o filtro com o valor vinculado (fixo)
+  // Inicializa / atualiza o centro de custo quando mudam:
+  // - lista de projetos disponíveis
+  // - perfil do usuário
+  // - hidratação completa
+  // NÃO observa "centroCusto" para evitar loop.
   useEffect(() => {
-    if (authLoading) return;
-    if ((isGuest || isLinkedUser) && user?.centro_custo) {
-      _setCentroCusto(user.centro_custo);
-      localStorage.setItem(STORAGE_KEY, user.centro_custo);
+    if (!hasHydrated) return;
+    if (centrosDisponiveis.length === 0) return;
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    // Admin: usa valor salvo se existir na lista, senão null (Todos)
+    if (isAdmin) {
+      if (saved && centrosDisponiveis.includes(saved)) {
+        _setCentroCusto(saved);
+      } else {
+        _setCentroCusto(null);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      return;
     }
-  }, [authLoading, isGuest, isLinkedUser, user?.centro_custo]);
+
+    // Guest / user vinculado: só pode escolher entre projetos permitidos
+    if (isGuest || isLinkedUser) {
+      const permitidos = userCentros.filter((c) =>
+        centrosDisponiveis.includes(c),
+      );
+      if (permitidos.length === 0) return;
+
+      const ativo =
+        saved && permitidos.includes(saved) ? saved : permitidos[0];
+      _setCentroCusto(ativo);
+      localStorage.setItem(STORAGE_KEY, ativo);
+      return;
+    }
+
+    // User não vinculado (sem centro_custo): usa valor salvo ou primeiro projeto
+    if (saved && centrosDisponiveis.includes(saved)) {
+      _setCentroCusto(saved);
+    } else {
+      _setCentroCusto(centrosDisponiveis[0]);
+      localStorage.setItem(STORAGE_KEY, centrosDisponiveis[0]);
+    }
+  }, [hasHydrated, centrosDisponiveis, isAdmin, isGuest, isLinkedUser, userCentros]);
 
   const setCentroCusto = useCallback(
     (v: string | null) => {
-      if (isGuest || isLinkedUser) return; // filtrados não podem mudar
+      // Guest / user vinculado: só permite trocar entre projetos autorizados
+      if (isGuest || isLinkedUser) {
+        if (v && !userCentros.includes(v)) return;
+        _setCentroCusto(v);
+        if (v) localStorage.setItem(STORAGE_KEY, v);
+        else localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
       _setCentroCusto(v);
       if (v) {
         localStorage.setItem(STORAGE_KEY, v);
@@ -119,7 +144,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem(STORAGE_KEY);
       }
     },
-    [isGuest, isLinkedUser],
+    [isGuest, isLinkedUser, userCentros],
   );
 
   return (
@@ -128,7 +153,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         centroCusto,
         setCentroCusto,
         centrosDisponiveis,
-        isLocked: isGuest || isLinkedUser,
+        isLocked: false,
       }}
     >
       {children}

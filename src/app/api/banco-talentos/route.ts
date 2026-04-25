@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20")));
     const search = searchParams.get("search") ?? "";
+    const pessoa = searchParams.get("pessoa") ?? "";
+    const cpf = searchParams.get("cpf") ?? "";
+    const municipio = searchParams.get("municipio") ?? "";
     const offset = (page - 1) * limit;
 
     const supabase = createServerClient();
@@ -34,6 +37,30 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       query = query.or(`nome.ilike.%${search}%,cpf.ilike.%${search}%,pessoa.ilike.%${search}%`);
+    }
+    if (pessoa) {
+      const vals = pessoa.split(",").filter(Boolean);
+      if (vals.length === 1) {
+        query = query.ilike("pessoa", `%${vals[0]}%`);
+      } else if (vals.length > 1) {
+        query = query.or(vals.map((v) => `pessoa.ilike.%${v}%`).join(","));
+      }
+    }
+    if (cpf) {
+      const vals = cpf.split(",").filter(Boolean);
+      if (vals.length === 1) {
+        query = query.ilike("cpf", `%${vals[0]}%`);
+      } else if (vals.length > 1) {
+        query = query.or(vals.map((v) => `cpf.ilike.%${v}%`).join(","));
+      }
+    }
+    if (municipio) {
+      const vals = municipio.split(",").filter(Boolean);
+      if (vals.length === 1) {
+        query = query.ilike("municipio", `%${vals[0]}%`);
+      } else if (vals.length > 1) {
+        query = query.or(vals.map((v) => `municipio.ilike.%${v}%`).join(","));
+      }
     }
 
     const { data, error, count } = await query;

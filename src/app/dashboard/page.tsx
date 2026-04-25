@@ -21,6 +21,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  ReferenceDot,
 } from "recharts";
 import {
   Users,
@@ -37,14 +38,17 @@ import {
   Check,
   ListChecks,
   MessageSquare,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente } from "@/lib/axios";
+import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, pendenciasApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente, type PendenciaManual } from "@/lib/axios";
 import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
+import { cn } from "@/lib/utils";
 
 // ============================================================================
 // CONFIGURAÇÃO DOS GRÁFICOS
@@ -92,6 +96,42 @@ function fmtDate(v: string | undefined | null): string | null {
 
 // Paleta de cores para o pie de funções
 const PIE_COLORS = MANSERV_PIE_COLORS;
+
+function isEtapaAtrasada(etapa: DashboardPrincipalData["etapas"][number]): boolean {
+  const hojeRealStr = new Date().toISOString().split("T")[0];
+
+  if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
+    let lastProgressIdx = -1;
+    let prevRealizado = 0;
+    for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
+      if (etapa.evolucaoDiaria[i].realizado > prevRealizado) {
+        lastProgressIdx = i;
+        prevRealizado = etapa.evolucaoDiaria[i].realizado;
+      }
+    }
+
+    if (lastProgressIdx !== -1) {
+      const previsto = etapa.evolucaoDiaria[lastProgressIdx].previsto;
+      const realizado = etapa.evolucaoDiaria[lastProgressIdx].realizado;
+      return realizado < previsto;
+    } else {
+      let lastBeforeToday = -1;
+      for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
+        if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
+        else break;
+      }
+      const previsto = lastBeforeToday !== -1 ? etapa.evolucaoDiaria[lastBeforeToday].previsto : 0;
+      return previsto > 0;
+    }
+  }
+
+  // Sem evolucaoDiaria: atrasada se dataFim já passou e não está concluída
+  if ((etapa.dataFim && hojeRealStr >= etapa.dataFim) && !etapa.concluida && etapa.percentualConcluido < 100) {
+    return true;
+  }
+
+  return false;
+}
 
 // ============================================================================
 // LOADING SKELETON
@@ -287,6 +327,31 @@ export default function DashboardPage() {
     setEditandoComentarioData("");
   };
 
+  // ── Pendências manuais ───────────────────────────────────────────────────────
+  const [painelPendenciasAberto, setPainelPendenciasAberto] = useState(false);
+  const [novoTextoPendencia, setNovoTextoPendencia] = useState("");
+
+  const { data: pendenciasData } = useQuery({
+    queryKey: ["pendencias-manuais", centroCusto],
+    queryFn: async () => (await pendenciasApi.listar(centroCusto)).data.data,
+    staleTime: 30_000,
+  });
+  const pendenciasManuais: PendenciaManual[] = pendenciasData ?? [];
+
+  const criarPendencia = useMutation({
+    mutationFn: () =>
+      pendenciasApi.criar({ texto: novoTextoPendencia.trim(), centro_custo: centroCusto || undefined }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pendencias-manuais"] });
+      setNovoTextoPendencia("");
+    },
+  });
+
+  const deletarPendencia = useMutation({
+    mutationFn: (id: number) => pendenciasApi.deletar(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pendencias-manuais"] }),
+  });
+
   // Gera dados da Curva S dinamicamente
   const curveData = useMemo(() => {
     if (!dashboardData?.graficos?.curvaS) return [];
@@ -298,6 +363,8 @@ export default function DashboardPage() {
       realizado: realizado?.[index] ?? undefined,
       previstoEtapa: detalhes?.[index]?.planejadoEtapa,
       realizadoEtapa: detalhes?.[index]?.realizadoEtapa,
+      mediaPlanejadoEtapas: detalhes?.[index]?.mediaPlanejadoEtapas,
+      mediaRealizadoEtapas: detalhes?.[index]?.mediaRealizadoEtapas,
       etapaNome: detalhes?.[index]?.etapaNome,
     }));
 
@@ -314,12 +381,12 @@ export default function DashboardPage() {
     return d;
   }, [dashboardData]);
 
-  // Previsto fica sempre completo; realizado é nulado após o dia selecionado
+  // Array compartilhado: realizado vira null após o dia selecionado
   const chartDisplayData = useMemo(() => {
     if (selectedCurvaDayIdx < 0) return curveData;
     return curveData.map((d, i) => ({
       ...d,
-      realizado: i <= selectedCurvaDayIdx ? d.realizado : undefined,
+      realizado: i <= selectedCurvaDayIdx ? d.realizado : null,
     }));
   }, [curveData, selectedCurvaDayIdx]);
 
@@ -348,6 +415,14 @@ export default function DashboardPage() {
     const realizado = dashboardData.graficos.curvaS.realizado;
     return realizado.some((v) => v !== null && v > 0);
   }, [dashboardData]);
+
+  // Coordenadas do ponto selecionado no gráfico
+  const pontoSelecionado = useMemo(() => {
+    if (selectedCurvaDayIdx < 0 || curveData.length === 0) return null;
+    const dia = curveData[selectedCurvaDayIdx];
+    if (!dia || dia.realizado == null) return null;
+    return { x: dia.mes, y: dia.realizado };
+  }, [curveData, selectedCurvaDayIdx]);
 
   // Dados para gráfico de rosca (Status) — inclui Desligado
   const dadosStatus = useMemo(() => {
@@ -380,21 +455,25 @@ export default function DashboardPage() {
 
   // Cálculos dos KPIs
   const kpis = useMemo(() => {
+    const etapasAtrasadas = dashboardData?.etapas?.filter((e) => isEtapaAtrasada(e)).length ?? 0;
+    const totalPendencias = etapasAtrasadas + pendenciasManuais.length;
+
     if (!dashboardData?.metricas) {
       return {
         total: 0,
         asoPercentual: 0,
-        pendenciasSetoriais: 0,
+        pendenciasSetoriais: totalPendencias,
+        etapasAtrasadas,
       };
     }
 
     return {
       total: dashboardData.metricas.totalCadastrados,
       asoPercentual: dashboardData.metricas.percentualASO,
-      pendenciasSetoriais:
-        dashboardData.pendencias?.filter((p) => p.status === "Atrasado").length ?? 0,
+      pendenciasSetoriais: totalPendencias,
+      etapasAtrasadas,
     };
-  }, [dashboardData]);
+  }, [dashboardData, pendenciasManuais]);
 
   if (isLoading) {
     return (
@@ -592,20 +671,139 @@ export default function DashboardPage() {
             </Card>
 
             {/* Pendências setoriais */}
-            <Card className="glass-card">
+            <Card
+              className={cn(
+                "glass-card transition-colors",
+                kpis.pendenciasSetoriais > 0 && "border-[#FFB800]/60 bg-[#FFB800]/10"
+              )}
+            >
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Pendências setoriais
+                  Pontos de atenção
                 </CardTitle>
-                <AlertCircle className="h-4 w-4 text-destructive" />
+                <AlertCircle
+                  className={cn(
+                    "h-4 w-4",
+                    kpis.pendenciasSetoriais > 0 ? "text-[#FFB800]" : "text-destructive"
+                  )}
+                />
               </CardHeader>
               <CardContent>
-                <div className="big-number text-[40px] text-destructive">
+                <div
+                  className="big-number text-[40px]"
+                  style={{
+                    color: kpis.pendenciasSetoriais > 0 ? "#FFB800" : undefined,
+                  }}
+                >
                   {kpis.pendenciasSetoriais}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Etapas atrasadas
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Etapas atrasadas + Pendências
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                    onClick={() => setPainelPendenciasAberto((v) => !v)}
+                  >
+                    {painelPendenciasAberto ? (
+                      <>
+                        Ocultar <ChevronUp className="h-3 w-3 ml-1" />
+                      </>
+                    ) : (
+                      <>
+                        Ver detalhes <ChevronDown className="h-3 w-3 ml-1" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {painelPendenciasAberto && (
+                  <div className="mt-3 space-y-3 border-t border-border/30 pt-3">
+                    {/* Etapas atrasadas */}
+                    {kpis.etapasAtrasadas > 0 && (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1.5">
+                          Etapas atrasadas
+                        </p>
+                        <div className="space-y-1">
+                          {dashboardData?.etapas
+                            ?.filter((e) => isEtapaAtrasada(e))
+                            .map((etapa) => (
+                              <div
+                                key={etapa.id}
+                                className="flex items-center gap-2 text-xs text-[#FFB800]"
+                              >
+                                <AlertTriangle className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{etapa.nome}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pendências manuais */}
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1.5">
+                        Pendências manuais
+                      </p>
+                      {pendenciasManuais.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/60 italic">
+                          Nenhuma pendência manual registrada
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          {pendenciasManuais.map((p) => (
+                            <div
+                              key={p.id}
+                              className="flex items-center justify-between gap-2 rounded-md border border-white/5 bg-white/5 px-2 py-1.5"
+                            >
+                              <span className="text-xs truncate">{p.texto}</span>
+                              <CanAccess role="user">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-5 w-5 text-muted-foreground hover:text-destructive shrink-0"
+                                  onClick={() => deletarPendencia.mutate(p.id)}
+                                  disabled={deletarPendencia.isPending}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </CanAccess>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Formulário de adicionar */}
+                      <CanAccess role="user">
+                        <div className="flex gap-2 mt-2">
+                          <Input
+                            className="glass-input h-8 text-xs flex-1"
+                            placeholder="Nova pendência..."
+                            value={novoTextoPendencia}
+                            onChange={(e) => setNovoTextoPendencia(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && novoTextoPendencia.trim() && !criarPendencia.isPending) {
+                                criarPendencia.mutate();
+                              }
+                            }}
+                          />
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8"
+                            disabled={!novoTextoPendencia.trim() || criarPendencia.isPending}
+                            onClick={() => criarPendencia.mutate()}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CanAccess>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -668,9 +866,15 @@ export default function DashboardPage() {
                           <span className="text-xs text-muted-foreground">
                             Plan:{" "}
                             <span className="font-semibold text-foreground">
-                              {selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.previsto != null
-                                ? `${(curveData[selectedCurvaDayIdx].previsto as number).toFixed(1)}%`
-                                : `${indicadorCurvaS.diario.planejado.toFixed(1)}%`}
+                              {(() => {
+                                if (selectedCurvaDayIdx >= 0) {
+                                  const dia = curveData[selectedCurvaDayIdx];
+                                  const v = dia?.previsto;
+                                  if (v != null) return `${(v as number).toFixed(1)}%`;
+                                  return "-";
+                                }
+                                return `${indicadorCurvaS.diario.planejado.toFixed(1)}%`;
+                              })()}
                             </span>
                           </span>
                           <span className="text-xs text-muted-foreground">
@@ -679,20 +883,26 @@ export default function DashboardPage() {
                               className="font-semibold"
                               style={{
                                 color: (() => {
-                                  const plan = selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.previsto != null
-                                    ? (curveData[selectedCurvaDayIdx].previsto as number)
-                                    : indicadorCurvaS.diario.planejado;
-                                  const real = selectedCurvaDayIdx >= 0 && curveData[selectedCurvaDayIdx]?.realizado != null
-                                    ? (curveData[selectedCurvaDayIdx].realizado as number)
-                                    : indicadorCurvaS.diario.realizado;
-                                  return real >= plan ? "#337246" : "#DA291B";
+                                  let plan: number | null = null;
+                                  let real: number | null = null;
+                                  if (selectedCurvaDayIdx >= 0) {
+                                    const dia = curveData[selectedCurvaDayIdx];
+                                    plan = dia?.previsto ?? null;
+                                    real = dia?.realizado ?? null;
+                                  } else {
+                                    plan = indicadorCurvaS.diario.planejado;
+                                    real = indicadorCurvaS.diario.realizado;
+                                  }
+                                  return real != null && plan != null && real >= plan ? "#337246" : "#DA291B";
                                 })(),
                               }}
                             >
                               {(() => {
                                 if (selectedCurvaDayIdx >= 0) {
-                                  const r = curveData[selectedCurvaDayIdx]?.realizado;
-                                  return r != null ? `${(r as number).toFixed(1)}%` : "-";
+                                  const dia = curveData[selectedCurvaDayIdx];
+                                  const v = dia?.realizado;
+                                  if (v != null) return `${(v as number).toFixed(1)}%`;
+                                  return "-";
                                 }
                                 return temProgressoReal ? `${indicadorCurvaS.diario.realizado.toFixed(1)}%` : "-";
                               })()}
@@ -844,6 +1054,17 @@ export default function DashboardPage() {
                           fill="url(#gradientAdmitidos)"
                           dot={false}
                           activeDot={{ r: 7, fill: "#DA291B", stroke: "#fff", strokeWidth: 2 }}
+                        />
+                      )}
+
+                      {pontoSelecionado && (
+                        <ReferenceDot
+                          x={pontoSelecionado.x}
+                          y={pontoSelecionado.y}
+                          r={6}
+                          fill="#DA291B"
+                          stroke="#fff"
+                          strokeWidth={2}
                         />
                       )}
 
