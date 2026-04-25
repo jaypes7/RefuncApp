@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
@@ -9,11 +8,6 @@ import { ConditionalLayout } from "@/components/conditional-layout";
 import { AuthGlobalUI } from "@/components/auth-global-ui";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-
-const ibmPlexSans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "700"],
-});
 
 export const metadata: Metadata = {
   title: "RefuncApp - Gestão de Mobilização",
@@ -27,7 +21,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={ibmPlexSans.className}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="font-sans" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
         <Providers>
           <AuthProvider>
             <FilterProvider>
