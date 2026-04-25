@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -39,6 +39,7 @@ import { bancoTalentosApi, type BancoTalento } from "@/lib/axios";
 import { BancoTalentosImportModal } from "@/components/BancoTalentosImportModal";
 import { BancoTalentosAddEditModal } from "@/components/BancoTalentosAddEditModal";
 import { BancoTalentosRealocarModal } from "@/components/BancoTalentosRealocarModal";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { cn } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,6 +100,11 @@ export default function BancoTalentosPage() {
   const [page, setPage] = useState(1);
   const limit = 20;
 
+  // Filtros avançados
+  const [filtroPessoa, setFiltroPessoa] = useState<string[]>([]);
+  const [filtroCpf, setFiltroCpf] = useState<string[]>([]);
+  const [filtroMunicipio, setFiltroMunicipio] = useState<string[]>([]);
+
   const [importOpen, setImportOpen] = useState(false);
   const [addEditOpen, setAddEditOpen] = useState(false);
   const [realocarOpen, setRealocarOpen] = useState(false);
@@ -107,14 +113,42 @@ export default function BancoTalentosPage() {
   // ── Queries ─────────────────────────────────────────────────────────────────
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["banco-talentos", page, limit, debouncedSearch],
+    queryKey: ["banco-talentos", page, limit, debouncedSearch, filtroPessoa, filtroCpf, filtroMunicipio],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
+      if (filtroPessoa.length > 0) params.pessoa = filtroPessoa.join(",");
+      if (filtroCpf.length > 0) params.cpf = filtroCpf.join(",");
+      if (filtroMunicipio.length > 0) params.municipio = filtroMunicipio.join(",");
       const response = await bancoTalentosApi.listar(params);
       return response.data;
     },
   });
+
+  // Buscar valores distintos para os filtros (todos os registros, sem paginação)
+  const { data: todosTalentosData } = useQuery({
+    queryKey: ["banco-talentos", "todos"],
+    queryFn: async () => {
+      const response = await bancoTalentosApi.listar({ limit: 9999 });
+      return response.data.data ?? [];
+    },
+    staleTime: Infinity,
+  });
+
+  const opcoesPessoa = useMemo(() => {
+    const valores = new Set(todosTalentosData?.map((t) => t.pessoa).filter(Boolean) as string[] ?? []);
+    return Array.from(valores).sort().map((v) => ({ value: v, label: v }));
+  }, [todosTalentosData]);
+
+  const opcoesCpf = useMemo(() => {
+    const valores = new Set(todosTalentosData?.map((t) => t.cpf).filter(Boolean) as string[] ?? []);
+    return Array.from(valores).sort().map((v) => ({ value: v, label: formatCPF(v) }));
+  }, [todosTalentosData]);
+
+  const opcoesMunicipio = useMemo(() => {
+    const valores = new Set(todosTalentosData?.map((t) => t.municipio).filter(Boolean) as string[] ?? []);
+    return Array.from(valores).sort().map((v) => ({ value: v, label: v }));
+  }, [todosTalentosData]);
 
   const { data: centrosDisponiveisData } = useQuery({
     queryKey: ["centros-custo"],
@@ -231,8 +265,8 @@ export default function BancoTalentosPage() {
             <TableSkeleton />
           ) : (
             <>
-              {/* ── Search ── */}
-              <div className="glass-card rounded-md px-4 py-3">
+              {/* ── Search & Filters ── */}
+              <div className="glass-card rounded-md px-4 py-3 space-y-3">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -240,6 +274,29 @@ export default function BancoTalentosPage() {
                     value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     className="h-9 pl-9 text-sm border-slate-300 bg-white placeholder:text-slate-400 focus-visible:border-primary/60 focus-visible:ring-primary/20 dark:border-input dark:bg-input/30 dark:placeholder:text-muted-foreground/60"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <MultiSelectFilter
+                    placeholder="Pessoa (Oracle)"
+                    selected={filtroPessoa}
+                    onChange={(v) => { setFiltroPessoa(v); setPage(1); }}
+                    options={opcoesPessoa}
+                    width="w-48"
+                  />
+                  <MultiSelectFilter
+                    placeholder="CPF"
+                    selected={filtroCpf}
+                    onChange={(v) => { setFiltroCpf(v); setPage(1); }}
+                    options={opcoesCpf}
+                    width="w-48"
+                  />
+                  <MultiSelectFilter
+                    placeholder="Município"
+                    selected={filtroMunicipio}
+                    onChange={(v) => { setFiltroMunicipio(v); setPage(1); }}
+                    options={opcoesMunicipio}
+                    width="w-56"
                   />
                 </div>
               </div>

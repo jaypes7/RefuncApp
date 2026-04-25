@@ -5,6 +5,8 @@
  *
  * POST: Substitui todas as etapas do cronograma (delete + insert).
  *       Preserva os dados do projeto (configuracoes) intocados.
+ *       Limpa progresso diario de etapas removidas.
+ *       Gera IDs reais para etapas novas (id <= 0).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -40,8 +42,9 @@ export async function POST(request: NextRequest) {
     // Validar que as datas das etapas estão dentro do intervalo do projeto
     if (projectStartDate && projectEndDate) {
       for (const etapa of etapas) {
-        const dataInicio = (body.etapas?.find((e: any) => e.id === etapa.id)?.dataInicio as string | undefined) || null;
-        const dataFim = (body.etapas?.find((e: any) => e.id === etapa.id)?.dataFim as string | undefined) || null;
+        const rawEtapa = body.etapas?.find((e: any) => e.id === etapa.id);
+        const dataInicio = (rawEtapa?.dataInicio as string | undefined) || null;
+        const dataFim = (rawEtapa?.dataFim as string | undefined) || null;
 
         if (dataInicio) {
           if (dataInicio < projectStartDate || dataInicio > projectEndDate) {
@@ -76,6 +79,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // --- IDs antigos para limpar progresso órfão depois ---
+    const { data: etapasAntigas } = await supabase
+      .from("etapas")
+      .select("id")
+      .eq("centro_custo", centroCusto);
+
+    const idsAntigos = new Set((etapasAntigas ?? []).map((e) => e.id));
+    const idsNovos = new Set(etapas.map((e) => e.id).filter((id) => id > 0));
+    const idsRemovidos = Array.from(idsAntigos).filter((id) => !idsNovos.has(id));
+
+    // --- Gerar IDs reais para etapas novas (id <= 0) ---
+    const { data: maxIdRow } = await supabase
+      .from("etapas")
+      .select("id")
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let nextId = (maxIdRow?.id ?? 0) + 1;
+    const idMap: Record<string, number> = {};
+
+    const etapasComIdReal = etapas.map((e) => {
+      if (e.id <= 0) {
+        const novoId = nextId++;
+        idMap[String(e.id)] = novoId;
+        return { ...e, id: novoId };
+      }
+      return e;
+    });
+
     // Remove apenas as etapas do centro de custo e insere a nova lista
     const { error: delError } = await supabase
       .from("etapas")
@@ -86,11 +119,24 @@ export async function POST(request: NextRequest) {
       throw new Error(`Erro ao remover etapas: ${delError.message}`);
     }
 
-    if (etapas.length > 0) {
-      const payload = etapas.map((e, idx) => {
-        const rawEtapa = body.etapas?.find((raw: any) => raw.id === e.id);
+    // --- Limpar progresso diário das etapas removidas ---
+    if (idsRemovidos.length > 0) {
+      const { error: delProgressError } = await supabase
+        .from("etapas_progresso_diario")
+        .delete()
+        .eq("centro_custo", centroCusto)
+        .in("etapa_id", idsRemovidos);
+
+      if (delProgressError) {
+        console.error("[POST /config/etapas] erro ao limpar progresso:", delProgressError.message);
+      }
+    }
+
+    if (etapasComIdReal.length > 0) {
+      const payload = etapasComIdReal.map((e, idx) => {
+        const rawEtapa = body.etapas?.find((raw: any) => raw.id === e.id || idMap[String(raw.id)] === e.id);
         return {
-          id: e.id ?? idx + 1,
+          id: e.id,
           nome: e.nome,
           dias: e.duracaoDias,
           ordem: idx + 1,
@@ -116,13 +162,13 @@ export async function POST(request: NextRequest) {
       user.re,
       "Cronograma",
       undefined,
-      `Etapas atualizadas: ${etapas.length} etapa(s)`,
+      `Etapas atualizadas: ${etapasComIdReal.length} etapa(s)`,
     );
 
     return NextResponse.json({
       success: true,
       message: "Etapas do cronograma atualizadas",
-      data: { etapas },
+      data: { etapas: etapasComIdReal, idMap },
     });
   } catch (error) {
     console.error("[POST /config/etapas]", error);
