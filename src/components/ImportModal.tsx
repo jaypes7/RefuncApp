@@ -12,7 +12,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Upload,
+  Download,
   FileSpreadsheet,
   CheckCircle,
   AlertCircle,
@@ -187,7 +187,7 @@ export function ImportModal({
       setBufferedRows(null);
 
       if (report.erros.length === 0) {
-        toast.success(`Importação concluída!`);
+        toast.success(`Upload concluído!`);
       } else {
         toast.warning(`Concluído com ${report.erros.length} erro(s).`);
       }
@@ -230,11 +230,11 @@ export function ImportModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            {importResult ? "Relatório de Importação" : "Importar Planilha XLSX"}
+            {importResult ? "Relatório de Upload" : "Fazer Upload de Planilha XLSX"}
           </DialogTitle>
           <DialogDescription>
             {importResult
-              ? "Confira abaixo os resultados e eventuais erros da sua importação."
+              ? "Confira abaixo os resultados e eventuais erros do seu upload."
               : "Importe dados de colaboradores a partir de uma planilha Excel. O sistema fará upsert (atualiza existentes, insere novos) baseado no CPF."}
           </DialogDescription>
         </DialogHeader>
@@ -259,7 +259,7 @@ export function ImportModal({
                   className="flex flex-col items-center gap-3 cursor-pointer"
                 >
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Upload className="h-6 w-6 text-primary" />
+                    <Download className="h-6 w-6 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm font-medium">
@@ -362,7 +362,7 @@ export function ImportModal({
                   {isLoading ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</>
                   ) : (
-                    "Iniciar Importação"
+                    "Iniciar Upload"
                   )}
                 </Button>
               </div>
@@ -406,7 +406,7 @@ export function ImportModal({
               ) : (
                 <div className="py-8 text-center bg-green-50 border border-green-100 rounded-lg">
                   <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-green-800">Tudo limpo! Importação 100% concluída.</p>
+                  <p className="text-sm font-medium text-green-800">Tudo limpo! Upload 100% concluído.</p>
                 </div>
               )}
 

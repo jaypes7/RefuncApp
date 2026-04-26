@@ -31,6 +31,7 @@ function mapRow(row: Record<string, any>): Colaborador {
     STATUS:               row.status            ?? null,
     ENVIADO_RH:           row.enviado_rh        ?? null,
     PESSOA:               row.pessoa            ?? null,
+    SEXO:                 row.sexo              ?? null,
     REQ:                  row.req               ?? null,
     VINCULADO:            row.vinculado         ?? null,
     CARTA_OFERTA:         row.carta_oferta      ?? null,
@@ -44,6 +45,7 @@ function mapRow(row: Record<string, any>): Colaborador {
     MOB:                  row.mob               ?? null,
     OP:                   row.op                ?? null,
     DATA_ADMISSAO:        row.data_admissao     ?? null,
+    TIPO_CONTRATO:        row.tipo_contrato     ?? null,
     CONTRATO:             row.contrato          ?? null,
     PORTAL:               row.portal            ?? null,
     CRACHA:               row.cracha            ?? null,
@@ -82,6 +84,7 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
   if (data.STATUS            !== undefined) row.status             = data.STATUS;
   if (data.ENVIADO_RH        !== undefined) row.enviado_rh         = data.ENVIADO_RH;
   if (data.PESSOA            !== undefined) row.pessoa             = data.PESSOA;
+  if (data.SEXO              !== undefined) row.sexo               = data.SEXO;
   if (data.REQ               !== undefined) row.req                = data.REQ;
   if (data.VINCULADO         !== undefined) row.vinculado          = data.VINCULADO;
   if (data.CARTA_OFERTA      !== undefined) row.carta_oferta       = data.CARTA_OFERTA;
@@ -95,6 +98,7 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
   if (data.MOB               !== undefined) row.mob                = data.MOB;
   if (data.OP                !== undefined) row.op                 = data.OP;
   if (data.DATA_ADMISSAO     !== undefined) row.data_admissao      = data.DATA_ADMISSAO;
+  if (data.TIPO_CONTRATO     !== undefined) row.tipo_contrato      = data.TIPO_CONTRATO;
   if (data.CONTRATO          !== undefined) row.contrato           = data.CONTRATO;
   if (data.PORTAL            !== undefined) row.portal             = data.PORTAL;
   if (data.CRACHA            !== undefined) row.cracha             = data.CRACHA;

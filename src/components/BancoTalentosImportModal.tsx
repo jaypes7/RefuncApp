@@ -12,7 +12,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Upload,
+  Download,
   FileSpreadsheet,
   CheckCircle,
   AlertCircle,
@@ -106,14 +106,14 @@ export function BancoTalentosImportModal({ open, onOpenChange, onSuccess }: Impo
       setBufferedRows(null);
 
       if (report.erros.length === 0) {
-        toast.success("Importação concluída com sucesso!");
+        toast.success("Upload concluído com sucesso!");
       } else {
         toast.warning(`Concluído com ${report.erros.length} erro(s).`);
       }
       onSuccess?.();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
-      const msg = e.response?.data?.error ?? "Erro ao importar planilha.";
+      const msg = e.response?.data?.error ?? "Erro ao fazer upload da planilha.";
       toast.error(msg);
     } finally {
       setIsLoading(false);
@@ -134,11 +134,11 @@ export function BancoTalentosImportModal({ open, onOpenChange, onSuccess }: Impo
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            {importResult ? "Relatório de Importação" : "Importar Planilha — Banco de Talentos"}
+            {importResult ? "Relatório de Upload" : "Fazer Upload de Planilha — Banco de Talentos"}
           </DialogTitle>
           <DialogDescription>
             {importResult
-              ? "Confira abaixo os resultados da sua importação."
+              ? "Confira abaixo os resultados do seu upload."
               : "Importe colaboradores a partir de uma planilha Excel (modelo: PESSOA, NOME, IDADE, DT NASC, CPF, MUNICÍPIO, UF, TELEFONE)."}
           </DialogDescription>
         </DialogHeader>
@@ -158,7 +158,7 @@ export function BancoTalentosImportModal({ open, onOpenChange, onSuccess }: Impo
                 />
                 <label htmlFor="bt-file-upload" className="flex flex-col items-center gap-3 cursor-pointer">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Upload className="h-6 w-6 text-primary" />
+                    <Download className="h-6 w-6 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm font-medium">
@@ -208,7 +208,7 @@ export function BancoTalentosImportModal({ open, onOpenChange, onSuccess }: Impo
                   {isLoading ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processando...</>
                   ) : (
-                    "Iniciar Importação"
+                    "Iniciar Upload"
                   )}
                 </Button>
               </div>
@@ -246,7 +246,7 @@ export function BancoTalentosImportModal({ open, onOpenChange, onSuccess }: Impo
               ) : (
                 <div className="py-8 text-center bg-green-50 border border-green-100 rounded-lg">
                   <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-green-800">Importação 100% concluída sem erros.</p>
+                  <p className="text-sm font-medium text-green-800">Upload 100% concluído sem erros.</p>
                 </div>
               )}
 

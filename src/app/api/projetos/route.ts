@@ -12,7 +12,7 @@ export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, normalizeCentroCusto } from "@/lib/auth";
 import { ZodError, z } from "zod";
 
 const ProjetoCreateSchema = z.object({
@@ -36,8 +36,7 @@ export async function GET() {
 
     // Users e guests só veem os projetos dos seus centros de custo vinculados
     if (currentUser.perfil !== "admin") {
-      const cc = currentUser.centro_custo;
-      const ccs = Array.isArray(cc) ? cc : cc ? [cc] : [];
+      const ccs = normalizeCentroCusto(currentUser.centro_custo);
       if (ccs.length === 0) return NextResponse.json({ data: [] });
       query = query.in("centro_custo", ccs);
     }

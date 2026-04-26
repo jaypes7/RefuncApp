@@ -189,7 +189,7 @@ export default function CentralPage() {
   const [centroCustoLocal, setCentroCustoLocal] = useState<string[]>([]);
   const [page, setPage] = useState(1);
 
-  // Estado do modal de importação
+  // Estado do modal de upload
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -452,7 +452,7 @@ export default function CentralPage() {
               onClick={handleExport}
               disabled={isExporting}
             >
-              <Download className="h-3.5 w-3.5" />
+              <Upload className="h-3.5 w-3.5" />
               {isExporting ? "Exportando..." : "Exportar"}
             </Button>
             <CanAccess role="user">
@@ -462,8 +462,8 @@ export default function CentralPage() {
                 className="gap-1.5"
                 onClick={() => setImportModalOpen(true)}
               >
-                <Upload className="h-3.5 w-3.5" />
-                Importar
+                <Download className="h-3.5 w-3.5" />
+                Fazer upload
               </Button>
               <Button
                 size="sm"
@@ -803,12 +803,12 @@ export default function CentralPage() {
         )}
       </div>
 
-      {/* Modal de Importação */}
+      {/* Modal de Upload */}
       <ImportModal
         open={importModalOpen}
         onOpenChange={setImportModalOpen}
         onSuccess={() => {
-          // Recarrega a lista de colaboradores após importação
+          // Recarrega a lista de colaboradores após upload
           queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
         }}
       />

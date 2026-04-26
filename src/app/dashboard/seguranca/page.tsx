@@ -244,7 +244,7 @@ export default function DashboardSegurancaPage() {
               <ExportPdfButton targetRef={contentRef} filename="dashboard-seguranca" />
               <SheetUpload
                 endpoint="/api/seguranca/fits"
-                label="Importar FITs"
+                label="Fazer upload de FITs"
                 headerDetectionKeys={["RE", "CPF", "NOME"]}
                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ["seguranca-dashboard"] })}
                 variant="outline"

@@ -19,7 +19,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2 } from "lucide-react";
+import { Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -212,7 +212,7 @@ export function ExportButton({
       {isExporting ? (
         <Loader2 className="h-4 w-4 animate-spin" />
       ) : (
-        <Download className="h-4 w-4" />
+        <Upload className="h-4 w-4" />
       )}
       {isExporting ? "Exportando..." : label}
     </Button>

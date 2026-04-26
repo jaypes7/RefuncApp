@@ -71,12 +71,13 @@ import { CargoCombobox } from "@/components/CargoCombobox";
 const step1Schema = z.object({
   cpf: z.string().min(14, "CPF inválido"),
   nome: z.string().min(3, "Nome completo é obrigatório"),
+  centroCusto: z.string().min(1, "Centro de custo é obrigatório"),
   dtNascimento: z.string().optional(),
   idade: z.number().min(16).max(99).optional(),
   municipio: z.string().optional(),
   telefone: z.string().optional(),
   uf: z.string().optional(),
-  pessoa: z.enum(["Masculino", "Feminino"]).optional(),
+  sexo: z.enum(["Masculino", "Feminino"]).optional(),
   ind: z.string().optional(),
 });
 
@@ -86,7 +87,7 @@ const step2Schema = z.object({
   re: z.string().optional(),
   funcaoClt: z.string().optional(),
   histograma: z.string().optional(),
-  numeroOracle: z.string().optional(),
+  numeroOracle: z.coerce.number().optional().nullable(),
   cartaOferta: z.enum(["Sim", "Não", "Pendente"]).optional(),
   tipoContrato: z.enum(["Determinado", "Indeterminado"]).optional(),
   contrato: z.enum(["CLT", "PJ", "Estagiário"]).optional(),
@@ -232,6 +233,19 @@ export default function OnboardingPage() {
 
   const clinicas = clinicasData?.data || [];
 
+  // Busca projetos cadastrados para o dropdown de centro de custo
+  const { data: projetosData } = useQuery({
+    queryKey: ["projetos"],
+    queryFn: async () => {
+      const response = await fetch("/api/projetos");
+      if (!response.ok) return [];
+      const json = (await response.json()) as { data?: Array<{ centro_custo: string }> };
+      return (json.data ?? []).map((p) => p.centro_custo).filter(Boolean);
+    },
+  });
+
+  const projetos = projetosData ?? [];
+
   // Helper para montar payload da API a partir dos dados do formulário
   const buildColaboradorPayload = (data: FullFormData) => {
     return {
@@ -239,7 +253,7 @@ export default function OnboardingPage() {
       IND: data.ind,
       STATUS: data.status || "Pendente",
       ENVIADO_RH: data.enviadoRh,
-      PESSOA: data.pessoa,
+      SEXO: data.sexo,
       REQ: data.req,
       // Colunas 6-10
       VINCULADO: data.vinculado,
@@ -270,7 +284,7 @@ export default function OnboardingPage() {
       NOME: data.nome,
       FUNCAO_CLT: data.funcaoClt,
       HISTOGRAMA: data.histograma,
-      NUMERO_ORACLE: data.numeroOracle,
+      NUMERO_ORACLE: data.numeroOracle ?? null,
       IDADE: data.idade,
       DT_NASCIMENTO: data.dtNascimento,
       // Colunas 31-35
@@ -283,8 +297,7 @@ export default function OnboardingPage() {
       MUNICIPIO: data.municipio,
       UF: data.uf,
       TELEFONE: data.telefone,
-      // Centro de custo ativo do contexto global
-      CENTRO_CUSTO: centroCusto,
+      CENTRO_CUSTO: data.centroCusto || centroCusto,
     };
   };
 
@@ -389,19 +402,20 @@ export default function OnboardingPage() {
       // Step 1 - Dados Pessoais
       cpf: "",
       nome: "",
+      centroCusto: centroCusto || "",
       dtNascimento: "",
       idade: undefined,
       municipio: "",
       telefone: "",
       uf: "",
-      pessoa: undefined,
+      sexo: undefined,
       ind: "",
       // Step 2 - Contratual/Admissão
       dataAdmissao: "",
       re: "",
       funcaoClt: "",
       histograma: "",
-      numeroOracle: "",
+      numeroOracle: null,
       cartaOferta: undefined,
       contrato: undefined,
       status: undefined,
@@ -438,7 +452,7 @@ export default function OnboardingPage() {
 
   // Watch para valores dos selects
   const ufValue = watch("uf");
-  const pessoaValue = watch("pessoa");
+  const sexoValue = watch("sexo");
   const cartaOfertaValue = watch("cartaOferta");
   const tipoContratoValue = watch("tipoContrato");
   const contratoValue = watch("contrato");
@@ -459,6 +473,7 @@ export default function OnboardingPage() {
   const treinamentoValue = watch("treinamento");
   const realizarTreinamentoValue = watch("realizarTreinamento");
   const funcaoCltValue = watch("funcaoClt");
+  const centroCustoValue = watch("centroCusto");
   const cpfValue = watch("cpf");
 
   // Verificar CPF duplicado em tempo real
@@ -484,7 +499,7 @@ export default function OnboardingPage() {
 
   const handleNext = async () => {
     if (step === 1) {
-      const isValid = await trigger(["cpf", "nome"]);
+      const isValid = await trigger(["cpf", "nome", "centroCusto"]);
       if (isValid && !cpfError) {
         setDirection(1);
         setStep(2);
@@ -563,6 +578,7 @@ export default function OnboardingPage() {
   const isStep1Valid =
     watch("cpf")?.length === 14 &&
     watch("nome")?.length >= 3 &&
+    !!watch("centroCusto") &&
     !cpfError;
 
   const isStep2Valid = true;
@@ -718,25 +734,60 @@ export default function OnboardingPage() {
                         )}
                       </div>
 
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="nome"
-                          className="text-sm font-medium text-foreground"
-                        >
-                          Nome Completo{" "}
-                          <span className="text-destructive">*</span>
-                        </label>
-                        <Input
-                          id="nome"
-                          placeholder="Digite o nome completo"
-                          {...register("nome")}
-                          className={errors.nome ? "border-destructive" : ""}
-                        />
-                        {errors.nome && (
-                          <p className="text-xs text-destructive">
-                            {errors.nome.message}
-                          </p>
-                        )}
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="nome"
+                            className="text-sm font-medium text-foreground"
+                          >
+                            Nome Completo{" "}
+                            <span className="text-destructive">*</span>
+                          </label>
+                          <Input
+                            id="nome"
+                            placeholder="Digite o nome completo"
+                            {...register("nome")}
+                            className={errors.nome ? "border-destructive" : ""}
+                          />
+                          {errors.nome && (
+                            <p className="text-xs text-destructive">
+                              {errors.nome.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-foreground">
+                            Centro de Custo{" "}
+                            <span className="text-destructive">*</span>
+                          </label>
+                          <Select
+                            value={centroCustoValue || undefined}
+                            onValueChange={(value) =>
+                              setValue("centroCusto", value, { shouldValidate: true })
+                            }
+                          >
+                            <SelectTrigger
+                              className={
+                                errors.centroCusto ? "border-destructive" : ""
+                              }
+                            >
+                              <SelectValue placeholder="Selecione o centro de custo..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {projetos.map((cc) => (
+                                <SelectItem key={cc} value={cc}>
+                                  {cc}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.centroCusto && (
+                            <p className="text-xs text-destructive">
+                              {errors.centroCusto.message}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -853,25 +904,25 @@ export default function OnboardingPage() {
 
                         <div className="space-y-2">
                           <label
-                            htmlFor="pessoa"
+                            htmlFor="sexo"
                             className="text-sm font-medium text-foreground"
                           >
                             Sexo
                           </label>
                           <Select
-                            value={pessoaValue}
+                            value={sexoValue || undefined}
                             onValueChange={(value: "Masculino" | "Feminino") =>
-                              setValue("pessoa", value, {
+                              setValue("sexo", value, {
                                 shouldValidate: true,
                               })
                             }
                           >
                             <SelectTrigger
                               className={
-                                errors.pessoa ? "border-destructive" : ""
+                                errors.sexo ? "border-destructive" : ""
                               }
                             >
-                              <SelectValue placeholder="Tipo" />
+                              <SelectValue placeholder="Selecione..." />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Masculino">Masculino</SelectItem>

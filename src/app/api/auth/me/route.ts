@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, normalizeCentroCusto } from "@/lib/auth";
 
 export async function GET() {
   try {
@@ -34,7 +34,7 @@ export async function GET() {
         re: user.re,
         nome: user.nome || null,
         perfil: user.perfil || null,
-        centro_custo: dbUser?.centro_custo ?? user.centro_custo ?? null,
+        centro_custo: normalizeCentroCusto(dbUser?.centro_custo ?? user.centro_custo),
         precisaRedefinirSenha: dbUser?.precisa_redefinir_senha ?? false,
       },
     });

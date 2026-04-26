@@ -55,7 +55,7 @@ import {
 } from "@/components/ui/select";
 
 import { colaboradoresApi, type Colaborador } from "@/lib/axios";
-import { CARGOS } from "@/constants/cargos";
+import { CargoCombobox } from "@/components/CargoCombobox";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
@@ -107,6 +107,7 @@ const EMPTY: FormData = {
   STATUS: "",
   IND: "",
   PESSOA: "",
+  SEXO: "",
   REQ: "",
   VINCULADO: "",
   OP: "",
@@ -134,7 +135,7 @@ const EMPTY: FormData = {
   TREINAMENTO: "",
   REALIZAR_TREINAMENTO: "",
   LOCAL_TREINAMENTO: "",
-  NUMERO_ORACLE: "",
+  NUMERO_ORACLE: null,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,13 +144,15 @@ const EMPTY: FormData = {
 
 const O_STATUS = ["Ativo", "Pendente", "Inativo", "Desligado"];
 const O_SIM_NAO = ["Sim", "Não"];
+const O_SIM_NAO_PENDENTE = ["Sim", "Não", "Pendente"];
 const O_APTO = ["Apto", "Inapto", "Pendente"];
-const O_LIBERADO = ["Liberado", "Pendente", "Bloqueado"];
+const O_PORTAL = ["Liberado", "Pendente", "Bloqueado"];
+const O_CRACHA = ["Emitido", "Pendente"];
 const O_DOCS = ["Completo", "Incompleto", "Pendente"];
 const O_EXAME = ["Realizado", "Agendado", "Pendente"];
-const O_CARTA = ["Enviada", "Assinada", "Pendente"];
+const O_CARTA = ["Sim", "Não", "Pendente"];
 const O_ADMISSAO = ["Concluída", "Em andamento", "Pendente"];
-const O_CONTRATO = ["Assinado", "Pendente", "Cancelado"];
+const O_CONTRATO = ["CLT", "PJ", "Temporário", "Estagiário"];
 const O_TIPO_CONTRATO = ["Determinado", "Indeterminado"];
 const O_PONTO = ["Cadastrado", "Pendente"];
 const O_TREINAMENTO = ["Concluído", "Em Andamento", "Pendente"];
@@ -521,16 +524,18 @@ export default function EditarColaboradorPage() {
                   onChange={t("RE")}
                   placeholder="Número de registro"
                 />
-                <S
-                  label="Função / Cargo CLT"
-                  value={form.FUNCAO_CLT}
-                  onChange={s("FUNCAO_CLT")}
-                  options={CARGOS as unknown as string[]}
-                />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Função / Cargo CLT</label>
+                  <CargoCombobox
+                    value={form.FUNCAO_CLT || undefined}
+                    onChange={(value) => set("FUNCAO_CLT", value as never)}
+                    placeholder="Selecione o cargo..."
+                  />
+                </div>
                 <S
                   label="Sexo"
-                  value={form.PESSOA}
-                  onChange={s("PESSOA")}
+                  value={form.SEXO}
+                  onChange={s("SEXO")}
                   options={O_PESSOA}
                 />
                 <F
@@ -670,7 +675,7 @@ export default function EditarColaboradorPage() {
                   label="VR (Vale Refeição)"
                   value={form.VR}
                   onChange={s("VR")}
-                  options={O_SIM_NAO}
+                  options={["Ativo", "Pendente"]}
                 />
               </div>
 
@@ -707,7 +712,7 @@ export default function EditarColaboradorPage() {
                   label="Enviado RH"
                   value={form.ENVIADO_RH}
                   onChange={s("ENVIADO_RH")}
-                  options={O_SIM_NAO}
+                  options={O_SIM_NAO_PENDENTE}
                 />
                 <S
                   label="Carta Oferta"
@@ -733,13 +738,13 @@ export default function EditarColaboradorPage() {
                   label="Portal"
                   value={form.PORTAL}
                   onChange={s("PORTAL")}
-                  options={O_LIBERADO}
+                  options={O_PORTAL}
                 />
                 <S
                   label="Crachá"
                   value={form.CRACHA}
                   onChange={s("CRACHA")}
-                  options={O_LIBERADO}
+                  options={O_CRACHA}
                 />
                 <S
                   label="Ponto"
@@ -826,7 +831,7 @@ export default function EditarColaboradorPage() {
                   label="Realizar Treinamento"
                   value={form.REALIZAR_TREINAMENTO}
                   onChange={s("REALIZAR_TREINAMENTO")}
-                  options={O_SIM_NAO}
+                  options={O_SIM_NAO_PENDENTE}
                 />
                 <F
                   label="Local do Treinamento"

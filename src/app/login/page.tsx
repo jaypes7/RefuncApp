@@ -48,7 +48,7 @@ export default function LoginPage() {
             </span>
           </h1>
           <p className="text-sm font-medium text-primary-foreground/80 md:text-base">
-            Controle, agilidade e segurança nas operações da sua unidade de trabalho.
+            Fazer. Inovar. Solucionar.
           </p>
         </div>
       </div>
