@@ -355,7 +355,7 @@ export default function DashboardRhPage() {
               <ExportPdfButton targetRef={contentRef} filename="dashboard-rh" />
               <SheetUpload
                 endpoint="/api/rh/colaboradores"
-                label="Importar planilha RH"
+                label="Fazer upload de planilha RH"
                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-rh"] })}
                 variant="outline"
                 size="sm"

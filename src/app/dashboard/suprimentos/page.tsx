@@ -308,7 +308,7 @@ export default function DashboardSuprimentosPage() {
               <ExportPdfButton targetRef={contentRef} filename="dashboard-suprimentos" />
               <SheetUpload
                 endpoint="/api/suprimentos/ordens"
-                label="Importar ordens"
+                label="Fazer upload de ordens"
                 headerDetectionKeys={["Descrição", "Ordem de Compra", "Valor OC", "Item"]}
                 onSuccess={() => {
                   queryClient.invalidateQueries({ queryKey: ["dashboard-suprimentos"] });

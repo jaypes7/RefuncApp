@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { LoginSchema } from "@/lib/schemas";
 import { createServerClient } from "@/lib/supabase";
-import { generateToken, setAuthCookie } from "@/lib/auth";
+import { generateToken, setAuthCookie, normalizeCentroCusto } from "@/lib/auth";
 import { comparePassword } from "@/lib/password";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       re: usuario.re,
       nome: usuario.nome ?? undefined,
       perfil: usuario.perfil ?? undefined,
-      centro_custo: usuario.centro_custo ?? undefined,
+      centro_custo: normalizeCentroCusto(usuario.centro_custo),
     });
 
     await setAuthCookie(token);

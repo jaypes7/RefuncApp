@@ -11,7 +11,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FileDown, Loader2 } from "lucide-react";
+import { FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
@@ -103,7 +103,7 @@ export function ExportPdfButton({
       {isExporting ? (
         <Loader2 className="h-4 w-4 animate-spin" />
       ) : (
-        <FileDown className="h-4 w-4" />
+        <FileUp className="h-4 w-4" />
       )}
       {isExporting ? "Exportando..." : label}
     </Button>

@@ -166,7 +166,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       Todos
                     </button>
                   )}
-                  {(user?.perfil === "admin" ? centrosDisponiveis : (Array.isArray(user?.centro_custo) ? user.centro_custo : user?.centro_custo ? [user.centro_custo] : [])).map((cc) => (
+                  {centrosDisponiveis.map((cc) => (
                     <button
                       key={cc}
                       onClick={() => handleSelectProject(cc)}
@@ -222,7 +222,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       Todos
                     </button>
                   )}
-                  {(user?.perfil === "admin" ? centrosDisponiveis : (Array.isArray(user?.centro_custo) ? user.centro_custo : user?.centro_custo ? [user.centro_custo] : [])).map((cc) => (
+                  {centrosDisponiveis.map((cc) => (
                     <button
                       key={cc}
                       onClick={() => handleSelectProject(cc)}

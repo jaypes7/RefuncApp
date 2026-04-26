@@ -61,6 +61,7 @@ export interface Colaborador {
   STATUS?: string | null;
   ENVIADO_RH?: string | null;
   PESSOA?: string | null;
+  SEXO?: string | null;
   REQ?: string | null;
   VINCULADO?: string | null;
   CARTA_OFERTA?: string | null;
@@ -96,7 +97,7 @@ export interface Colaborador {
   MUNICIPIO?: string | null;
   UF?: string | null;
   TELEFONE?: string | null;
-  NUMERO_ORACLE?: string | null;
+  NUMERO_ORACLE?: number | null;
   CENTRO_CUSTO?: string | null;
   turno_trabalho?: string | null;
   TURNO_TRABALHO?: string | null;
@@ -159,7 +160,7 @@ export interface User {
   re: string;
   nome: string | null;
   perfil: string | null;
-  centro_custo?: string | null;
+  centro_custo?: string[] | null;
   precisaRedefinirSenha?: boolean;
 }
 

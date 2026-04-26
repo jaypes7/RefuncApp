@@ -10,14 +10,14 @@
  *
  * Props:
  *   endpoint  — rota de API que recebe { rows }  ex: "/api/rh/colaboradores"
- *   label     — texto do botão (padrão "Importar planilha")
+ *   label     — texto do botão (padrão "Fazer upload de planilha")
  *   onSuccess — callback chamado após upload bem-sucedido (para refetch)
  *   variant   — variante do Button (padrão "outline")
  */
 
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { Upload, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { ButtonHTMLAttributes } from "react";
@@ -35,7 +35,7 @@ export interface ImportReport {
 interface SheetUploadProps {
   /** Rota de API que recebe `POST { rows: RawRow[] }` */
   endpoint: string;
-  /** Texto do botão — padrão: "Importar planilha" */
+  /** Texto do botão — padrão: "Fazer upload de planilha" */
   label?: string;
   /** Chamado após upload bem-sucedido (ex.: invalidar query) */
   onSuccess?: (report: ImportReport) => void;
@@ -154,7 +154,7 @@ function formatReport(report: ImportReport): string {
 
 export function SheetUpload({
   endpoint,
-  label    = "Importar planilha",
+  label    = "Fazer upload de planilha",
   onSuccess,
   variant  = "outline",
   size     = "default",
@@ -197,15 +197,15 @@ export function SheetUpload({
       const summary = formatReport(report);
 
       if (report.erros.length > 0 && report.inseridos + report.atualizados === 0) {
-        toast.error("Importação com erros", { description: summary });
+        toast.error("Upload com erros", { description: summary });
       } else {
-        toast.success("Importação concluída", { description: summary });
+        toast.success("Upload concluído", { description: summary });
       }
 
       onSuccess?.(report);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      toast.error("Falha na importação", { description: msg });
+      toast.error("Falha no upload", { description: msg });
     } finally {
       setLoading(false);
       // Limpa o input para permitir re-upload do mesmo arquivo
@@ -238,7 +238,7 @@ export function SheetUpload({
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <Upload className="h-4 w-4" />
+          <Download className="h-4 w-4" />
         )}
         <span className="ml-2">{loading ? "Importando…" : label}</span>
       </Button>

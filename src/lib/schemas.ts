@@ -218,6 +218,7 @@ export const ColaboradorSchema = z.object({
   STATUS: z.preprocess(emptyStringToUndefined, StatusEnum.optional().catch(undefined)),
   ENVIADO_RH: z.preprocess(emptyStringToUndefined, SimNaoPendenteEnum.optional().catch(undefined)),
   PESSOA: z.preprocess(emptyStringToUndefined, PessoaEnum.optional().catch(undefined)),
+  SEXO: z.preprocess(emptyStringToUndefined, z.enum(["Masculino", "Feminino"]).optional().catch(undefined)),
   REQ: z.preprocess(emptyStringToUndefined, z.string().optional()),
 
   // Colunas 6-10
@@ -237,6 +238,7 @@ export const ColaboradorSchema = z.object({
   // Colunas 16-20
   OP: z.preprocess(emptyStringToUndefined, z.string().optional()),
   DATA_ADMISSAO: DateSchema,
+  TIPO_CONTRATO: z.preprocess(emptyStringToUndefined, z.enum(["Determinado", "Indeterminado"]).optional().catch(undefined)),
   CONTRATO: z.preprocess(emptyStringToUndefined, ContratoEnum.optional().catch(undefined)),
   PORTAL: z.preprocess(emptyStringToUndefined, PortalEnum.optional().catch(undefined)),
   CRACHA: z.preprocess(emptyStringToUndefined, CrachaEnum.optional().catch(undefined)),
@@ -270,7 +272,7 @@ export const ColaboradorSchema = z.object({
   // ── Campos extras (DB) — não presentes na planilha de importação ──────────
   // Ignorados durante o parse de planilhas (strip); persistidos via Supabase.
   turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
-  NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.coerce.number().optional().nullable()),
   CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
 });
 
@@ -298,6 +300,7 @@ export const ColaboradorUpdateSchema = z.object({
   STATUS: safeEnum(STATUS_VALUES),
   ENVIADO_RH: safeEnum(SIM_NAO_PENDENTE_VALUES),
   PESSOA: safeEnum(PESSOA_VALUES),
+  SEXO: safeEnum(["Masculino", "Feminino"] as const),
   REQ: z.preprocess(emptyStringToUndefined, z.string().optional()),
 
   // Colunas 6-10
@@ -317,6 +320,7 @@ export const ColaboradorUpdateSchema = z.object({
   // Colunas 16-20
   OP: z.preprocess(emptyStringToUndefined, z.string().optional()),
   DATA_ADMISSAO: DateSchema,
+  TIPO_CONTRATO: safeEnum(["Determinado", "Indeterminado"] as const),
   CONTRATO: safeEnum(CONTRATO_VALUES),
   PORTAL: safeEnum(PORTAL_VALUES),
   CRACHA: safeEnum(CRACHA_VALUES),
@@ -349,7 +353,7 @@ export const ColaboradorUpdateSchema = z.object({
 
   // ── Campos extras (DB)
   turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
-  NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.coerce.number().optional().nullable()),
   CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
 });
 

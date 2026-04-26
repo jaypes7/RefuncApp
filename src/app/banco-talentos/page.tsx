@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Search,
-  Upload,
+  Download,
   Plus,
   MoreHorizontal,
   Pencil,
@@ -251,8 +251,8 @@ export default function BancoTalentosPage() {
                 className="gap-1.5"
                 onClick={() => setImportOpen(true)}
               >
-                <Upload className="h-3.5 w-3.5" />
-                Importar Planilha
+                <Download className="h-3.5 w-3.5" />
+                Fazer upload de planilha
               </Button>
               <Button size="sm" className="gap-1.5" onClick={handleAddNew}>
                 <Plus className="h-3.5 w-3.5" />

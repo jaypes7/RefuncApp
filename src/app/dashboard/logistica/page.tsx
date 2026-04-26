@@ -285,7 +285,7 @@ export default function DashboardLogisticaPage() {
               <ExportPdfButton targetRef={contentRef} filename="dashboard-logistica" />
               <SheetUpload
                 endpoint="/api/logistica/controle"
-                label="Importar controle logístico"
+                label="Fazer upload de controle logístico"
                 headerDetectionKeys={["CPF", "RE", "NOME"]}
                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-logistica"] })}
                 variant="outline"

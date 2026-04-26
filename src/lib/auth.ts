@@ -50,6 +50,23 @@ export interface JWTPayload {
   exp?: number;
 }
 
+/**
+ * Normaliza qualquer representação de centro_custo para string[].
+ * Trata strings com vírgulas como múltiplos valores.
+ */
+export function normalizeCentroCusto(cc: unknown): string[] {
+  if (Array.isArray(cc)) {
+    return cc.map(String).map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof cc === "string" && cc.includes(",")) {
+    return cc.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (typeof cc === "string" && cc.trim()) {
+    return [cc.trim()];
+  }
+  return [];
+}
+
 // ============================================================================
 // GERAÇÃO DE TOKEN
 // ============================================================================
@@ -188,10 +205,8 @@ export function resolveCentroCusto(
     if (!ccParam) return undefined;
     return ccParam.split(",").filter(Boolean);
   }
-  const cc = currentUser.centro_custo;
-  if (!cc) return undefined;
-  // Compat: tokens antigos (pré-migração) podem ter string em vez de array
-  const autorizados = Array.isArray(cc) ? cc : [cc as unknown as string];
+  const autorizados = normalizeCentroCusto(currentUser.centro_custo);
+  if (autorizados.length === 0) return undefined;
 
   // Se o frontend enviou um ccParam específico e ele está autorizado, use-o
   if (ccParam) {

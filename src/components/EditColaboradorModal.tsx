@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -103,6 +102,7 @@ const editSchema = z.object({
   UF: z.string().length(2).optional().nullable(),
   TELEFONE: z.string().optional().nullable(),
   PESSOA: z.enum(["Física", "Jurídica"]).optional().nullable(),
+  SEXO: z.enum(["Masculino", "Feminino"]).optional().nullable(),
   IND: z.string().optional().nullable(),
 
   // Dados Contratuais
@@ -129,7 +129,7 @@ const editSchema = z.object({
   PRE_ADMISSAO: z.enum(["Sim", "Não", "Pendente"]).optional().nullable(),
   OP: z.string().optional().nullable(),
   REQ: z.string().optional().nullable(),
-  NUMERO_ORACLE: z.string().optional().nullable(),
+  NUMERO_ORACLE: z.coerce.number().optional().nullable(),
 
   // Saúde
   EXAME: z.enum(["Realizado", "Agendado", "Pendente"]).optional().nullable(),
@@ -218,7 +218,6 @@ export function EditColaboradorModal({
     reset,
     formState: { errors, isDirty },
   } = useForm<EditFormData>({
-    resolver: zodResolver(editSchema),
     defaultValues: {
       NOME: "",
       RE: null,
@@ -256,11 +255,12 @@ export function EditColaboradorModal({
         UF: colaborador.UF || "",
         TELEFONE: colaborador.TELEFONE || "",
         PESSOA: safeEnum(colaborador.PESSOA, ["Física", "Jurídica"] as const),
+        SEXO: safeEnum(colaborador.SEXO, ["Masculino", "Feminino"] as const),
         IND: colaborador.IND || "",
         DATA_ADMISSAO: formatDataSegura(colaborador.DATA_ADMISSAO) ?? "",
         FUNCAO_CLT: colaborador.FUNCAO_CLT || "",
         HISTOGRAMA: colaborador.HISTOGRAMA || "",
-        NUMERO_ORACLE: colaborador.NUMERO_ORACLE || "",
+        NUMERO_ORACLE: colaborador.NUMERO_ORACLE ?? null,
         CONTRATO: safeEnum(colaborador.CONTRATO, ["CLT", "PJ", "Temporário", "Estagiário"] as const),
         STATUS: safeEnum(colaborador.STATUS, ["Ativo", "Pendente", "Inativo", "Desligado"] as const),
         VINCULADO: colaborador.VINCULADO || "",
