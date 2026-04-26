@@ -3,8 +3,9 @@
  * API: GET /api/colaboradores/centros-custo
  * ============================================================================
  *
- * Retorna a lista de centros de custo distintos cadastrados nos colaboradores.
- * Usado para popular o dropdown de filtro na Central de Colaboradores.
+ * Retorna a lista de centros de custo distintos cadastrados nas configurações.
+ * Usado para popular o dropdown de filtro na Central de Colaboradores e o
+ * modal de realocação de colaboradores.
  */
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export async function GET() {
 
     const db = createServerClient();
     const { data, error } = await db
-      .from("colaboradores")
+      .from("configuracoes")
       .select("centro_custo")
       .not("centro_custo", "is", null)
       .neq("centro_custo", "");

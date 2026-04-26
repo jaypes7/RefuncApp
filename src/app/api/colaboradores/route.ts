@@ -244,6 +244,9 @@ export async function GET(request: NextRequest) {
       query = query.in("centro_custo", centroCusto);
     }
 
+    // ── Ordenação alfabética por nome ─────────────────────────────────────
+    query = query.order("nome", { ascending: true });
+
     // ── Paginação server-side (.range é inclusivo em ambos os extremos) ───
     const from = (page - 1) * limit;
     const to   = from + limit - 1;

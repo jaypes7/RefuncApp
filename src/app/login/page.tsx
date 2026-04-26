@@ -35,7 +35,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* ── Coluna Esquerda (Branding) ── */}
       <div className="flex w-full flex-col items-center justify-center bg-primary px-6 py-10 text-center text-primary-foreground md:w-1/2 md:min-h-screen">
-        <div className="max-w-md space-y-4">
+        <div className="max-w-md space-y-20">
           <h1 className="text-3xl leading-tight sm:text-4xl md:text-5xl">
             <span className="block font-light tracking-wide">
               GESTÃO DE
@@ -47,7 +47,7 @@ export default function LoginPage() {
               DE CONTRATOS
             </span>
           </h1>
-          <p className="text-sm font-medium text-primary-foreground/80 md:text-base">
+          <p className="text-lg font-medium text-primary-foreground/80 md:text-xl lg:text-2xl">
             Fazer. Inovar. Solucionar.
           </p>
         </div>

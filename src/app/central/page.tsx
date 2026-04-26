@@ -174,7 +174,7 @@ export default function CentralPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const { centroCusto } = useFilter();
+  const { centroCusto, setCentroCusto } = useFilter();
 
   // Redireciona guests para o Dashboard Geral (única página permitida)
   useEffect(() => {
@@ -186,7 +186,6 @@ export default function CentralPage() {
   const debouncedSearch = useDebounce(search, 500);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [cargoFilter, setCargoFilter] = useState<string[]>([]);
-  const [centroCustoLocal, setCentroCustoLocal] = useState<string[]>([]);
   const [page, setPage] = useState(1);
 
   // Estado do modal de upload
@@ -222,7 +221,7 @@ export default function CentralPage() {
       // Buscar todos os colaboradores usando a API de exportação (sem paginação)
       const exportParams: { cargo?: string; centro_custo?: string } = {};
       if (cargoFilter.length) exportParams.cargo = cargoFilter.join(",");
-      if (centroCustoLocal.length) exportParams.centro_custo = centroCustoLocal.join(",");
+      if (centroCusto) exportParams.centro_custo = centroCusto;
       const response = await exportApi.exportar(exportParams);
       const allColaboradores = response.data.data || [];
 
@@ -366,14 +365,14 @@ export default function CentralPage() {
       debouncedSearch,
       statusFilter,
       cargoFilter,
-      centroCustoLocal,
+      centroCusto,
     ],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter.length) params.status = statusFilter.join(",");
       if (cargoFilter.length) params.cargo = cargoFilter.join(",");
-      if (centroCustoLocal.length) params.centro_custo = centroCustoLocal.join(",");
+      if (centroCusto) params.centro_custo = centroCusto;
 
       const response = await colaboradoresApi.listar(params);
       return response.data;
@@ -557,9 +556,9 @@ export default function CentralPage() {
                 <MultiSelectFilter
                   placeholder="Centro de custo"
                   width="sm:w-44 w-full"
-                  selected={centroCustoLocal}
+                  selected={centroCusto ? [centroCusto] : []}
                   onChange={(values) => {
-                    setCentroCustoLocal(values);
+                    setCentroCusto(values[0] || null);
                     setPage(1);
                   }}
                   options={centrosDisponiveis.map((cc) => ({
@@ -621,7 +620,7 @@ export default function CentralPage() {
                           className="transition-colors hover:bg-muted/50"
                         >
                           {/* Nome + Avatar */}
-                          <TableCell className="py-3 pl-5">
+                          <TableCell className="py-3 pl-5 overflow-hidden">
                             <div className="flex items-center gap-3 min-w-0">
                               <AvatarInitials
                                 name={colab.NOME || "?"}
@@ -636,21 +635,21 @@ export default function CentralPage() {
                           </TableCell>
 
                           {/* RE */}
-                          <TableCell className="py-3">
+                          <TableCell className="py-3 overflow-hidden">
                             <span className="font-mono text-sm text-muted-foreground">
                               {colab.RE || "-"}
                             </span>
                           </TableCell>
 
                           {/* CPF */}
-                          <TableCell className="py-3">
+                          <TableCell className="py-3 overflow-hidden">
                             <span className="font-mono text-sm text-muted-foreground">
                               {formatCPF(colab.CPF || "")}
                             </span>
                           </TableCell>
 
                           {/* Centro de Custo */}
-                          <TableCell className="py-3">
+                          <TableCell className="py-3 overflow-hidden">
                             {colab.CENTRO_CUSTO ? (
                               <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-500/10 dark:bg-slate-500/10 dark:text-slate-400">
                                 {colab.CENTRO_CUSTO}
@@ -661,14 +660,14 @@ export default function CentralPage() {
                           </TableCell>
 
                           {/* Função */}
-                          <TableCell className="py-3">
+                          <TableCell className="py-3 overflow-hidden">
                             <span className="text-sm text-foreground/80 block truncate" title={colab.FUNCAO_CLT || ""}>
                               {colab.FUNCAO_CLT || "-"}
                             </span>
                           </TableCell>
 
                           {/* Status */}
-                          <TableCell className="py-3">
+                          <TableCell className="py-3 overflow-hidden">
                             <StatusBadge
                               status={(colab.STATUS as Status) || "Pendente"}
                             />

@@ -18,6 +18,8 @@ import {
   Cell,
   Area,
   AreaChart,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -1627,29 +1629,20 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <ChartContainer config={chartConfigFuncoes} className="h-[350px] 2xl:h-[480px] w-full">
-                    <PieChart>
-                      <Pie
-                        data={dadosFuncoes}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius="80%"
-                        paddingAngle={2}
-                        dataKey="value"
-                        nameKey="name"
-                        label={({ name, percent }) =>
-                          percent > 0.04 ? `${name} (${(percent * 100).toFixed(0)}%)` : ""
-                        }
-                        labelLine={false}
-                      >
+                    <BarChart data={dadosFuncoes}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                         {dadosFuncoes.map((entry, i) => (
                           <Cell key={`fn-${i}`} fill={entry.fill} />
                         ))}
-                      </Pie>
+                      </Bar>
                       <ChartTooltip
-                        content={<ChartTooltipContent nameKey="name" />}
+                        content={<ChartTooltipContent />}
                       />
                       <ChartLegend content={<ChartLegendContent />} />
-                    </PieChart>
+                    </BarChart>
                   </ChartContainer>
                 </CardContent>
               </Card>
