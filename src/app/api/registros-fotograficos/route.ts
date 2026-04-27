@@ -136,11 +136,12 @@ export async function POST(request: NextRequest) {
     const urls: string[] = [];
 
     // Upload das fotos para o Storage
-    for (const file of files) {
-      if (!(file instanceof File) && !(file instanceof Blob)) {
-        console.warn("[POST /registros-fotograficos] Item ignorado — não é File/Blob:", typeof file);
+    for (const entry of files) {
+      if (typeof entry !== "object" || entry === null) {
+        console.warn("[POST /registros-fotograficos] Item ignorado — não é File/Blob:", typeof entry);
         continue;
       }
+      const file = entry as { size: number; name?: string; type?: string; arrayBuffer(): Promise<ArrayBuffer> };
       if (file.size === 0) {
         console.warn("[POST /registros-fotograficos] Arquivo vazio ignorado");
         continue;
