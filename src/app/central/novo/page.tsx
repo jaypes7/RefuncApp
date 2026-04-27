@@ -240,8 +240,9 @@ export default function OnboardingPage() {
       const response = await fetch("/api/projetos");
       if (!response.ok) return [];
       const json = (await response.json()) as { data?: Array<{ centro_custo: string }> };
-      return (json.data ?? []).map((p) => p.centro_custo).filter(Boolean);
+      return json.data ?? [];
     },
+    select: (data) => data.map((p) => p.centro_custo).filter(Boolean),
   });
 
   const projetos = projetosData ?? [];

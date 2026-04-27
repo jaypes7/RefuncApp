@@ -21,6 +21,7 @@ import {
   CalendarClock,
   Building2,
   Database,
+  Camera,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
@@ -74,10 +75,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     setCentroCusto(cc);
     setProjectOpen(false);
     // Invalida todas as queries para forçar recarregamento com novo centro de custo
-    queryClient.invalidateQueries({ queryKey: ["config"] });
-    queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    queryClient.invalidateQueries({ queryKey: ["centros-custo"] });
+    queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["seguranca-dashboard"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["ocorrencias"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["comentarios-cliente"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["pendencias-manuais"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["suprimentos-ordens"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["centros-custo"], type: "all" });
+    queryClient.invalidateQueries({ queryKey: ["registros-fotograficos"], type: "all" });
   };
 
   const navItem = (isActive: boolean) =>
@@ -207,10 +214,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       onClick={() => {
                         setCentroCusto(null);
                         setProjectOpen(false);
-                        queryClient.invalidateQueries({ queryKey: ["config"] });
-                        queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
-                        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-                        queryClient.invalidateQueries({ queryKey: ["centros-custo"] });
+                        queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
+                        queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
+                        queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+                        queryClient.invalidateQueries({ queryKey: ["centros-custo"], type: "all" });
+                        queryClient.invalidateQueries({ queryKey: ["registros-fotograficos"], type: "all" });
                       }}
                       className={cn(
                         "w-full rounded px-2 py-1.5 text-left text-sm",
@@ -370,6 +378,20 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </div>
             )}
           </div>
+
+          
+          {/* Registros fotográficos — visível para user/admin */}
+          <CanAccess role="user">
+            <Link href="/registros-fotograficos">
+              <span
+                className={navItem(pathname === "/registros-fotograficos")}
+                title={collapsed ? "Registros fotográficos" : undefined}
+              >
+                <Camera className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Registros fotográficos</span>}
+              </span>
+            </Link>
+          </CanAccess>
 
         </nav>
 

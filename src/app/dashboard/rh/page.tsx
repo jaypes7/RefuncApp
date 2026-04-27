@@ -188,6 +188,13 @@ export default function DashboardRhPage() {
 
   const { centroCusto } = useFilter();
 
+  // Reseta filtros ao trocar de projeto
+  useEffect(() => {
+    setFilterNome("");
+    setFilterStatus("all");
+    setFilterCargo("all");
+  }, [centroCusto]);
+
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard-rh", centroCusto],
     queryFn: async () => {
@@ -356,7 +363,7 @@ export default function DashboardRhPage() {
               <SheetUpload
                 endpoint="/api/rh/colaboradores"
                 label="Fazer upload de planilha RH"
-                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-rh"] })}
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" })}
                 variant="outline"
                 size="sm"
               />

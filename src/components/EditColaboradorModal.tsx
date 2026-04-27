@@ -294,7 +294,7 @@ export function EditColaboradorModal({
     },
     onSuccess: () => {
       toast.success("Colaborador atualizado com sucesso!");
-      queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
       onOpenChange(false);
     },
     onError: (error: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -205,7 +205,7 @@ export default function DashboardPage() {
       return response.data;
     },
     retry: 2,
-    staleTime: 60_000,
+    staleTime: 0,
   });
 
   // Busca configurações do projeto para o card de cabeçalho
@@ -223,6 +223,12 @@ export default function DashboardPage() {
   // Estado para seleção de dia previsto por etapa (cards de etapas)
   const [selectedDayPerEtapa, setSelectedDayPerEtapa] = useState<Record<number, string>>({});
   const [selectedCurvaDayIdx, setSelectedCurvaDayIdx] = useState<number>(-1);
+
+  // Reseta seleções da Curva S ao trocar de projeto
+  useEffect(() => {
+    setSelectedCurvaDayIdx(-1);
+    setSelectedDayPerEtapa({});
+  }, [centroCusto]);
 
   // ── Ocorrências manuais ──────────────────────────────────────────────────────
   const queryClient = useQueryClient();
@@ -244,7 +250,7 @@ export default function DashboardPage() {
   const criarOcorrencia = useMutation({
     mutationFn: () => ocorrenciasApi.criar({ texto: novoTexto.trim(), data: novaData, centro_custo: centroCusto || undefined }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ocorrencias"] });
+      queryClient.invalidateQueries({ queryKey: ["ocorrencias", centroCusto], type: "all" });
       setNovoTexto("");
       setNovaData("");
     },
@@ -252,14 +258,14 @@ export default function DashboardPage() {
 
   const deletarOcorrencia = useMutation({
     mutationFn: (id: number) => ocorrenciasApi.deletar(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ocorrencias"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["ocorrencias", centroCusto], type: "all" }),
   });
 
   const atualizarOcorrencia = useMutation({
     mutationFn: ({ id, texto, data }: { id: number; texto: string; data: string }) =>
       ocorrenciasApi.atualizar(id, { texto: texto.trim(), data, centro_custo: centroCusto || undefined }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ocorrencias"] });
+      queryClient.invalidateQueries({ queryKey: ["ocorrencias", centroCusto], type: "all" });
       setEditandoId(null);
       setEditandoTexto("");
       setEditandoData("");
@@ -295,7 +301,7 @@ export default function DashboardPage() {
   const criarComentario = useMutation({
     mutationFn: () => comentariosClienteApi.criar({ texto: novoComentario.trim(), data: novaDataComentario, centro_custo: centroCusto || undefined }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["comentarios-cliente"] });
+      queryClient.invalidateQueries({ queryKey: ["comentarios-cliente", centroCusto], type: "all" });
       setNovoComentario("");
       setNovaDataComentario("");
     },
@@ -303,14 +309,14 @@ export default function DashboardPage() {
 
   const deletarComentario = useMutation({
     mutationFn: (id: number) => comentariosClienteApi.deletar(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["comentarios-cliente"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["comentarios-cliente", centroCusto], type: "all" }),
   });
 
   const atualizarComentario = useMutation({
     mutationFn: ({ id, texto, data }: { id: number; texto: string; data: string }) =>
       comentariosClienteApi.atualizar(id, { texto: texto.trim(), data, centro_custo: centroCusto || undefined }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["comentarios-cliente"] });
+      queryClient.invalidateQueries({ queryKey: ["comentarios-cliente", centroCusto], type: "all" });
       setEditandoComentarioId(null);
       setEditandoComentarioTexto("");
       setEditandoComentarioData("");
@@ -344,14 +350,14 @@ export default function DashboardPage() {
     mutationFn: () =>
       pendenciasApi.criar({ texto: novoTextoPendencia.trim(), centro_custo: centroCusto || undefined }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pendencias-manuais"] });
+      queryClient.invalidateQueries({ queryKey: ["pendencias-manuais", centroCusto], type: "all" });
       setNovoTextoPendencia("");
     },
   });
 
   const deletarPendencia = useMutation({
     mutationFn: (id: number) => pendenciasApi.deletar(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pendencias-manuais"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pendencias-manuais", centroCusto], type: "all" }),
   });
 
   // Gera dados da Curva S dinamicamente

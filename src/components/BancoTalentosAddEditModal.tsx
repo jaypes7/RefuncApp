@@ -96,7 +96,7 @@ export function BancoTalentosAddEditModal({ open, onOpenChange, talento }: Props
     },
     onSuccess: () => {
       toast.success(isEdit ? "Talento atualizado com sucesso!" : "Talento adicionado com sucesso!");
-      queryClient.invalidateQueries({ queryKey: ["banco-talentos"] });
+      queryClient.invalidateQueries({ queryKey: ["banco-talentos"], type: "all" });
       onOpenChange(false);
     },
     onError: (error: unknown) => {

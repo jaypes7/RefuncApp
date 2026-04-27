@@ -287,7 +287,7 @@ export default function DashboardLogisticaPage() {
                 endpoint="/api/logistica/controle"
                 label="Fazer upload de controle logístico"
                 headerDetectionKeys={["CPF", "RE", "NOME"]}
-                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-logistica"] })}
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-logistica"], type: "all" })}
                 variant="outline"
                 size="sm"
               />

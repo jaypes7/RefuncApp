@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { calculateWorkingDays, calculateWorkingDaysDetailed, addWorkingDays, formatDateISO } from "@/lib/date-utils";
-import { validateScheduleTotal } from "@/constants/cronograma-data";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -134,10 +133,6 @@ export default function CronogramaPage() {
     dias_totais: ETAPAS_DEFAULT.reduce((s, e) => s + e.dias, 0),
   });
 
-  // Estado para modal de confirmação quando cronograma desbalanceado
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [pendingSaveData, setPendingSaveData] = useState<ConfigCronograma | null>(null);
-
   // Estado para modal de confirmação ao remover etapa
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [pendingRemoveId, setPendingRemoveId] = useState<number | null>(null);
@@ -213,9 +208,8 @@ export default function CronogramaPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["etapas-progresso"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"] });
+      queryClient.invalidateQueries({ queryKey: ["etapas-progresso"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -280,29 +274,6 @@ export default function CronogramaPage() {
     ).length;
   }, [diasTrabalhadosData, projetoData?.DATA_INICIO_PROJETO, projetoData?.DATA_FIM_PROJETO]);
 
-  // Soma das etapas considerando sobreposição de datas (união de dias úteis únicos)
-  const somaEtapasDisplay = useMemo(() => {
-    const todasComDatas = cronograma.etapas.every(e => e.data_inicio && e.data_fim);
-    if (todasComDatas && diasTrabalhadosData?.length) {
-      const diasTrabalhadosSet = new Set(diasTrabalhadosData);
-      const diasCobertos = new Set<string>();
-      for (const etapa of cronograma.etapas) {
-        if (etapa.data_inicio && etapa.data_fim) {
-          getDaysInRange(etapa.data_inicio, etapa.data_fim)
-            .filter(d => diasTrabalhadosSet.has(d))
-            .forEach(d => diasCobertos.add(d));
-        }
-      }
-      return diasCobertos.size;
-    }
-    return cronograma.etapas.reduce((s, e) => s + e.dias, 0);
-  }, [cronograma.etapas, diasTrabalhadosData]);
-
-  const scheduleValidation = useMemo(() => {
-    if (diasUteisTotal === null) return null;
-    return validateScheduleTotal([somaEtapasDisplay], diasUteisTotal);
-  }, [somaEtapasDisplay, diasUteisTotal]);
-
   const cronogramaMutation = useMutation({
     mutationFn: async (data: ConfigCronograma) => {
       const payload = {
@@ -359,36 +330,16 @@ export default function CronogramaPage() {
         });
       }
 
-      queryClient.invalidateQueries({ queryKey: ["config"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"] });
+      queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
       toast.success("Cronograma atualizado com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Handler de salvamento com verificação de balanceamento
+  // Handler de salvamento
   const handleSaveClick = (data: ConfigCronograma) => {
-    // Se estiver desbalanceado, mostra modal de confirmação
-    if (scheduleValidation && !scheduleValidation.valid) {
-      setPendingSaveData(data);
-      setShowConfirmModal(true);
-      return;
-    }
-    // Se estiver balanceado, salva direto
     cronogramaMutation.mutate(data);
-  };
-
-  const confirmSave = () => {
-    if (pendingSaveData) {
-      cronogramaMutation.mutate(pendingSaveData);
-      setShowConfirmModal(false);
-      setPendingSaveData(null);
-    }
-  };
-
-  const cancelSave = () => {
-    setShowConfirmModal(false);
-    setPendingSaveData(null);
   };
 
   // Helpers para avanço diário
@@ -615,13 +566,18 @@ export default function CronogramaPage() {
 
   const etapasPesos = useMemo(() => {
     const totalDias = cronograma.dias_totais || 1;
-    let acum = 0;
-    return cronograma.etapas.map((e) => {
-      const inicio = Math.round((acum / totalDias) * 100);
-      acum += e.dias;
-      const fim = Math.round((acum / totalDias) * 100);
-      return { id: e.id, inicio, fim };
-    });
+    return cronograma.etapas.reduce<
+      { acum: number; result: { id: number; inicio: number; fim: number }[] }
+    >(
+      (acc, e) => {
+        const inicio = Math.round((acc.acum / totalDias) * 100);
+        const novoAcum = acc.acum + e.dias;
+        const fim = Math.round((novoAcum / totalDias) * 100);
+        acc.result.push({ id: e.id, inicio, fim });
+        return { acum: novoAcum, result: acc.result };
+      },
+      { acum: 0, result: [] },
+    ).result;
   }, [cronograma.etapas, cronograma.dias_totais]);
 
   type EtapaDateError = {
@@ -701,12 +657,6 @@ export default function CronogramaPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between p-4 bg-primary/10 rounded-lg border border-primary/20">
-                  <span className="font-medium">Soma das Etapas:</span>
-                  <span className="text-2xl font-bold text-primary tabular-nums">
-                    {somaEtapasDisplay} dias úteis
-                  </span>
-                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-0.5 p-3 bg-primary/5 rounded-lg border border-primary/15">
                     <span className="text-xs text-muted-foreground">Total Dias Corridos</span>
@@ -722,29 +672,15 @@ export default function CronogramaPage() {
                   </div>
                 </div>
 
-                {diasUteisTotal !== null &&
-                  scheduleValidation !== null &&
-                  (scheduleValidation.valid ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-[#337246]/30 bg-[#337246]/10 px-4 py-2.5 text-sm text-[#337246]">
-                      <Check className="h-4 w-4 shrink-0" />
-                      <span>
-                        Cronograma balanceado — {scheduleValidation.stepsDaysTotal} dias úteis
-                        alocados (meta: {diasUteisTotal} dias úteis do projeto).
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
-                      <X className="h-4 w-4 shrink-0" />
-                      <span>
-                        {scheduleValidation.difference > 0
-                          ? `As etapas excedem o projeto em ${scheduleValidation.difference} dia(s) útil(is).`
-                          : `Faltam ${Math.abs(scheduleValidation.difference)} dia(s) útil(is).`}{" "}
-                        <span className="opacity-70">
-                          (Etapas: {scheduleValidation.stepsDaysTotal} · Projeto: {diasUteisTotal})
-                        </span>
-                      </span>
-                    </div>
-                  ))}
+                {hasDateErrors && (
+                  <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>
+                      {etapasDateErrors.filter((e) => e.dataInicio || e.dataFim || e.dataStartGreaterThanEnd).length}{" "}
+                      etapa(s) com datas fora do intervalo do projeto.
+                    </span>
+                  </div>
+                )}
 
                 {diasUteisTotal === null && (
                   <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-sm text-yellow-400">
@@ -1158,31 +1094,6 @@ export default function CronogramaPage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Modal de confirmação para cronograma desbalanceado */}
-          <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                  Cronograma Desbalanceado
-                </DialogTitle>
-                <DialogDescription>
-                  {scheduleValidation?.difference && scheduleValidation.difference > 0
-                    ? `As etapas somam ${scheduleValidation.stepsDaysTotal} dias, mas o projeto tem ${diasUteisTotal} dias úteis. Sobram ${scheduleValidation.difference} dias.`
-                    : `As etapas somam ${scheduleValidation?.stepsDaysTotal} dias, mas o projeto tem ${diasUteisTotal} dias úteis. Faltam ${Math.abs(scheduleValidation?.difference || 0)} dias.`}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={cancelSave}>
-                  Cancelar
-                </Button>
-                <Button onClick={confirmSave}>
-                  Salvar Mesmo Assim
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
 
           {/* Modal de confirmação ao remover etapa */}
           <Dialog open={showRemoveModal} onOpenChange={setShowRemoveModal}>

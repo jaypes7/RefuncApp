@@ -35,7 +35,7 @@ export default function RootLayout({
             <FilterProvider>
               <ConditionalLayout>{children}</ConditionalLayout>
               <AuthGlobalUI />
-              <Toaster position="top-right" richColors />
+              <Toaster position="top-right" richColors closeButton />
               <Analytics />
               <SpeedInsights />
             </FilterProvider>

@@ -51,7 +51,7 @@ export function RealocarColaboradorModal({
       toast.success("Colaborador realocado com sucesso!");
       setNovoCentroCusto("");
       onOpenChange(false);
-      queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
     },
     onError: (error: {
       response?: { data?: { error?: string } };
