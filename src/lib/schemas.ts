@@ -776,6 +776,18 @@ export const SegurancaSchema = z.object({
 });
 
 // ============================================================================
+// SCHEMA DE REGISTROS FOTOGRÁFICOS
+// ============================================================================
+
+export const RegistroFotograficoSchema = z.object({
+  nome: z.string().min(1, "Nome é obrigatório").max(255),
+  descricao: z.string().max(1000).optional().nullable(),
+  centro_custo: z.string().min(1, "Centro de custo é obrigatório"),
+});
+
+export type RegistroFotograficoInput = z.infer<typeof RegistroFotograficoSchema>;
+
+// ============================================================================
 // TIPOS TYPESCRIPT
 // ============================================================================
 

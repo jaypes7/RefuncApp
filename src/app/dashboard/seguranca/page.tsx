@@ -246,7 +246,7 @@ export default function DashboardSegurancaPage() {
                 endpoint="/api/seguranca/fits"
                 label="Fazer upload de FITs"
                 headerDetectionKeys={["RE", "CPF", "NOME"]}
-                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["seguranca-dashboard"] })}
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ["seguranca-dashboard"], type: "all" })}
                 variant="outline"
                 size="sm"
               />

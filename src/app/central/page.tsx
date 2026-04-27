@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFilter } from "@/contexts/FilterContext";
@@ -49,7 +49,7 @@ import { RealocarColaboradorModal } from "@/components/RealocarColaboradorModal"
 import { CanAccess } from "@/components/CanAccess";
 import * as XLSX from "xlsx";
 import { useDebounce } from "@/hooks/use-debounce";
-import { CARGOS, CARGOS_AGRUPADOS } from "@/constants/cargos";
+// import { CARGOS, CARGOS_AGRUPADOS } from "@/constants/cargos";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -174,7 +174,11 @@ export default function CentralPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const { centroCusto, setCentroCusto } = useFilter();
+  const { centroCusto: globalCentroCusto } = useFilter();
+  const [localCentroCusto, setLocalCentroCusto] = useState<string | null>(null);
+
+  // CC efetivo: se a sidebar tem um CC específico, usa-o; senão, usa o filtro local da central
+  const effectiveCentroCusto = globalCentroCusto || localCentroCusto;
 
   // Redireciona guests para o Dashboard Geral (única página permitida)
   useEffect(() => {
@@ -221,7 +225,7 @@ export default function CentralPage() {
       // Buscar todos os colaboradores usando a API de exportação (sem paginação)
       const exportParams: { cargo?: string; centro_custo?: string } = {};
       if (cargoFilter.length) exportParams.cargo = cargoFilter.join(",");
-      if (centroCusto) exportParams.centro_custo = centroCusto;
+      if (effectiveCentroCusto) exportParams.centro_custo = effectiveCentroCusto;
       const response = await exportApi.exportar(exportParams);
       const allColaboradores = response.data.data || [];
 
@@ -365,14 +369,14 @@ export default function CentralPage() {
       debouncedSearch,
       statusFilter,
       cargoFilter,
-      centroCusto,
+      effectiveCentroCusto,
     ],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter.length) params.status = statusFilter.join(",");
       if (cargoFilter.length) params.cargo = cargoFilter.join(",");
-      if (centroCusto) params.centro_custo = centroCusto;
+      if (effectiveCentroCusto) params.centro_custo = effectiveCentroCusto;
 
       const response = await colaboradoresApi.listar(params);
       return response.data;
@@ -386,7 +390,7 @@ export default function CentralPage() {
     },
     onSuccess: () => {
       toast.success("Colaborador removido com sucesso!");
-      queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
     },
     onError: (error: unknown) => {
       const e = error as { response?: { data?: { error?: string } } };
@@ -394,8 +398,23 @@ export default function CentralPage() {
     },
   });
 
-  const colaboradores = data?.data || [];
+  const colaboradores = useMemo(() => data?.data || [], [data?.data]);
   const pagination = data?.pagination;
+
+  // ── Filtros dinâmicos baseados nos dados carregados ──
+  const statusDisponiveis = useMemo(() => {
+    const unicos = new Set(
+      colaboradores.map((c) => c.STATUS).filter((s): s is string => !!s),
+    );
+    return Array.from(unicos).sort();
+  }, [colaboradores]);
+
+  const cargosDisponiveis = useMemo(() => {
+    const unicos = new Set(
+      colaboradores.map((c) => c.FUNCAO_CLT).filter((c): c is string => !!c),
+    );
+    return Array.from(unicos).sort((a, b) => a.localeCompare(b));
+  }, [colaboradores]);
 
   const handleDelete = async (id: string, nome: string) => {
     if (confirm(`Tem certeza que deseja remover ${nome}?`)) {
@@ -413,7 +432,7 @@ export default function CentralPage() {
           </p>
           <Button
             onClick={() =>
-              queryClient.invalidateQueries({ queryKey: ["colaboradores"] })
+              queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" })
             }
           >
             Tentar novamente
@@ -433,9 +452,16 @@ export default function CentralPage() {
               <Users className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                Central de Colaboradores
-              </h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                  Central de Colaboradores
+                </h1>
+                {pagination && (
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-medium text-primary">
+                    {pagination.total} colaboradores cadastrados
+                  </span>
+                )}
+              </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Gerencie informações, cargos e status da sua equipe em tempo
                 real.
@@ -502,19 +528,14 @@ export default function CentralPage() {
 
                 {/* Status filter */}
                 <MultiSelectFilter
-                  placeholder="Status"
+                  placeholder="Status do Contrato"
                   width="sm:w-44 w-full"
                   selected={statusFilter}
                   onChange={(values) => {
                     setStatusFilter(values);
                     setPage(1);
                   }}
-                  options={[
-                    { value: "Ativo", label: "Ativo" },
-                    { value: "Pendente", label: "Pendente" },
-                    { value: "Inativo", label: "Inativo" },
-                    { value: "Desligado", label: "Desligado" },
-                  ]}
+                  options={statusDisponiveis.map((s) => ({ value: s, label: s }))}
                 />
 
                 {/* Cargo filter */}
@@ -526,46 +547,25 @@ export default function CentralPage() {
                     setCargoFilter(values);
                     setPage(1);
                   }}
-                  groups={[
-                    ...Object.entries(CARGOS_AGRUPADOS)
-                      .sort(([a], [b]) => a.localeCompare(b))
-                      .map(([grupo, cargos]) => ({
-                        label: grupo,
-                        options: [...cargos]
-                          .sort((a, b) => a.localeCompare(b))
-                          .map((c) => ({ value: c, label: c })),
-                      })),
-                    ...(() => {
-                      const todosAgrupados = new Set<string>(
-                        Object.values(CARGOS_AGRUPADOS).flat(),
-                      );
-                      const orfaos = CARGOS.filter(
-                        (c) => !todosAgrupados.has(c),
-                      ).sort((a, b) => a.localeCompare(b));
-                      return orfaos.length
-                        ? [{
-                            label: "Outros",
-                            options: orfaos.map((c) => ({ value: c, label: c })),
-                          }]
-                        : [];
-                    })(),
-                  ]}
+                  options={cargosDisponiveis.map((c) => ({ value: c, label: c }))}
                 />
 
-                {/* Centro de Custo filter */}
-                <MultiSelectFilter
-                  placeholder="Centro de custo"
-                  width="sm:w-44 w-full"
-                  selected={centroCusto ? [centroCusto] : []}
-                  onChange={(values) => {
-                    setCentroCusto(values[0] || null);
-                    setPage(1);
-                  }}
-                  options={centrosDisponiveis.map((cc) => ({
-                    value: cc,
-                    label: cc,
-                  }))}
-                />
+                {/* Centro de Custo filter — só aparece quando a sidebar está em "Todos" */}
+                {!globalCentroCusto && (
+                  <MultiSelectFilter
+                    placeholder="Centro de custo"
+                    width="sm:w-44 w-full"
+                    selected={localCentroCusto ? [localCentroCusto] : []}
+                    onChange={(values) => {
+                      setLocalCentroCusto(values[0] || null);
+                      setPage(1);
+                    }}
+                    options={centrosDisponiveis.map((cc) => ({
+                      value: cc,
+                      label: cc,
+                    }))}
+                  />
+                )}
               </div>
             </div>
 
@@ -591,7 +591,7 @@ export default function CentralPage() {
                       Função
                     </TableHead>
                     <TableHead className="w-[10%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Status
+                      Status do Contrato
                     </TableHead>
                     <TableHead className="pr-5 w-[8%] text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Ações
@@ -808,7 +808,7 @@ export default function CentralPage() {
         onOpenChange={setImportModalOpen}
         onSuccess={() => {
           // Recarrega a lista de colaboradores após upload
-          queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
+          queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
         }}
       />
 

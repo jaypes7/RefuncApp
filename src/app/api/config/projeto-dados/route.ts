@@ -95,6 +95,39 @@ export async function POST(request: NextRequest) {
       throw new Error(`Erro ao salvar no Supabase: ${error.message}`);
     }
 
+    // ── Cascade update: migra centro_custo nas tabelas filhas quando o CC mudou ──
+    if (centroCustoOriginal && centroCustoOriginal !== targetCentroCusto) {
+      const tabelas = [
+        "colaboradores",
+        "comentarios_cliente",
+        "configuracoes_clinicas",
+        "configuracoes_hoteis",
+        "etapas",
+        "etapas_progresso_diario",
+        "logistica_controle",
+        "ocorrencias",
+        "pendencias_manuais",
+        "registros_fotograficos",
+        "rh_colaboradores",
+        "seguranca_fits",
+        "suprimentos_ordens",
+      ];
+
+      for (const tabela of tabelas) {
+        const { error: migrateError } = await supabase
+          .from(tabela)
+          .update({ centro_custo: targetCentroCusto })
+          .eq("centro_custo", centroCustoOriginal);
+
+        if (migrateError) {
+          console.error(
+            `[POST /config/projeto-dados] Erro ao migrar ${tabela}:`,
+            migrateError.message,
+          );
+        }
+      }
+    }
+
     await logConfig(
       user.re,
       "Projeto",

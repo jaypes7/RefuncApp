@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -45,8 +46,6 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
   const [centroCusto, _setCentroCusto] = useState<string | null>(null);
   const [hasHydrated, setHasHydrated] = useState(false);
 
-  const [centrosDisponiveis, setCentrosDisponiveis] = useState<string[]>([]);
-
   // Lista de centros de custo permitidos para o usuário atual (memoizada)
   const userCentros = useMemo(() => {
     const cc = user?.centro_custo;
@@ -64,23 +63,20 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     setHasHydrated(true);
   }, []);
 
-  // Busca os projetos cadastrados (fonte única de verdade para a sidebar)
-  // Este useEffect NÃO altera centroCusto — apenas busca a lista.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!hasHydrated) return;
-
-    fetch("/api/projetos")
-      .then((res) => (res.ok ? res.json() : { data: [] }))
-      .then((json: { data?: Array<{ centro_custo: string }> }) => {
-        const list = (json.data || [])
-          .map((p) => p.centro_custo)
-          .filter(Boolean)
-          .sort();
-        setCentrosDisponiveis(list);
-      })
-      .catch(() => setCentrosDisponiveis([]));
-  }, [hasHydrated]);
+  // Busca os projetos cadastrados via React Query (reativo a invalidações)
+  const { data: centrosDisponiveis = [] } = useQuery<string[]>({
+    queryKey: ["projetos", "centros"],
+    queryFn: async () => {
+      const res = await fetch("/api/projetos");
+      if (!res.ok) return [];
+      const json = (await res.json()) as { data?: Array<{ centro_custo: string }> };
+      return (json.data || [])
+        .map((p) => p.centro_custo)
+        .filter(Boolean)
+        .sort();
+    },
+    enabled: hasHydrated,
+  });
 
   // Inicializa / atualiza o centro de custo quando mudam:
   // - lista de projetos disponíveis

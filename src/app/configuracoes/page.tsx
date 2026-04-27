@@ -228,7 +228,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "feriados"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "feriados"], type: "all" });
       toast.success("Feriados salvos com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -263,7 +263,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "dias-trabalhados"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "dias-trabalhados"], type: "all" });
       toast.success("Dias trabalhados salvos com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -417,8 +417,8 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["projetos"] });
-      queryClient.invalidateQueries({ queryKey: ["centros-custo"] });
+      queryClient.invalidateQueries({ queryKey: ["projetos"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["centros-custo"], type: "all" });
       setNovoProjetoOpen(false);
       setNovoProjetoCC("");
       setNovoProjetoNome("");
@@ -440,8 +440,8 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["projetos"] });
-      queryClient.invalidateQueries({ queryKey: ["centros-custo"] });
+      queryClient.invalidateQueries({ queryKey: ["projetos"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["centros-custo"], type: "all" });
       toast.success("Projeto excluído com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -504,8 +504,16 @@ export default function ConfiguracoesPage() {
       if (!res.ok) throw new Error("Falha ao salvar projeto");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config"] });
+    onSuccess: (_, variables) => {
+      const novoCC = variables.centro_custo;
+      const ccOriginal = projetoData?.CENTRO_CUSTO || "";
+
+      if (novoCC !== ccOriginal) {
+        setCentroCusto(novoCC);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["projetos"], type: "all" });
       toast.success("Configurações do projeto salvas!");
     },
     onError: () => toast.error("Erro ao salvar configurações do projeto"),
@@ -522,7 +530,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "clinicas"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "clinicas"], type: "all" });
       setClinicaInput("");
       toast.success("Clínica salva com sucesso!");
     },
@@ -538,7 +546,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "clinicas"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "clinicas"], type: "all" });
       toast.success("Clínica excluída com sucesso!");
     },
     onError: () => toast.error("Erro ao excluir clínica"),
@@ -558,7 +566,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "hoteis"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "hoteis"], type: "all" });
       setHotelNome("");
       setHotelVagas("");
       toast.success("Hotel salvo com sucesso!");
@@ -578,7 +586,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "hoteis"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "hoteis"], type: "all" });
       toast.success("Hotel excluído com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -598,7 +606,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "hoteis"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "hoteis"], type: "all" });
       setEditingHotelId(null);
       toast.success("Hotel atualizado com sucesso!");
     },
@@ -616,7 +624,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "acessos"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "acessos"], type: "all" });
       setAcessoRE("");
       setAcessoNome("");
       setAcessoRole("");
@@ -638,7 +646,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "acessos"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "acessos"], type: "all" });
       toast.success("Acesso removido com sucesso!");
     },
     onError: () => toast.error("Erro ao remover acesso"),
@@ -658,7 +666,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "acessos"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "acessos"], type: "all" });
       setEditingAcessoId(null);
       setEditingAcessoRE("");
       setEditingAcessoNome("");
@@ -682,7 +690,7 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "acessos"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "acessos"], type: "all" });
       toast.success("Senha redefinida para o padrão. O usuário deverá alterá-la no próximo login.");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -720,9 +728,9 @@ export default function ConfiguracoesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config"] });
-      queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
       toast.success("Projeto resetado com sucesso! Recarregando página...");
       setTimeout(() => window.location.reload(), 2000);
     },

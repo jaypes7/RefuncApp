@@ -166,7 +166,7 @@ export default function BancoTalentosPage() {
     mutationFn: (id: string) => bancoTalentosApi.remover(id),
     onSuccess: () => {
       toast.success("Colaborador removido do banco de talentos.");
-      queryClient.invalidateQueries({ queryKey: ["banco-talentos"] });
+      queryClient.invalidateQueries({ queryKey: ["banco-talentos"], type: "all" });
     },
     onError: (error: unknown) => {
       const e = error as { response?: { data?: { error?: string } } };
@@ -207,7 +207,7 @@ export default function BancoTalentosPage() {
           <div className="flex flex-col items-center justify-center gap-4 py-20">
             <Database className="h-16 w-16 text-destructive/50" />
             <p className="text-lg text-muted-foreground">Erro ao carregar banco de talentos</p>
-            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["banco-talentos"] })}>
+            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ["banco-talentos"], type: "all" })}>
               Tentar novamente
             </Button>
           </div>
@@ -461,7 +461,7 @@ export default function BancoTalentosPage() {
         <BancoTalentosImportModal
           open={importOpen}
           onOpenChange={setImportOpen}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["banco-talentos"] })}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["banco-talentos"], type: "all" })}
         />
         <BancoTalentosAddEditModal
           open={addEditOpen}

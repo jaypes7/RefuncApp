@@ -311,7 +311,7 @@ export default function DashboardSuprimentosPage() {
                 label="Fazer upload de ordens"
                 headerDetectionKeys={["Descrição", "Ordem de Compra", "Valor OC", "Item"]}
                 onSuccess={() => {
-                  queryClient.invalidateQueries({ queryKey: ["dashboard-suprimentos"] });
+                  queryClient.invalidateQueries({ queryKey: ["dashboard-suprimentos"], type: "all" });
                   refetchOrdens();
                 }}
                 variant="outline"

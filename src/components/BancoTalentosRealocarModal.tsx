@@ -39,7 +39,7 @@ export function BancoTalentosRealocarModal({ open, onOpenChange, talento, centro
     },
     onSuccess: () => {
       toast.success(`${talento?.nome} realocado para ${centroCusto} com sucesso!`);
-      queryClient.invalidateQueries({ queryKey: ["colaboradores"] });
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
       setCentroCusto("");
       onOpenChange(false);
     },
