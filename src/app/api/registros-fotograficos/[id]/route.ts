@@ -127,8 +127,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // ── Adicionar novas fotos ──────────────────────────────────────────────
     const novasUrls: string[] = [];
 
-    for (const file of files) {
-      if (!(file instanceof File) && !(file instanceof Blob)) continue;
+    for (const entry of files) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const file = entry as { size: number; name?: string; type?: string; arrayBuffer(): Promise<ArrayBuffer> };
       if (file.size === 0) continue;
 
       const safeName = sanitizeFileName(file.name || "foto");
