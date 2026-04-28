@@ -1,17 +1,31 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import {
-  ComposableMap,
-  Geographies,
-  Geography,
-  ZoomableGroup,
-} from "react-simple-maps";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { geoMercator, geoPath } from "d3-geo";
 
 const geoUrl = "/geo/br-states.json";
 
 interface BrazilMapProps {
   data: Array<{ uf: string; count: number }>;
+}
+
+interface GeoFeature {
+  type: "Feature";
+  properties: {
+    id?: number;
+    name?: string;
+    sigla?: string;
+    [key: string]: unknown;
+  };
+  geometry: {
+    type: string;
+    coordinates: unknown;
+  };
+}
+
+interface GeoCollection {
+  type: "FeatureCollection";
+  features: GeoFeature[];
 }
 
 // Escala de cor por threshold
@@ -33,8 +47,10 @@ interface TooltipState {
 }
 
 export function BrazilMap({ data }: BrazilMapProps) {
-  const map = new Map(data.map((d) => [d.uf.toUpperCase(), d.count]));
+  const map = useMemo(() => new Map(data.map((d) => [d.uf.toUpperCase(), d.count])), [data]);
   const max = Math.max(...data.map((d) => d.count), 1);
+
+  const [geographies, setGeographies] = useState<GeoFeature[]>([]);
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,
     x: 0,
@@ -42,8 +58,36 @@ export function BrazilMap({ data }: BrazilMapProps) {
     text: "",
   });
 
+  useEffect(() => {
+    fetch(geoUrl)
+      .then((res) => res.json())
+      .then((geoData: GeoCollection) => {
+        setGeographies(geoData.features || []);
+      })
+      .catch((err) => {
+        console.error("Erro ao carregar GeoJSON:", err);
+      });
+  }, []);
+
+  // Projeção e path generator — fitSize centraliza e maximiza o mapa no SVG
+  const pathStrings = useMemo(() => {
+    if (!geographies.length) return [];
+
+    const projection = geoMercator().fitSize([800, 600], {
+      type: "FeatureCollection",
+      features: geographies,
+    } as unknown as GeoJSON.FeatureCollection);
+
+    const pathGenerator = geoPath(projection);
+
+    return geographies.map((geo) => ({
+      feature: geo,
+      d: pathGenerator(geo as unknown as GeoJSON.Feature) ?? "",
+    }));
+  }, [geographies]);
+
   const handleMouseEnter = useCallback(
-    (geo: { properties?: Record<string, unknown> }, count: number) => {
+    (geo: GeoFeature, count: number) => {
       const nome = String(
         geo.properties?.name ?? geo.properties?.nome ?? geo.properties?.NOME ?? geo.properties?.sigla ?? ""
       );
@@ -70,40 +114,35 @@ export function BrazilMap({ data }: BrazilMapProps) {
 
   return (
     <div className="w-full relative flex flex-col h-full" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <ComposableMap
-        projection="geoMercator"
-        projectionConfig={{ scale: 650, center: [-55, -15] }}
-        className="w-full flex-1 min-h-0"
-      >
-        <ZoomableGroup>
-          <Geographies geography={geoUrl}>
-            {({ geographies }: { geographies: Array<{ rsmKey: string; properties?: Record<string, unknown> }> }) =>
-              geographies.map((geo) => {
-                const sigla = String(
-                  geo.properties?.sigla ?? geo.properties?.SIGLA ?? ""
-                ).toUpperCase();
-                const count = map.get(sigla) ?? 0;
-                return (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo as unknown as Parameters<typeof Geography>[0]["geography"]}
-                    fill={getColor(count, max)}
-                    stroke="#fff"
-                    strokeWidth={0.6}
-                    style={{
-                      default: { outline: "none" },
-                      hover: { outline: "none", fill: "#416e7d", cursor: "pointer" },
-                      pressed: { outline: "none" },
-                    }}
-                    onMouseEnter={() => handleMouseEnter(geo, count)}
-                    onMouseLeave={handleMouseLeave}
-                  />
-                );
-              })
-            }
-          </Geographies>
-        </ZoomableGroup>
-      </ComposableMap>
+      <svg viewBox="0 0 800 600" className="w-full flex-1 min-h-0">
+        <g>
+          {pathStrings.map(({ feature, d }, index) => {
+            const sigla = String(
+              feature.properties?.sigla ?? feature.properties?.SIGLA ?? ""
+            ).toUpperCase();
+            const count = map.get(sigla) ?? 0;
+            return (
+              <path
+                key={String(feature.properties?.id ?? sigla ?? `geo-${index}`)}
+                d={d}
+                fill={getColor(count, max)}
+                stroke="#fff"
+                strokeWidth={0.6}
+                className="outline-none hover:cursor-pointer"
+                style={{ transition: "fill 150ms ease" }}
+                onMouseEnter={() => handleMouseEnter(feature, count)}
+                onMouseLeave={handleMouseLeave}
+                onMouseOver={(e) => {
+                  (e.currentTarget as SVGPathElement).style.fill = "#416e7d";
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as SVGPathElement).style.fill = getColor(count, max);
+                }}
+              />
+            );
+          })}
+        </g>
+      </svg>
 
       {/* Tooltip custom */}
       {tooltip.visible && (
