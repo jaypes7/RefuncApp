@@ -1,7 +1,7 @@
 // src/app/cronograma/page.tsx
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -126,7 +126,7 @@ export default function CronogramaPage() {
   const { centroCusto } = useFilter();
   const queryClient = useQueryClient();
 
-  const [projetoData, setProjetoData] = useState<ApiConfigResponse | null>(null);
+  // projetoQueryData é usado diretamente — não mantemos estado espelho
 
   const [cronograma, setCronograma] = useState<ConfigCronograma>({
     etapas: ETAPAS_DEFAULT,
@@ -214,13 +214,11 @@ export default function CronogramaPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  useEffect(() => {
-    if (!projetoQueryData) return;
-    setProjetoData(projetoQueryData);
-
-    // Sempre que o banco retornar etapas (mesmo vazio), usá-lo como fonte de verdade.
-    // ETAPAS_DEFAULT só serve como seed inicial quando não há projeto carregado.
-    if (projetoQueryData.ETAPAS_PROJETO) {
+  // Sincroniza cronograma quando projetoQueryData muda (sem effect)
+  const [prevProjetoQueryData, setPrevProjetoQueryData] = useState(projetoQueryData);
+  if (prevProjetoQueryData !== projetoQueryData) {
+    setPrevProjetoQueryData(projetoQueryData);
+    if (projetoQueryData?.ETAPAS_PROJETO) {
       const etapasSalvas = projetoQueryData.ETAPAS_PROJETO;
       const novasEtapas = etapasSalvas.length
         ? etapasSalvas.map((salva) => {
@@ -242,37 +240,42 @@ export default function CronogramaPage() {
       const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
       setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
     }
-  }, [projetoQueryData, diasTrabalhadosData]);
+  }
 
-  // Popula progressoDiario quando os dados chegam do servidor
-  useEffect(() => {
-    if (!progressoDiarioData) return;
-    const mapa: Record<number, Record<string, number>> = {};
-    for (const entry of progressoDiarioData) {
-      if (!mapa[entry.etapa_id]) mapa[entry.etapa_id] = {};
-      mapa[entry.etapa_id][entry.data] = entry.percentual;
+  // Sincroniza progressoDiario quando os dados chegam do servidor (sem effect)
+  const [prevProgressoDiarioData, setPrevProgressoDiarioData] = useState(progressoDiarioData);
+  if (prevProgressoDiarioData !== progressoDiarioData) {
+    setPrevProgressoDiarioData(progressoDiarioData);
+    if (progressoDiarioData) {
+      const mapa: Record<number, Record<string, number>> = {};
+      for (const entry of progressoDiarioData) {
+        if (!mapa[entry.etapa_id]) mapa[entry.etapa_id] = {};
+        mapa[entry.etapa_id][entry.data] = entry.percentual;
+      }
+      setProgressoDiario(mapa);
     }
-    setProgressoDiario(mapa);
-  }, [progressoDiarioData]);
+  }
 
   // Total de dias corridos = fim - início (inclusive)
+  // Extrai datas para deps estáveis (evita optional chaining no array de deps)
+  const dataInicioProjeto = projetoQueryData?.DATA_INICIO_PROJETO ?? null;
+  const dataFimProjeto = projetoQueryData?.DATA_FIM_PROJETO ?? null;
+
   const diasCorridosTotal = useMemo(() => {
-    if (!projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO) return null;
-    const start = new Date(projetoData.DATA_INICIO_PROJETO + "T00:00:00");
-    const end = new Date(projetoData.DATA_FIM_PROJETO + "T00:00:00");
+    if (!dataInicioProjeto || !dataFimProjeto) return null;
+    const start = new Date(dataInicioProjeto + "T00:00:00");
+    const end = new Date(dataFimProjeto + "T00:00:00");
     const diffTime = Math.abs(end.getTime() - start.getTime());
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-  }, [projetoData?.DATA_INICIO_PROJETO, projetoData?.DATA_FIM_PROJETO]);
+  }, [dataInicioProjeto, dataFimProjeto]);
 
   // Total de dias úteis = dias marcados no calendário DENTRO do intervalo do projeto
   const diasUteisTotal = useMemo<number | null>(() => {
-    if (!diasTrabalhadosData || !projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO) return null;
-    const inicio = projetoData.DATA_INICIO_PROJETO;
-    const fim = projetoData.DATA_FIM_PROJETO;
+    if (!diasTrabalhadosData || !dataInicioProjeto || !dataFimProjeto) return null;
     return diasTrabalhadosData.filter(
-      (d) => d >= inicio && d <= fim
+      (d) => d >= dataInicioProjeto && d <= dataFimProjeto
     ).length;
-  }, [diasTrabalhadosData, projetoData?.DATA_INICIO_PROJETO, projetoData?.DATA_FIM_PROJETO]);
+  }, [diasTrabalhadosData, dataInicioProjeto, dataFimProjeto]);
 
   const cronogramaMutation = useMutation({
     mutationFn: async (data: ConfigCronograma) => {
@@ -551,8 +554,8 @@ export default function CronogramaPage() {
   };
 
   const etapasDatas = useMemo(() => {
-    if (!projetoData?.DATA_INICIO_PROJETO) return null;
-    let cursor = projetoData.DATA_INICIO_PROJETO;
+    if (!dataInicioProjeto) return null;
+    let cursor = dataInicioProjeto;
     return cronograma.etapas.map((e) => {
       // Se a etapa tem datas manuais, usa-as; senão, calcula sequencialmente a partir do cursor
       const startDate = e.data_inicio || cursor;
@@ -562,7 +565,7 @@ export default function CronogramaPage() {
       cursor = formatDateISO(addWorkingDays(endDate, 1));
       return { id: e.id, startDate, endDate, calendarDays, workingDays };
     });
-  }, [projetoData?.DATA_INICIO_PROJETO, cronograma.etapas]);
+  }, [dataInicioProjeto, cronograma.etapas]);
 
   const etapasPesos = useMemo(() => {
     const totalDias = cronograma.dias_totais || 1;
@@ -588,16 +591,16 @@ export default function CronogramaPage() {
   };
 
   const etapasDateErrors = useMemo<EtapaDateError[]>(() => {
-    if (!projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO) return [];
+    if (!dataInicioProjeto || !dataFimProjeto) return [];
     return cronograma.etapas.map((etapa) => ({
       id: etapa.id,
       dataInicio: !!(
         etapa.data_inicio &&
-        (etapa.data_inicio < projetoData.DATA_INICIO_PROJETO! || etapa.data_inicio > projetoData.DATA_FIM_PROJETO!)
+        (etapa.data_inicio < dataInicioProjeto || etapa.data_inicio > dataFimProjeto)
       ),
       dataFim: !!(
         etapa.data_fim &&
-        (etapa.data_fim < projetoData.DATA_INICIO_PROJETO! || etapa.data_fim > projetoData.DATA_FIM_PROJETO!)
+        (etapa.data_fim < dataInicioProjeto || etapa.data_fim > dataFimProjeto)
       ),
       dataStartGreaterThanEnd: !!(
         etapa.data_inicio &&
@@ -605,7 +608,7 @@ export default function CronogramaPage() {
         etapa.data_inicio > etapa.data_fim
       ),
     }));
-  }, [cronograma.etapas, projetoData?.DATA_INICIO_PROJETO, projetoData?.DATA_FIM_PROJETO]);
+  }, [cronograma.etapas, dataInicioProjeto, dataFimProjeto]);
 
   const hasDateErrors = useMemo(
     () => etapasDateErrors.some((e) => e.dataInicio || e.dataFim || e.dataStartGreaterThanEnd),
@@ -871,7 +874,7 @@ export default function CronogramaPage() {
                               onChange={(e) =>
                                 updateEtapaDataInicio(etapa.id, e.target.value)
                               }
-                              disabled={etapa.id < 0 || !projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO}
+                              disabled={etapa.id < 0 || !dataInicioProjeto || !dataFimProjeto}
                               title={etapa.id < 0 ? "Salve o cronograma para definir datas" : undefined}
                               className={`glass-input ${
                                 dateError?.dataInicio || dateError?.dataStartGreaterThanEnd
@@ -890,7 +893,7 @@ export default function CronogramaPage() {
                               onChange={(e) =>
                                 updateEtapaDataFim(etapa.id, e.target.value)
                               }
-                              disabled={etapa.id < 0 || !projetoData?.DATA_INICIO_PROJETO || !projetoData?.DATA_FIM_PROJETO}
+                              disabled={etapa.id < 0 || !dataInicioProjeto || !dataFimProjeto}
                               title={etapa.id < 0 ? "Salve o cronograma para definir datas" : undefined}
                               className={`glass-input ${
                                 dateError?.dataFim || dateError?.dataStartGreaterThanEnd

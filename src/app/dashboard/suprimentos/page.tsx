@@ -249,7 +249,7 @@ export default function DashboardSuprimentosPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <ProtectedRoute>
         <SuprimentosSkeleton />

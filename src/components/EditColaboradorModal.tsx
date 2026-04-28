@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -314,7 +314,22 @@ export function EditColaboradorModal({
     updateMutation.mutate(sanitizePayload(data));
   };
 
-  const funcaoValue = watch("FUNCAO_CLT");
+  const funcaoValue = useWatch({ control, name: "FUNCAO_CLT" });
+  const ufValue = useWatch({ control, name: "UF" });
+  const statusValue = useWatch({ control, name: "STATUS" });
+  const contratoValue = useWatch({ control, name: "CONTRATO" });
+  const preAdmissaoValue = useWatch({ control, name: "PRE_ADMISSAO" });
+  const docsValue = useWatch({ control, name: "DOCS" });
+  const portalValue = useWatch({ control, name: "PORTAL" });
+  const crachaValue = useWatch({ control, name: "CRACHA" });
+  const pontoValue = useWatch({ control, name: "PONTO" });
+  const mobValue = useWatch({ control, name: "MOB" });
+  const vrValue = useWatch({ control, name: "VR" });
+  const exameValue = useWatch({ control, name: "EXAME" });
+  const asoValue = useWatch({ control, name: "ASO" });
+  const clinicaValue = useWatch({ control, name: "CLINICA" });
+  const treinamentoValue = useWatch({ control, name: "TREINAMENTO" });
+  const realizarTreinamentoValue = useWatch({ control, name: "REALIZAR_TREINAMENTO" });
 
   if (!colaborador) return null;
 
@@ -405,7 +420,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">UF</label>
                   <Select
-                    value={watch("UF") || undefined}
+                    value={ufValue || undefined}
                     onValueChange={(v) => setValue("UF", v)}
                   >
                     <SelectTrigger>
@@ -446,7 +461,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Status</label>
                   <Select
-                    value={watch("STATUS") || undefined}
+                    value={statusValue || undefined}
                     onValueChange={(v) =>
                       setValue("STATUS", v as EditFormData["STATUS"])
                     }
@@ -468,7 +483,7 @@ export function EditColaboradorModal({
                     Tipo de Contrato
                   </label>
                   <Select
-                    value={watch("CONTRATO") || undefined}
+                    value={contratoValue || undefined}
                     onValueChange={(v) =>
                       setValue("CONTRATO", v as EditFormData["CONTRATO"])
                     }
@@ -500,7 +515,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Pré-Admissão</label>
                   <Select
-                    value={watch("PRE_ADMISSAO") || undefined}
+                    value={preAdmissaoValue || undefined}
                     onValueChange={(v) =>
                       setValue(
                         "PRE_ADMISSAO",
@@ -522,7 +537,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Documentação</label>
                   <Select
-                    value={watch("DOCS") || undefined}
+                    value={docsValue || undefined}
                     onValueChange={(v) =>
                       setValue("DOCS", v as EditFormData["DOCS"])
                     }
@@ -546,7 +561,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Portal</label>
                   <Select
-                    value={watch("PORTAL") || undefined}
+                    value={portalValue || undefined}
                     onValueChange={(v) =>
                       setValue("PORTAL", v as EditFormData["PORTAL"])
                     }
@@ -565,7 +580,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Crachá</label>
                   <Select
-                    value={watch("CRACHA") || undefined}
+                    value={crachaValue || undefined}
                     onValueChange={(v) =>
                       setValue("CRACHA", v as EditFormData["CRACHA"])
                     }
@@ -583,7 +598,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Ponto</label>
                   <Select
-                    value={watch("PONTO") || undefined}
+                    value={pontoValue || undefined}
                     onValueChange={(v) =>
                       setValue("PONTO", v as EditFormData["PONTO"])
                     }
@@ -601,7 +616,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">MOB</label>
                   <Select
-                    value={watch("MOB") || undefined}
+                    value={mobValue || undefined}
                     onValueChange={(v) =>
                       setValue("MOB", v as EditFormData["MOB"])
                     }
@@ -630,7 +645,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">VR</label>
                   <Select
-                    value={watch("VR") || undefined}
+                    value={vrValue || undefined}
                     onValueChange={(v) =>
                       setValue("VR", v as EditFormData["VR"])
                     }
@@ -653,7 +668,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Exame</label>
                   <Select
-                    value={watch("EXAME") || undefined}
+                    value={exameValue || undefined}
                     onValueChange={(v) =>
                       setValue("EXAME", v as EditFormData["EXAME"])
                     }
@@ -672,7 +687,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">ASO</label>
                   <Select
-                    value={watch("ASO") || undefined}
+                    value={asoValue || undefined}
                     onValueChange={(v) =>
                       setValue("ASO", v as EditFormData["ASO"])
                     }
@@ -691,7 +706,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Clínica</label>
                   <Select
-                    value={watch("CLINICA") || undefined}
+                    value={clinicaValue || undefined}
                     onValueChange={(v) => setValue("CLINICA", v)}
                   >
                     <SelectTrigger>
@@ -717,7 +732,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Treinamento</label>
                   <Select
-                    value={watch("TREINAMENTO") || undefined}
+                    value={treinamentoValue || undefined}
                     onValueChange={(v) =>
                       setValue("TREINAMENTO", v as EditFormData["TREINAMENTO"])
                     }
@@ -738,7 +753,7 @@ export function EditColaboradorModal({
                     Realizar Treinamento
                   </label>
                   <Select
-                    value={watch("REALIZAR_TREINAMENTO") || undefined}
+                    value={realizarTreinamentoValue || undefined}
                     onValueChange={(v) =>
                       setValue(
                         "REALIZAR_TREINAMENTO",

@@ -224,7 +224,7 @@ export default function DashboardLogisticaPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <ProtectedRoute>
         <LogisticaSkeleton />

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -89,13 +90,14 @@ function RegistroCard({
       {/* Galeria */}
       <div className="p-4 pt-2">
         {registro.urls.length === 1 ? (
-          <div className="aspect-video rounded-lg overflow-hidden border bg-muted">
-            <img
+          <div className="aspect-video rounded-lg overflow-hidden border bg-muted relative">
+            <Image
               src={registro.urls[0]}
               alt={registro.nome}
-              className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover cursor-pointer hover:scale-105 transition-transform"
               onClick={() => setExpanded(true)}
-              loading="lazy"
             />
           </div>
         ) : (
@@ -107,12 +109,13 @@ function RegistroCard({
                   idx === 3 && registro.urls.length > 4 ? "group" : ""
                 }`}
               >
-                <img
+                <Image
                   src={url}
                   alt={`${registro.nome} - ${idx + 1}`}
-                  className="w-full aspect-square object-cover cursor-pointer hover:scale-105 transition-transform"
+                  fill
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  className="object-cover cursor-pointer hover:scale-105 transition-transform"
                   onClick={() => setExpanded(true)}
-                  loading="lazy"
                 />
                 {idx === 3 && registro.urls.length > 4 && (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-semibold text-lg">
@@ -139,13 +142,14 @@ function RegistroCard({
               {registro.urls.map((url, idx) => (
                 <div
                   key={idx}
-                  className="rounded-lg overflow-hidden border bg-muted"
+                  className="rounded-lg overflow-hidden border bg-muted relative"
                 >
-                  <img
+                  <Image
                     src={url}
                     alt={`${registro.nome} - ${idx + 1}`}
-                    className="w-full object-contain max-h-[60vh]"
-                    loading="lazy"
+                    width={800}
+                    height={600}
+                    className="w-full object-contain max-h-[60vh] h-auto"
                   />
                 </div>
               ))}

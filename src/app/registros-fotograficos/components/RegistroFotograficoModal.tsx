@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import Image from "next/image";
 import { Loader2, X, ImagePlus, Pencil } from "lucide-react";
 import {
   registrosFotograficosApi,
@@ -240,10 +241,12 @@ export function RegistroFotograficoModal({
                         marcada ? "opacity-40 grayscale" : ""
                       }`}
                     >
-                      <img
+                      <Image
                         src={url}
                         alt={`Foto ${idx + 1}`}
-                        className="w-full h-full object-cover"
+                        fill
+                        sizes="(max-width: 640px) 33vw, 25vw"
+                        className="object-cover"
                       />
                       <button
                         type="button"
@@ -307,10 +310,12 @@ export function RegistroFotograficoModal({
                     key={idx}
                     className="relative group aspect-square rounded-md overflow-hidden border"
                   >
-                    <img
+                    <Image
                       src={src}
                       alt={`Nova foto ${idx + 1}`}
-                      className="w-full h-full object-cover"
+                      fill
+                      sizes="(max-width: 640px) 33vw, 25vw"
+                      className="object-cover"
                     />
                     <button
                       type="button"

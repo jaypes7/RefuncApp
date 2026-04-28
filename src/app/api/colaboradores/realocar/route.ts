@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Verifica se já existe o mesmo CPF no centro de custo destino
-    let duplicataQuery = supabase
+    const duplicataQuery = supabase
       .from("colaboradores")
       .select("cpf, nome, centro_custo")
       .eq("cpf", origem.cpf)
