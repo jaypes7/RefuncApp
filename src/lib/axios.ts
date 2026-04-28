@@ -340,8 +340,17 @@ export type DashboardPrincipalData = {
     dataInicio?: string;
     dataFim?: string;
     evolucaoDiaria?: Array<{ data: string; previsto: number; realizado: number }>;
+    temRegistros?: boolean;
   }>;
-  agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes" | "distribuicaoMob">;
+  agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes" | "distribuicaoMob"> & {
+    terminoDetalhado: Array<{
+      nome: string;
+      funcao_clt: string | null;
+      termino: string;
+      status: string | null;
+      uf: string | null;
+    }>;
+  };
 };
 
 /** Shape retornada por GET /api/dashboard/rh */
@@ -350,7 +359,9 @@ export type DashboardRhData = {
   agregacoes: {
     distribuicaoIdades: DashboardData["agregacoes"]["distribuicaoIdades"];
     distribuicaoFuncoes: DashboardData["agregacoes"]["distribuicaoFuncoes"];
-    terminoDetalhado: Array<{ nome: string; funcao_clt: string | null; termino: string }>;
+    terminoDetalhado: Array<{ nome: string; funcao_clt: string | null; termino: string; status: string | null; uf: string | null }>;
+    distribuicaoASO: Array<{ status: string; total: number }>;
+    distribuicaoSexo: Array<{ sexo: string; total: number }>;
   };
 };
 

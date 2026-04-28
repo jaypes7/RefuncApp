@@ -42,9 +42,11 @@ import {
   MessageSquare,
   ChevronDown,
   ChevronUp,
+  CalendarClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
 import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, pendenciasApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente, type PendenciaManual } from "@/lib/axios";
 import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
@@ -90,6 +92,11 @@ const chartConfigFuncoes = {
   total: { label: "Colaboradores", color: MANSERV_CHART.primary },
 };
 
+// ============================================================================
+// HELPERS — cores de término
+// ============================================================================
+
+/** Retorna classificação de urgência baseada em comparação de datas (YYYY-MM-DD). */
 function fmtDate(v: string | undefined | null): string | null {
   if (!v) return null;
   const d = new Date(v + "T00:00:00Z");
@@ -103,32 +110,26 @@ function isEtapaAtrasada(etapa: DashboardPrincipalData["etapas"][number]): boole
   const hojeRealStr = new Date().toISOString().split("T")[0];
 
   if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
-    let lastProgressIdx = -1;
-    let prevRealizado = 0;
+    // Etapa nunca teve progresso preenchido = não iniciada, não está atrasada
+    if (!etapa.temRegistros) return false;
+
+    let lastBeforeToday = -1;
     for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
-      if (etapa.evolucaoDiaria[i].realizado > prevRealizado) {
-        lastProgressIdx = i;
-        prevRealizado = etapa.evolucaoDiaria[i].realizado;
-      }
+      if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
+      else break;
     }
 
-    if (lastProgressIdx !== -1) {
-      const previsto = etapa.evolucaoDiaria[lastProgressIdx].previsto;
-      const realizado = etapa.evolucaoDiaria[lastProgressIdx].realizado;
+    if (lastBeforeToday !== -1) {
+      const previsto = etapa.evolucaoDiaria[lastBeforeToday].previsto;
+      const realizado = etapa.evolucaoDiaria[lastBeforeToday].realizado;
       return realizado < previsto;
-    } else {
-      let lastBeforeToday = -1;
-      for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
-        if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
-        else break;
-      }
-      const previsto = lastBeforeToday !== -1 ? etapa.evolucaoDiaria[lastBeforeToday].previsto : 0;
-      return previsto > 0;
     }
+    return false;
   }
 
-  // Sem evolucaoDiaria: atrasada se dataFim já passou e não está concluída
-  if ((etapa.dataFim && hojeRealStr >= etapa.dataFim) && !etapa.concluida && etapa.percentualConcluido < 100) {
+  // Sem evolucaoDiaria: atrasada se dataFim já passou, não está concluída
+  // e já teve algum progresso (não iniciada = 0% não conta)
+  if ((etapa.dataFim && hojeRealStr >= etapa.dataFim) && !etapa.concluida && etapa.percentualConcluido > 0 && etapa.percentualConcluido < 100) {
     return true;
   }
 
@@ -224,17 +225,44 @@ export default function DashboardPage() {
   const [selectedDayPerEtapa, setSelectedDayPerEtapa] = useState<Record<number, string>>({});
   const [selectedCurvaDayIdx, setSelectedCurvaDayIdx] = useState<number>(-1);
 
-  // Reseta seleções da Curva S ao trocar de projeto
-  useEffect(() => {
+  // ── Lista de Funções — agrupada por funcao_clt ──────────────────────────
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (funcao: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(funcao)) next.delete(funcao);
+      else next.add(funcao);
+      return next;
+    });
+  };
+
+  // Reseta estados ao trocar de projeto (sem effect para evitar cascata)
+  const [prevCcDash, setPrevCcDash] = useState(centroCusto);
+  if (prevCcDash !== centroCusto) {
+    setPrevCcDash(centroCusto);
     setSelectedCurvaDayIdx(-1);
     setSelectedDayPerEtapa({});
-  }, [centroCusto]);
+    setExpandedGroups(new Set());
+  }
+
+  const terminoAgrupado = useMemo(() => {
+    const lista = dashboardData?.agregacoes?.terminoDetalhado ?? [];
+    if (lista.length === 0) return [];
+    const grupos = new Map<string, typeof lista>();
+    for (const row of lista) {
+      const fn = (row.funcao_clt as string) ?? "Não informado";
+      if (!grupos.has(fn)) grupos.set(fn, []);
+      grupos.get(fn)!.push(row);
+    }
+    return Array.from(grupos.entries()).map(([funcao, membros]) => ({ funcao, membros }));
+  }, [dashboardData]);
 
   // ── Ocorrências manuais ──────────────────────────────────────────────────────
   const queryClient = useQueryClient();
   const [novoTexto, setNovoTexto] = useState("");
   const [novaData, setNovaData] = useState("");
-  
+
   // Estados para edição
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [editandoTexto, setEditandoTexto] = useState("");
@@ -344,7 +372,7 @@ export default function DashboardPage() {
     queryFn: async () => (await pendenciasApi.listar(centroCusto)).data.data,
     staleTime: 30_000,
   });
-  const pendenciasManuais: PendenciaManual[] = pendenciasData ?? [];
+  const pendenciasManuais = useMemo<PendenciaManual[]>(() => pendenciasData ?? [], [pendenciasData]);
 
   const criarPendencia = useMutation({
     mutationFn: () =>
@@ -483,7 +511,7 @@ export default function DashboardPage() {
     };
   }, [dashboardData, pendenciasManuais]);
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <ProtectedRoute>
         <DashboardSkeleton />
@@ -553,1107 +581,1166 @@ export default function DashboardPage() {
 
           <div ref={contentRef}>
 
-          {/* ── Card de Cabeçalho do Projeto ── */}
-          {configData && centroCusto && (
-            <Card className="glass-card mb-6">
-              <CardHeader className="pb-3 flex flex-row items-center gap-2">
-                <Briefcase className="h-4 w-4 text-primary" />
-                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  Informações do Projeto
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
-                  {configData.NOME_CLIENTE && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Cliente</p>
-                      <p className="text-sm font-semibold truncate" title={configData.NOME_CLIENTE}>{configData.NOME_CLIENTE}</p>
-                    </div>
-                  )}
-                  {configData.CENTRO_CUSTO && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Centro de Custo</p>
-                      <p className="text-sm font-semibold truncate" title={configData.CENTRO_CUSTO}>{configData.CENTRO_CUSTO}</p>
-                    </div>
-                  )}
-                  {configData.GERENTE_OPERACOES && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Ger. Operações</p>
-                      <p className="text-sm font-semibold truncate" title={configData.GERENTE_OPERACOES}>{configData.GERENTE_OPERACOES}</p>
-                    </div>
-                  )}
-                  {configData.GERENTE_CONTRATO && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Ger. Contrato</p>
-                      <p className="text-sm font-semibold truncate" title={configData.GERENTE_CONTRATO}>{configData.GERENTE_CONTRATO}</p>
-                    </div>
-                  )}
-                  {configData.DATA_INICIO_PROJETO && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Início da mobilização</p>
-                      <p className="text-sm font-semibold">
-                        {new Date(configData.DATA_INICIO_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-                      </p>
-                    </div>
-                  )}
-                  {configData.DATA_FIM_PROJETO && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Término da mobilização</p>
-                      <p className="text-sm font-semibold">
-                        {new Date(configData.DATA_FIM_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-                      </p>
-                    </div>
-                  )}
-                  {configData.META_ADMISSOES > 0 && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Meta Admissões</p>
-                      <p className="text-sm font-semibold">{configData.META_ADMISSOES}</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ── Cards de KPIs ── */}
-          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {/* Previsto vs Real */}
-            {(() => {
-              const previsto = dashboardData?.metricas?.colaboradoresPrevistos ?? 0;
-              const pct = previsto > 0
-                ? Math.min(100, Math.round((kpis.total / previsto) * 100))
-                : 0;
-              return (
-                <Card className="glass-card">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                      Previsto vs Real
-                    </CardTitle>
-                    <Users className="h-4 w-4 text-primary" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="big-number text-[40px]">
-                      {kpis.total}
-                      {previsto > 0 && (
-                        <span className="ml-1 text-sm font-normal text-muted-foreground">
-                          / {previsto}
-                        </span>
-                      )}
-                    </div>
-                    {previsto > 0 ? (
-                      <>
-                        <div className="mt-2 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-primary transition-all"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {pct}% do previsto atingido
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Cadastrados no sistema
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })()}
-
-            {/* Saúde (ASO) */}
-            <Card className="glass-card">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Saúde Ocupacional
-                </CardTitle>
-                <ShieldCheck className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="big-number text-[40px]">
-                  {kpis.asoPercentual}%
-                </div>
-                <p className="text-xs text-muted-foreground">ASO Apto</p>
-              </CardContent>
-            </Card>
-
-            {/* Pendências setoriais */}
-            <Card
-              className={cn(
-                "glass-card transition-colors",
-                kpis.pendenciasSetoriais > 0 && "border-[#FFB800]/60 bg-[#FFB800]/10"
-              )}
-            >
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Pontos de atenção
-                </CardTitle>
-                <AlertCircle
-                  className={cn(
-                    "h-4 w-4",
-                    kpis.pendenciasSetoriais > 0 ? "text-[#FFB800]" : "text-destructive"
-                  )}
-                />
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="big-number text-[40px]"
-                  style={{
-                    color: kpis.pendenciasSetoriais > 0 ? "#FFB800" : undefined,
-                  }}
-                >
-                  {kpis.pendenciasSetoriais}
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    Etapas atrasadas + Pendências
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                    onClick={() => setPainelPendenciasAberto((v) => !v)}
-                  >
-                    {painelPendenciasAberto ? (
-                      <>
-                        Ocultar <ChevronUp className="h-3 w-3 ml-1" />
-                      </>
-                    ) : (
-                      <>
-                        Ver detalhes <ChevronDown className="h-3 w-3 ml-1" />
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {painelPendenciasAberto && (
-                  <div className="mt-3 space-y-3 border-t border-border/30 pt-3">
-                    {/* Etapas atrasadas */}
-                    {kpis.etapasAtrasadas > 0 && (
+            {/* ── Card de Cabeçalho do Projeto ── */}
+            {configData && centroCusto && (
+              <Card className="glass-card mb-6">
+                <CardHeader className="pb-3 flex flex-row items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                    Informações do Projeto
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+                    {configData.NOME_CLIENTE && (
                       <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1.5">
-                          Etapas atrasadas
-                        </p>
-                        <div className="space-y-1">
-                          {dashboardData?.etapas
-                            ?.filter((e) => isEtapaAtrasada(e))
-                            .map((etapa) => (
-                              <div
-                                key={etapa.id}
-                                className="flex items-center gap-2 text-xs text-[#FFB800]"
-                              >
-                                <AlertTriangle className="h-3 w-3 shrink-0" />
-                                <span className="truncate">{etapa.nome}</span>
-                              </div>
-                            ))}
-                        </div>
+                        <p className="text-xs text-muted-foreground">Cliente</p>
+                        <p className="text-sm font-semibold truncate" title={configData.NOME_CLIENTE}>{configData.NOME_CLIENTE}</p>
                       </div>
                     )}
-
-                    {/* Pendências manuais */}
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1.5">
-                        Pendências manuais
-                      </p>
-                      {pendenciasManuais.length === 0 ? (
-                        <p className="text-xs text-muted-foreground/60 italic">
-                          Nenhuma pendência manual registrada
+                    {configData.CENTRO_CUSTO && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Centro de Custo</p>
+                        <p className="text-sm font-semibold truncate" title={configData.CENTRO_CUSTO}>{configData.CENTRO_CUSTO}</p>
+                      </div>
+                    )}
+                    {configData.GERENTE_OPERACOES && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Ger. Operações</p>
+                        <p className="text-sm font-semibold truncate" title={configData.GERENTE_OPERACOES}>{configData.GERENTE_OPERACOES}</p>
+                      </div>
+                    )}
+                    {configData.GERENTE_CONTRATO && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Ger. Contrato</p>
+                        <p className="text-sm font-semibold truncate" title={configData.GERENTE_CONTRATO}>{configData.GERENTE_CONTRATO}</p>
+                      </div>
+                    )}
+                    {configData.DATA_INICIO_PROJETO && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Início da mobilização</p>
+                        <p className="text-sm font-semibold">
+                          {new Date(configData.DATA_INICIO_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                         </p>
-                      ) : (
-                        <div className="space-y-1">
-                          {pendenciasManuais.map((p) => (
+                      </div>
+                    )}
+                    {configData.DATA_FIM_PROJETO && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Término da mobilização</p>
+                        <p className="text-sm font-semibold">
+                          {new Date(configData.DATA_FIM_PROJETO + "T00:00:00Z").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                        </p>
+                      </div>
+                    )}
+                    {configData.META_ADMISSOES > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Meta Admissões</p>
+                        <p className="text-sm font-semibold">{configData.META_ADMISSOES}</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Cards de KPIs ── */}
+            <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Previsto vs Real */}
+              {(() => {
+                const previsto = dashboardData?.metricas?.colaboradoresPrevistos ?? 0;
+                const pct = previsto > 0
+                  ? Math.min(100, Math.round((kpis.total / previsto) * 100))
+                  : 0;
+                return (
+                  <Card className="glass-card">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
+                        Previsto vs Real
+                      </CardTitle>
+                      <Users className="h-4 w-4 text-primary" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="big-number text-[40px]">
+                        {kpis.total}
+                        {previsto > 0 && (
+                          <span className="ml-1 text-sm font-normal text-muted-foreground">
+                            / {previsto}
+                          </span>
+                        )}
+                      </div>
+                      {previsto > 0 ? (
+                        <>
+                          <div className="mt-2 h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                             <div
-                              key={p.id}
-                              className="flex items-center justify-between gap-2 rounded-md border border-white/5 bg-white/5 px-2 py-1.5"
-                            >
-                              <span className="text-xs truncate">{p.texto}</span>
-                              <CanAccess role="user">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-5 w-5 text-muted-foreground hover:text-destructive shrink-0"
-                                  onClick={() => deletarPendencia.mutate(p.id)}
-                                  disabled={deletarPendencia.isPending}
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {pct}% do previsto atingido
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Cadastrados no sistema
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* Saúde (ASO) */}
+              <Card className="glass-card">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
+                    Saúde Ocupacional
+                  </CardTitle>
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="big-number text-[40px]">
+                    {kpis.asoPercentual}%
+                  </div>
+                  <p className="text-xs text-muted-foreground">ASO Apto</p>
+                </CardContent>
+              </Card>
+
+              {/* Pendências setoriais */}
+              <Card
+                className={cn(
+                  "glass-card transition-colors",
+                  kpis.pendenciasSetoriais > 0 && "border-[#FFB800]/60 bg-[#FFB800]/10"
+                )}
+              >
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
+                    Pontos de atenção
+                  </CardTitle>
+                  <AlertCircle
+                    className={cn(
+                      "h-4 w-4",
+                      kpis.pendenciasSetoriais > 0 ? "text-[#FFB800]" : "text-destructive"
+                    )}
+                  />
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className="big-number text-[40px]"
+                    style={{
+                      color: kpis.pendenciasSetoriais > 0 ? "#FFB800" : undefined,
+                    }}
+                  >
+                    {kpis.pendenciasSetoriais}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Etapas atrasadas + Pendências
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                      onClick={() => setPainelPendenciasAberto((v) => !v)}
+                    >
+                      {painelPendenciasAberto ? (
+                        <>
+                          Ocultar <ChevronUp className="h-3 w-3 ml-1" />
+                        </>
+                      ) : (
+                        <>
+                          Ver detalhes <ChevronDown className="h-3 w-3 ml-1" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {painelPendenciasAberto && (
+                    <div className="mt-3 space-y-3 border-t border-border/30 pt-3">
+                      {/* Etapas atrasadas */}
+                      {kpis.etapasAtrasadas > 0 && (
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1.5">
+                            Etapas atrasadas
+                          </p>
+                          <div className="space-y-1">
+                            {dashboardData?.etapas
+                              ?.filter((e) => isEtapaAtrasada(e))
+                              .map((etapa) => (
+                                <div
+                                  key={etapa.id}
+                                  className="flex items-center gap-2 text-xs text-[#FFB800]"
                                 >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </CanAccess>
-                            </div>
-                          ))}
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">{etapa.nome}</span>
+                                </div>
+                              ))}
+                          </div>
                         </div>
                       )}
 
-                      {/* Formulário de adicionar */}
-                      <CanAccess role="user">
-                        <div className="flex gap-2 mt-2">
-                          <Input
-                            className="glass-input h-8 text-xs flex-1"
-                            placeholder="Nova pendência..."
-                            value={novoTextoPendencia}
-                            onChange={(e) => setNovoTextoPendencia(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && novoTextoPendencia.trim() && !criarPendencia.isPending) {
-                                criarPendencia.mutate();
-                              }
-                            }}
-                          />
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-8 w-8"
-                            disabled={!novoTextoPendencia.trim() || criarPendencia.isPending}
-                            onClick={() => criarPendencia.mutate()}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CanAccess>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                      {/* Pendências manuais */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1.5">
+                          Pendências manuais
+                        </p>
+                        {pendenciasManuais.length === 0 ? (
+                          <p className="text-xs text-muted-foreground/60 italic">
+                            Nenhuma pendência manual registrada
+                          </p>
+                        ) : (
+                          <div className="space-y-1">
+                            {pendenciasManuais.map((p) => (
+                              <div
+                                key={p.id}
+                                className="flex items-center justify-between gap-2 rounded-md border border-white/5 bg-white/5 px-2 py-1.5"
+                              >
+                                <span className="text-xs truncate">{p.texto}</span>
+                                <CanAccess role="user">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-5 w-5 text-muted-foreground hover:text-destructive shrink-0"
+                                    onClick={() => deletarPendencia.mutate(p.id)}
+                                    disabled={deletarPendencia.isPending}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </CanAccess>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-          {/* ── Curva de mobilização + Plano de ação ── */}
-          {/* Gated em configData (fonte canônica de datas) para não depender
+                        {/* Formulário de adicionar */}
+                        <CanAccess role="user">
+                          <div className="flex gap-2 mt-2">
+                            <Input
+                              className="glass-input h-8 text-xs flex-1"
+                              placeholder="Nova pendência..."
+                              value={novoTextoPendencia}
+                              onChange={(e) => setNovoTextoPendencia(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && novoTextoPendencia.trim() && !criarPendencia.isPending) {
+                                  criarPendencia.mutate();
+                                }
+                              }}
+                            />
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-8 w-8"
+                              disabled={!novoTextoPendencia.trim() || criarPendencia.isPending}
+                              onClick={() => criarPendencia.mutate()}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CanAccess>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ── Curva de mobilização + Plano de ação ── */}
+            {/* Gated em configData (fonte canônica de datas) para não depender
               de dashboardData.projeto.dataInicio, que só existe quando a
               meta de admissões > 0. O gráfico é exibido apenas quando há
               dados de curva; o "Plano de ação" aparece sempre que o projeto
               estiver configurado. */}
-          {configData?.DATA_INICIO_PROJETO && (
-            <div ref={evolucaoTimelineRef}>
-              <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-              {/* Curva S (Avanço Físico) — 2/3 da largura */}
-              <Card className="glass-card lg:col-span-2">
-                <CardHeader className="flex flex-row items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Evolução do projeto</CardTitle>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Avanço Planejado vs. Realizado do Cronograma
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                      <p className="text-xs text-muted-foreground">
-                        Início:{" "}
-                        {new Date(
-                          configData.DATA_INICIO_PROJETO + "T00:00:00Z",
-                        ).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-                      </p>
-                      {configData.DATA_FIM_PROJETO && (
-                        <p className="text-xs text-muted-foreground">
-                          Término:{" "}
-                          {new Date(
-                            configData.DATA_FIM_PROJETO + "T00:00:00Z",
-                          ).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+            {configData?.DATA_INICIO_PROJETO && (
+              <div ref={evolucaoTimelineRef}>
+                <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+                  {/* Curva S (Avanço Físico) — 2/3 da largura */}
+                  <Card className="glass-card lg:col-span-2">
+                    <CardHeader className="flex flex-row items-start justify-between gap-4">
+                      <div>
+                        <CardTitle>Evolução do projeto</CardTitle>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Avanço Planejado vs. Realizado do Cronograma
                         </p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Dia {dashboardData?.projeto?.diasCorridos ?? 0} do projeto
-                      </p>
-                    </div>
-                  </div>
-                  {/* Indicadores: Diário (Curva S) + Macro (Etapas) */}
-                  {indicadorCurvaS && (
-                    <div className="shrink-0 flex flex-col sm:flex-row items-end sm:items-center gap-3 text-right">
-                      {/* Comparação Diária */}
-                      {indicadorCurvaS.diario && (
-                        <div className="flex flex-col items-end gap-0.5">
-                          {curveData.length > 0 && (
-                            <select
-                              value={selectedCurvaDayIdx}
-                              onChange={(e) => setSelectedCurvaDayIdx(Number(e.target.value))}
-                              className="text-[10px] uppercase tracking-wide rounded px-1 py-0.5 border border-border bg-background text-muted-foreground font-medium"
-                            >
-                              <option value={-1}>Diário</option>
-                              {curveData.map((d, i) => (
-                                <option key={i} value={i}>{d.mes}</option>
-                              ))}
-                            </select>
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                          <p className="text-xs text-muted-foreground">
+                            Início:{" "}
+                            {new Date(
+                              configData.DATA_INICIO_PROJETO + "T00:00:00Z",
+                            ).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                          </p>
+                          {configData.DATA_FIM_PROJETO && (
+                            <p className="text-xs text-muted-foreground">
+                              Término:{" "}
+                              {new Date(
+                                configData.DATA_FIM_PROJETO + "T00:00:00Z",
+                              ).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                            </p>
                           )}
-                          <span className="text-xs text-muted-foreground">
-                            Plan:{" "}
-                            <span className="font-semibold text-foreground">
-                              {(() => {
-                                if (selectedCurvaDayIdx >= 0) {
-                                  const dia = curveData[selectedCurvaDayIdx];
-                                  const v = dia?.previsto;
-                                  if (v != null) return `${(v as number).toFixed(1)}%`;
-                                  return "-";
-                                }
-                                return `${indicadorCurvaS.diario.planejado.toFixed(1)}%`;
-                              })()}
-                            </span>
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Real:{" "}
-                            <span
-                              className="font-semibold"
-                              style={{
-                                color: (() => {
-                                  let plan: number | null = null;
-                                  let real: number | null = null;
-                                  if (selectedCurvaDayIdx >= 0) {
-                                    const dia = curveData[selectedCurvaDayIdx];
-                                    plan = dia?.previsto ?? null;
-                                    real = dia?.realizado ?? null;
-                                  } else {
-                                    plan = indicadorCurvaS.diario.planejado;
-                                    real = indicadorCurvaS.diario.realizado;
-                                  }
-                                  return real != null && plan != null && real >= plan ? "#337246" : "#DA291B";
-                                })(),
-                              }}
-                            >
-                              {(() => {
-                                if (selectedCurvaDayIdx >= 0) {
-                                  const dia = curveData[selectedCurvaDayIdx];
-                                  const v = dia?.realizado;
-                                  if (v != null) return `${(v as number).toFixed(1)}%`;
-                                  return "-";
-                                }
-                                return temProgressoReal ? `${indicadorCurvaS.diario.realizado.toFixed(1)}%` : "-";
-                              })()}
-                            </span>
-                          </span>
+                          <p className="text-xs text-muted-foreground">
+                            Dia {dashboardData?.projeto?.diasCorridos ?? 0} do projeto
+                          </p>
+                        </div>
+                      </div>
+                      {/* Indicadores: Diário (Curva S) + Macro (Etapas) */}
+                      {indicadorCurvaS && (
+                        <div className="shrink-0 flex flex-col sm:flex-row items-end sm:items-center gap-3 text-right">
+                          {/* Comparação Diária */}
+                          {indicadorCurvaS.diario && (
+                            <div className="flex flex-col items-end gap-0.5">
+                              {curveData.length > 0 && (
+                                <select
+                                  value={selectedCurvaDayIdx}
+                                  onChange={(e) => setSelectedCurvaDayIdx(Number(e.target.value))}
+                                  className="text-[10px] uppercase tracking-wide rounded px-1 py-0.5 border border-border bg-background text-muted-foreground font-medium"
+                                >
+                                  <option value={-1}>Diário</option>
+                                  {curveData.map((d, i) => (
+                                    <option key={i} value={i}>{d.mes}</option>
+                                  ))}
+                                </select>
+                              )}
+                              <span className="text-xs text-muted-foreground">
+                                Plan:{" "}
+                                <span className="font-semibold text-foreground">
+                                  {(() => {
+                                    if (selectedCurvaDayIdx >= 0) {
+                                      const dia = curveData[selectedCurvaDayIdx];
+                                      const v = dia?.previsto;
+                                      if (v != null) return `${(v as number).toFixed(1)}%`;
+                                      return "-";
+                                    }
+                                    return `${indicadorCurvaS.diario.planejado.toFixed(1)}%`;
+                                  })()}
+                                </span>
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Real:{" "}
+                                <span
+                                  className="font-semibold"
+                                  style={{
+                                    color: (() => {
+                                      let plan: number | null = null;
+                                      let real: number | null = null;
+                                      if (selectedCurvaDayIdx >= 0) {
+                                        const dia = curveData[selectedCurvaDayIdx];
+                                        plan = dia?.previsto ?? null;
+                                        real = dia?.realizado ?? null;
+                                      } else {
+                                        plan = indicadorCurvaS.diario.planejado;
+                                        real = indicadorCurvaS.diario.realizado;
+                                      }
+                                      return real != null && plan != null && real >= plan ? "#337246" : "#DA291B";
+                                    })(),
+                                  }}
+                                >
+                                  {(() => {
+                                    if (selectedCurvaDayIdx >= 0) {
+                                      const dia = curveData[selectedCurvaDayIdx];
+                                      const v = dia?.realizado;
+                                      if (v != null) return `${(v as number).toFixed(1)}%`;
+                                      return "-";
+                                    }
+                                    return temProgressoReal ? `${indicadorCurvaS.diario.realizado.toFixed(1)}%` : "-";
+                                  })()}
+                                </span>
+                              </span>
+                            </div>
+                          )}
+
+                          {indicadorCurvaS.diario && indicadorCurvaS.etapas && (
+                            <div className="hidden sm:block w-px h-8 bg-border/50" />
+                          )}
+
+                          {/* Comparação Macro (Etapas) */}
+                          {indicadorCurvaS.etapas && (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                                Geral
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Plan:{" "}
+                                <span className="font-semibold text-foreground">
+                                  {indicadorCurvaS.etapas.planejado.toFixed(1)}%
+                                </span>
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Real:{" "}
+                                <span
+                                  className="font-semibold"
+                                  style={{
+                                    color:
+                                      indicadorCurvaS.etapas.realizado >= indicadorCurvaS.etapas.planejado
+                                        ? "#337246"
+                                        : "#DA291B",
+                                  }}
+                                >
+                                  {indicadorCurvaS.etapas.realizado.toFixed(1)}%
+                                </span>
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
-
-                      {indicadorCurvaS.diario && indicadorCurvaS.etapas && (
-                        <div className="hidden sm:block w-px h-8 bg-border/50" />
-                      )}
-
-                      {/* Comparação Macro (Etapas) */}
-                      {indicadorCurvaS.etapas && (
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                            Geral
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Plan:{" "}
-                            <span className="font-semibold text-foreground">
-                              {indicadorCurvaS.etapas.planejado.toFixed(1)}%
-                            </span>
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Real:{" "}
-                            <span
-                              className="font-semibold"
-                              style={{
-                                color:
-                                  indicadorCurvaS.etapas.realizado >= indicadorCurvaS.etapas.planejado
-                                    ? "#337246"
-                                    : "#DA291B",
-                              }}
-                            >
-                              {indicadorCurvaS.etapas.realizado.toFixed(1)}%
-                            </span>
-                          </span>
+                    </CardHeader>
+                    <CardContent>
+                      {curveData.length === 0 ? (
+                        <div className="flex h-[350px] flex-col items-center justify-center gap-2 text-muted-foreground">
+                          <AlertTriangle className="h-10 w-10 opacity-30" />
+                          <p className="text-sm">
+                            Configure as etapas do cronograma para gerar a curva
+                          </p>
                         </div>
+                      ) : (
+                        <ChartContainer config={chartConfigCurvaS} className="h-[350px] 2xl:h-[480px] w-full">
+                          <AreaChart
+                            data={chartDisplayData}
+                            margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
+                          >
+                            <defs>
+                              <linearGradient
+                                id="gradientAdmitidos"
+                                x1="0" y1="0" x2="0" y2="1"
+                              >
+                                <stop offset="5%" stopColor="#DA291B" stopOpacity={0.35} />
+                                <stop offset="95%" stopColor="#DA291B" stopOpacity={0} />
+                              </linearGradient>
+                              <linearGradient
+                                id="gradientMeta"
+                                x1="0" y1="0" x2="0" y2="1"
+                              >
+                                <stop offset="5%" stopColor="#e2e2e2" stopOpacity={0.12} />
+                                <stop offset="95%" stopColor="#e2e2e2" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              stroke={CHART_GRID_COLOR}
+                              vertical={false}
+                            />
+
+                            <XAxis
+                              dataKey="mes"
+                              tick={CHART_AXIS_TICK}
+                              tickLine={false}
+                              axisLine={false}
+                              ticks={xAxisTicks}
+                              interval={0}
+                            />
+                            <YAxis
+                              tick={CHART_AXIS_TICK}
+                              tickLine={false}
+                              axisLine={false}
+                              domain={[0, 100]}
+                              tickFormatter={(v) => `${v}%`}
+                              label={{
+                                value: "Progresso (%)",
+                                angle: -90,
+                                position: "insideLeft",
+                                offset: 10,
+                                style: { fill: CHART_AXIS_TICK.fill, fontSize: CHART_AXIS_TICK.fontSize },
+                              }}
+                            />
+
+                            <ChartTooltip
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload || !payload.length) return null;
+                                const p = payload[0].payload as {
+                                  previsto?: number;
+                                  realizado?: number;
+                                };
+                                return (
+                                  <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                    <p className="text-xs text-muted-foreground">{label}</p>
+                                    <p className="text-xs">
+                                      Planejado:{" "}
+                                      <span className="font-semibold">
+                                        {p.previsto?.toFixed(1) ?? 0}%
+                                      </span>
+                                    </p>
+                                    <p className="text-xs">
+                                      Realizado:{" "}
+                                      <span className="font-semibold">
+                                        {p.realizado?.toFixed(1) ?? 0}%
+                                      </span>
+                                    </p>
+                                  </div>
+                                );
+                              }}
+                            />
+                            <ChartLegend content={<ChartLegendContent />} />
+
+                            <Area
+                              type="monotone"
+                              dataKey="previsto"
+                              stroke={MANSERV_CHART.gray}
+                              strokeWidth={2}
+                              strokeDasharray="6 3"
+                              fill="url(#gradientMeta)"
+                              dot={false}
+                              activeDot={{ r: 5, fill: "#e2e2e2" }}
+                            />
+
+                            {temProgressoReal && (
+                              <Area
+                                type="monotone"
+                                dataKey="realizado"
+                                stroke={MANSERV_STATUS.danger}
+                                strokeWidth={3}
+                                fill="url(#gradientAdmitidos)"
+                                dot={false}
+                                activeDot={{ r: 7, fill: "#DA291B", stroke: "#fff", strokeWidth: 2 }}
+                              />
+                            )}
+
+                            {pontoSelecionado && (
+                              <ReferenceDot
+                                x={pontoSelecionado.x}
+                                y={pontoSelecionado.y}
+                                r={6}
+                                fill="#DA291B"
+                                stroke="#fff"
+                                strokeWidth={2}
+                              />
+                            )}
+
+                          </AreaChart>
+                        </ChartContainer>
                       )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Ocorrências — 1/3 da largura */}
+                  <Card className="glass-card lg:col-span-1 flex flex-col h-[460px] 2xl:h-[590px] overflow-hidden">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                        Linha do tempo do Contrato
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-1 flex flex-col overflow-hidden">
+                      {/* Seção Ocorrências */}
+                      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                        {/* Formulário — somente admin/user */}
+                        <CanAccess role="user">
+                          <div className="flex gap-2 mb-4 shrink-0">
+                            <Input
+                              className="glass-input flex-1 min-w-0"
+                              placeholder="Descreva a ocorrência..."
+                              value={novoTexto}
+                              onChange={(e) => setNovoTexto(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (
+                                  e.key === "Enter" &&
+                                  novoTexto.trim() &&
+                                  novaData &&
+                                  !criarOcorrencia.isPending
+                                )
+                                  criarOcorrencia.mutate();
+                              }}
+                            />
+                            <Input
+                              className="glass-input w-36 shrink-0"
+                              type="date"
+                              value={novaData}
+                              onChange={(e) => setNovaData(e.target.value)}
+                            />
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              disabled={!novoTexto.trim() || !novaData || criarOcorrencia.isPending}
+                              onClick={() => criarOcorrencia.mutate()}
+                              title="Adicionar ocorrência"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CanAccess>
+
+                        <div className="border-t border-white/10 mb-3 shrink-0" />
+
+                        {/* Lista */}
+                        {ocorrencias.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+                            <AlertTriangle className="h-8 w-8 opacity-20" />
+                            <p className="text-sm">Nenhuma ocorrência registrada</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
+                            {ocorrencias.map((o) => (
+                              <div
+                                key={o.id}
+                                className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2"
+                              >
+                                {editandoId === o.id ? (
+                                  // Modo de edição
+                                  <>
+                                    <div className="min-w-0 flex-1 space-y-2">
+                                      <Input
+                                        className="glass-input h-8 text-sm"
+                                        value={editandoTexto}
+                                        onChange={(e) => setEditandoTexto(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" && editandoTexto.trim() && editandoData) {
+                                            atualizarOcorrencia.mutate({
+                                              id: o.id,
+                                              texto: editandoTexto,
+                                              data: editandoData,
+                                            });
+                                          }
+                                        }}
+                                        placeholder="Descrição da ocorrência..."
+                                      />
+                                      <Input
+                                        className="glass-input h-8 text-sm w-36"
+                                        type="date"
+                                        value={editandoData}
+                                        onChange={(e) => setEditandoData(e.target.value)}
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                        disabled={!editandoTexto.trim() || !editandoData || atualizarOcorrencia.isPending}
+                                        onClick={() =>
+                                          atualizarOcorrencia.mutate({
+                                            id: o.id,
+                                            texto: editandoTexto,
+                                            data: editandoData,
+                                          })
+                                        }
+                                        title="Salvar alterações"
+                                      >
+                                        <Check className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-muted-foreground hover:text-muted-foreground"
+                                        onClick={cancelarEdicao}
+                                        title="Cancelar edição"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  // Modo de visualização
+                                  <>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium truncate" title={o.texto}>
+                                        {o.texto}
+                                      </p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-xs text-muted-foreground">
+                                          {new Date(o.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                            timeZone: "UTC",
+                                          })}
+                                        </p>
+                                        {!centroCusto && o.centro_custo && (
+                                          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary/20 text-primary">
+                                            {o.centro_custo}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <CanAccess role="user">
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                          onClick={() => iniciarEdicao(o)}
+                                          title="Editar ocorrência"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                          disabled={deletarOcorrencia.isPending}
+                                          onClick={() => deletarOcorrencia.mutate(o.id)}
+                                          title="Remover ocorrência"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
+                                    </CanAccess>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Comentários do Cliente ── */}
+                      <div className="border-t border-white/10 my-4 shrink-0" />
+
+                      {/* Seção Comentários do Cliente */}
+                      <div className="shrink-0 max-h-[45%] flex flex-col overflow-hidden">
+                        <div className="flex items-center gap-2 mb-3 shrink-0">
+                          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium text-muted-foreground">Comentários do Cliente</span>
+                        </div>
+
+                        {/* Formulário — todos os perfis autenticados */}
+                        <div className="flex gap-2 mb-4 shrink-0">
+                          <Input
+                            className="glass-input flex-1 min-w-0"
+                            placeholder="Adicionar comentário do cliente..."
+                            value={novoComentario}
+                            onChange={(e) => setNovoComentario(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                novoComentario.trim() &&
+                                novaDataComentario &&
+                                !criarComentario.isPending
+                              )
+                                criarComentario.mutate();
+                            }}
+                          />
+                          <Input
+                            className="glass-input w-36 shrink-0"
+                            type="date"
+                            value={novaDataComentario}
+                            onChange={(e) => setNovaDataComentario(e.target.value)}
+                          />
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            disabled={!novoComentario.trim() || !novaDataComentario || criarComentario.isPending}
+                            onClick={() => criarComentario.mutate()}
+                            title="Adicionar comentário"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        {/* Lista de comentários */}
+                        {comentarios.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center gap-2 py-6 text-center text-muted-foreground">
+                            <MessageSquare className="h-6 w-6 opacity-20" />
+                            <p className="text-sm">Nenhum comentário registrado</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
+                            {comentarios.map((c) => (
+                              <div
+                                key={c.id}
+                                className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2"
+                              >
+                                {editandoComentarioId === c.id ? (
+                                  <>
+                                    <div className="min-w-0 flex-1 space-y-2">
+                                      <Input
+                                        className="glass-input h-8 text-sm"
+                                        value={editandoComentarioTexto}
+                                        onChange={(e) => setEditandoComentarioTexto(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" && editandoComentarioTexto.trim() && editandoComentarioData) {
+                                            atualizarComentario.mutate({
+                                              id: c.id,
+                                              texto: editandoComentarioTexto,
+                                              data: editandoComentarioData,
+                                            });
+                                          }
+                                        }}
+                                        placeholder="Comentário..."
+                                      />
+                                      <Input
+                                        className="glass-input h-8 text-sm w-36"
+                                        type="date"
+                                        value={editandoComentarioData}
+                                        onChange={(e) => setEditandoComentarioData(e.target.value)}
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                        disabled={!editandoComentarioTexto.trim() || !editandoComentarioData || atualizarComentario.isPending}
+                                        onClick={() =>
+                                          atualizarComentario.mutate({
+                                            id: c.id,
+                                            texto: editandoComentarioTexto,
+                                            data: editandoComentarioData,
+                                          })
+                                        }
+                                        title="Salvar"
+                                      >
+                                        <Check className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-muted-foreground"
+                                        onClick={cancelarEdicaoComentario}
+                                        title="Cancelar"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium truncate" title={c.texto}>
+                                        {c.texto}
+                                      </p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-xs text-muted-foreground">
+                                          {new Date(c.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                            timeZone: "UTC",
+                                          })}
+                                        </p>
+                                        {!centroCusto && c.centro_custo && (
+                                          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary/20 text-primary">
+                                            {c.centro_custo}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                        onClick={() => iniciarEdicaoComentario(c)}
+                                        title="Editar comentário"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                        disabled={deletarComentario.isPending}
+                                        onClick={() => deletarComentario.mutate(c.id)}
+                                        title="Remover comentário"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {/* ── Etapas do Projeto ── */}
+            {dashboardData?.etapas && dashboardData.etapas.length > 0 && (
+              <div className="mb-6">
+                <Card className="glass-card">
+                  <CardHeader className="flex flex-row items-center gap-2">
+                    <ListChecks className="h-5 w-5 text-primary" />
+                    <CardTitle>Etapas do Projeto</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-center gap-4 mb-4 text-lg text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-block h-2 w-4 rounded-full bg-blue-500" />
+                        <span>Previsto</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-block h-2 w-4 rounded-full bg-[#DA291B]" />
+                        <span>Realizado</span>
+                      </div>
                     </div>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  {curveData.length === 0 ? (
-                    <div className="flex h-[350px] flex-col items-center justify-center gap-2 text-muted-foreground">
-                      <AlertTriangle className="h-10 w-10 opacity-30" />
-                      <p className="text-sm">
-                        Configure as etapas do cronograma para gerar a curva
-                      </p>
-                    </div>
-                  ) : (
-                  <ChartContainer config={chartConfigCurvaS} className="h-[350px] 2xl:h-[480px] w-full">
-                    <AreaChart
-                      data={chartDisplayData}
-                      margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
-                    >
-                      <defs>
-                        <linearGradient
-                          id="gradientAdmitidos"
-                          x1="0" y1="0" x2="0" y2="1"
-                        >
-                          <stop offset="5%"  stopColor="#DA291B" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="#DA291B" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient
-                          id="gradientMeta"
-                          x1="0" y1="0" x2="0" y2="1"
-                        >
-                          <stop offset="5%"  stopColor="#e2e2e2" stopOpacity={0.12} />
-                          <stop offset="95%" stopColor="#e2e2e2" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {(() => {
+                        const hojeRealStr = new Date().toISOString().split("T")[0];
+                        return dashboardData.etapas.map((etapa) => {
+                          let previstoEtapa = 0;
+                          let realizadoEtapa = 0;
 
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke={CHART_GRID_COLOR}
-                        vertical={false}
-                      />
+                          if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
+                            // Encontra o último dia em que o realizado AUMENTOU (progresso efetivamente lançado).
+                            // Como realizado é acumulado (carry-forward), buscamos o último índice em que
+                            // o valor cresceu em relação ao anterior, evitando que dias posteriores sem lançamento
+                            // inflem o previsto.
+                            let lastProgressIdx = -1;
+                            let prevRealizado = 0;
+                            for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
+                              if (etapa.evolucaoDiaria[i].realizado > prevRealizado) {
+                                lastProgressIdx = i;
+                                prevRealizado = etapa.evolucaoDiaria[i].realizado;
+                              }
+                            }
 
-                      <XAxis
-                        dataKey="mes"
-                        tick={CHART_AXIS_TICK}
-                        tickLine={false}
-                        axisLine={false}
-                        ticks={xAxisTicks}
-                        interval={0}
-                      />
-                      <YAxis
-                        tick={CHART_AXIS_TICK}
-                        tickLine={false}
-                        axisLine={false}
-                        domain={[0, 100]}
-                        tickFormatter={(v) => `${v}%`}
-                        label={{
-                          value: "Progresso (%)",
-                          angle: -90,
-                          position: "insideLeft",
-                          offset: 10,
-                          style: { fill: CHART_AXIS_TICK.fill, fontSize: CHART_AXIS_TICK.fontSize },
-                        }}
-                      />
+                            if (lastProgressIdx !== -1) {
+                              // Usa previsto/realizado do último dia com lançamento real
+                              previstoEtapa = etapa.evolucaoDiaria[lastProgressIdx].previsto;
+                              realizadoEtapa = etapa.evolucaoDiaria[lastProgressIdx].realizado;
+                            } else {
+                              // Sem progresso: usa o previsto do último dia útil até hoje
+                              let lastBeforeToday = -1;
+                              for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
+                                if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
+                                else break;
+                              }
+                              previstoEtapa = lastBeforeToday !== -1 ? etapa.evolucaoDiaria[lastBeforeToday].previsto : 0;
+                              realizadoEtapa = 0;
+                            }
+                          } else {
+                            if ((etapa.dataFim && hojeRealStr >= etapa.dataFim) || etapa.concluida || etapa.percentualConcluido >= 100) {
+                              previstoEtapa = etapa.percentualConcluido ?? 0;
+                              realizadoEtapa = etapa.percentualConcluido ?? 0;
+                            } else {
+                              previstoEtapa = 0;
+                              realizadoEtapa = 0;
+                            }
+                          }
 
-                      <ChartTooltip
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload || !payload.length) return null;
-                          const p = payload[0].payload as {
-                            previsto?: number;
-                            realizado?: number;
-                          };
+                          // Dia selecionado para visualização do previsto
+                          const selectedDia = selectedDayPerEtapa[etapa.id] ?? "";
+                          const selectedDayData = selectedDia
+                            ? etapa.evolucaoDiaria?.find((d) => d.data === selectedDia)
+                            : undefined;
+                          const displayPrevisto = selectedDayData != null
+                            ? selectedDayData.previsto
+                            : previstoEtapa;
+                          const displayRealizado = selectedDayData != null
+                            ? selectedDayData.realizado
+                            : realizadoEtapa;
+
                           return (
-                            <div className="rounded-lg border bg-background p-2 shadow-sm">
-                              <p className="text-xs text-muted-foreground">{label}</p>
-                              <p className="text-xs">
-                                Planejado:{" "}
-                                <span className="font-semibold">
-                                  {p.previsto?.toFixed(1) ?? 0}%
+                            <div
+                              key={etapa.id}
+                              className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-4"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-sm font-semibold">{etapa.nome}</span>
+                              </div>
+                              {(etapa.dataInicio || etapa.dataFim) && (
+                                <div className="text-xs text-muted-foreground">
+                                  {fmtDate(etapa.dataInicio) ?? "—"} - {fmtDate(etapa.dataFim) ?? "—"}
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground">
+                                {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""} trabalhado{etapa.duracaoDias !== 1 ? "s" : ""}
+                              </div>
+                              {/* Seletor de dia para ver o previsto */}
+                              {etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0 && (
+                                <select
+                                  value={selectedDia}
+                                  onChange={(e) =>
+                                    setSelectedDayPerEtapa((prev) => ({
+                                      ...prev,
+                                      [etapa.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="text-xs rounded-md px-2 py-1 border border-border bg-background text-foreground"
+                                >
+                                  <option value="">Previsto hoje</option>
+                                  {etapa.evolucaoDiaria.map((d) => {
+                                    const diaMes = new Date(d.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      timeZone: "UTC",
+                                    });
+                                    const diaSemana = new Date(d.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
+                                      weekday: "short",
+                                      timeZone: "UTC",
+                                    });
+                                    return (
+                                      <option key={d.data} value={d.data}>
+                                        {diaMes} ({diaSemana})
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              )}
+                              <div className="mt-2 space-y-1">
+                                {/* Barra Previsto (azul) */}
+                                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-blue-500 transition-all"
+                                    style={{
+                                      width: `${Math.min(100, displayPrevisto)}%`,
+                                    }}
+                                  />
+                                </div>
+                                {/* Barra Realizado (vermelho) */}
+                                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-[#DA291B] transition-all"
+                                    style={{
+                                      width: `${Math.min(100, displayRealizado)}%`,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="text-sm text-muted-foreground text-center mt-1">
+                                <span className="text-muted-foreground">
+                                  Previsto: {displayPrevisto}%
                                 </span>
-                              </p>
-                              <p className="text-xs">
-                                Realizado:{" "}
-                                <span className="font-semibold">
-                                  {p.realizado?.toFixed(1) ?? 0}%
+                                <span className="mx-1">·</span>
+                                <span className="text-muted-foreground">
+                                  Realizado: {displayRealizado}%
                                 </span>
-                              </p>
+                              </div>
                             </div>
                           );
-                        }}
-                      />
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* ── Status Contratual + Lista de Términos — grid side-by-side ── */}
+            <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+              {/* Card Status Contratação */}
+              <Card className="glass-card">
+                <CardHeader>
+                  <CardTitle>Status Contratação</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer config={chartConfigStatus} className="h-[260px] 2xl:h-[340px] w-full">
+                    <PieChart>
+                      <Pie
+                        data={dadosStatus}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="30%"
+                        outerRadius="65%"
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {dadosStatus.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip content={<ChartTooltipContent />} />
                       <ChartLegend content={<ChartLegendContent />} />
-
-                      <Area
-                        type="monotone"
-                        dataKey="previsto"
-                        stroke={MANSERV_CHART.gray}
-                        strokeWidth={2}
-                        strokeDasharray="6 3"
-                        fill="url(#gradientMeta)"
-                        dot={false}
-                        activeDot={{ r: 5, fill: "#e2e2e2" }}
-                      />
-
-                      {temProgressoReal && (
-                        <Area
-                          type="monotone"
-                          dataKey="realizado"
-                          stroke={MANSERV_STATUS.danger}
-                          strokeWidth={3}
-                          fill="url(#gradientAdmitidos)"
-                          dot={false}
-                          activeDot={{ r: 7, fill: "#DA291B", stroke: "#fff", strokeWidth: 2 }}
-                        />
-                      )}
-
-                      {pontoSelecionado && (
-                        <ReferenceDot
-                          x={pontoSelecionado.x}
-                          y={pontoSelecionado.y}
-                          r={6}
-                          fill="#DA291B"
-                          stroke="#fff"
-                          strokeWidth={2}
-                        />
-                      )}
-
-                    </AreaChart>
+                    </PieChart>
                   </ChartContainer>
-                  )}
+                  {/* Números absolutos por status */}
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {dadosStatus.map((s) => (
+                      <div
+                        key={s.name}
+                        className="flex flex-col items-center rounded-lg border border-white/5 bg-white/5 px-3 py-3"
+                      >
+                        <span
+                          className="big-number text-[40px]"
+                          style={{ color: s.color }}
+                        >
+                          {s.value}
+                        </span>
+                        <span className="mt-0.5 text-xs text-muted-foreground">
+                          {s.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
 
-              {/* Ocorrências — 1/3 da largura */}
-              <Card className="glass-card lg:col-span-1 flex flex-col h-[460px] 2xl:h-[590px] overflow-hidden">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Linha do tempo do Contrato
-                  </CardTitle>
+              {/* Card Lista de Términos */}
+              <Card className="glass-card h-[480px] 2xl:h-[520px]">
+                <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                  <CalendarClock className="h-4 w-4 text-primary" />
+                  <CardTitle>Lista de Términos</CardTitle>
+                  <span className="text-sm font-normal text-muted-foreground">
+                    ({dashboardData?.agregacoes?.terminoDetalhado?.length ?? 0} colaboradores)
+                  </span>
                 </CardHeader>
-                <CardContent className="flex-1 flex flex-col overflow-hidden">
-                  {/* Seção Ocorrências */}
-                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                    {/* Formulário — somente admin/user */}
-                    <CanAccess role="user">
-                      <div className="flex gap-2 mb-4 shrink-0">
-                      <Input
-                        className="glass-input flex-1 min-w-0"
-                        placeholder="Descreva a ocorrência..."
-                        value={novoTexto}
-                        onChange={(e) => setNovoTexto(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === "Enter" &&
-                            novoTexto.trim() &&
-                            novaData &&
-                            !criarOcorrencia.isPending
-                          )
-                            criarOcorrencia.mutate();
-                        }}
-                      />
-                      <Input
-                        className="glass-input w-36 shrink-0"
-                        type="date"
-                        value={novaData}
-                        onChange={(e) => setNovaData(e.target.value)}
-                      />
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        disabled={!novoTexto.trim() || !novaData || criarOcorrencia.isPending}
-                        onClick={() => criarOcorrencia.mutate()}
-                        title="Adicionar ocorrência"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CanAccess>
-
-                    <div className="border-t border-white/10 mb-3 shrink-0" />
-
-                    {/* Lista */}
-                    {ocorrencias.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
-                        <AlertTriangle className="h-8 w-8 opacity-20" />
-                        <p className="text-sm">Nenhuma ocorrência registrada</p>
-                      </div>
+                <CardContent className="flex flex-col flex-1 overflow-hidden">
+                  {/* Lista agrupada por função com scroll fixo */}
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1 pb-2">
+                    {terminoAgrupado.length === 0 ? (
+                      <p className="py-8 text-center text-sm text-muted-foreground">
+                        Nenhum colaborador encontrado.
+                      </p>
                     ) : (
-                      <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
-                      {ocorrencias.map((o) => (
-                        <div
-                          key={o.id}
-                          className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2"
-                        >
-                          {editandoId === o.id ? (
-                            // Modo de edição
-                            <>
-                              <div className="min-w-0 flex-1 space-y-2">
-                                <Input
-                                  className="glass-input h-8 text-sm"
-                                  value={editandoTexto}
-                                  onChange={(e) => setEditandoTexto(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && editandoTexto.trim() && editandoData) {
-                                      atualizarOcorrencia.mutate({
-                                        id: o.id,
-                                        texto: editandoTexto,
-                                        data: editandoData,
-                                      });
-                                    }
-                                  }}
-                                  placeholder="Descrição da ocorrência..."
-                                />
-                                <Input
-                                  className="glass-input h-8 text-sm w-36"
-                                  type="date"
-                                  value={editandoData}
-                                  onChange={(e) => setEditandoData(e.target.value)}
-                                />
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
-                                  disabled={!editandoTexto.trim() || !editandoData || atualizarOcorrencia.isPending}
-                                  onClick={() =>
-                                    atualizarOcorrencia.mutate({
-                                      id: o.id,
-                                      texto: editandoTexto,
-                                      data: editandoData,
-                                    })
-                                  }
-                                  title="Salvar alterações"
-                                >
-                                  <Check className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-muted-foreground"
-                                  onClick={cancelarEdicao}
-                                  title="Cancelar edição"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </>
-                          ) : (
-                            // Modo de visualização
-                            <>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium truncate" title={o.texto}>
-                                  {o.texto}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                  <p className="text-xs text-muted-foreground">
-                                    {new Date(o.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
-                                      timeZone: "UTC",
-                                    })}
-                                  </p>
-                                  {!centroCusto && o.centro_custo && (
-                                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary/20 text-primary">
-                                      {o.centro_custo}
+                      terminoAgrupado.map(({ funcao, membros }) => {
+                        const isOpen = expandedGroups.has(funcao);
+                        return (
+                          <div key={funcao} className="rounded-lg border border-white/5 bg-white/5">
+                            <button
+                              type="button"
+                              onClick={() => toggleGroup(funcao)}
+                              className="flex w-full items-center justify-between px-3 py-2 text-left"
+                            >
+                              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+                                {funcao}
+                                <span className="ml-2 font-normal normal-case">({membros.length})</span>
+                              </span>
+                              {isOpen ? (
+                                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </button>
+                            {isOpen && (
+                              <div className="space-y-1 px-3 pb-2">
+                                {membros.map((m, i) => (
+                                  <div
+                                    key={`${m.nome}-${i}`}
+                                    className="flex items-center justify-between rounded-md px-3 py-2 border border-white/5 bg-white/5"
+                                  >
+                                    <span className="text-sm 2xl:text-base font-medium truncate max-w-[60%]" title={m.nome}>
+                                      {m.nome}
                                     </span>
-                                  )}
-                                </div>
+                                    <span className="text-xs 2xl:text-sm font-medium tabular-nums text-muted-foreground">
+                                      {m.funcao_clt ?? "Não informado"}
+                                    </span>
+                                  </div>
+                                ))}
                               </div>
-                              <CanAccess role="user">
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-muted-foreground hover:text-primary"
-                                    onClick={() => iniciarEdicao(o)}
-                                    title="Editar ocorrência"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    disabled={deletarOcorrencia.isPending}
-                                    onClick={() => deletarOcorrencia.mutate(o.id)}
-                                    title="Remover ocorrência"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              </CanAccess>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                      </div>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
                   </div>
-
-                  {/* ── Comentários do Cliente ── */}
-                  <div className="border-t border-white/10 my-4 shrink-0" />
-
-                  {/* Seção Comentários do Cliente */}
-                  <div className="shrink-0 max-h-[45%] flex flex-col overflow-hidden">
-                    <div className="flex items-center gap-2 mb-3 shrink-0">
-                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-muted-foreground">Comentários do Cliente</span>
-                    </div>
-
-                    {/* Formulário — todos os perfis autenticados */}
-                    <div className="flex gap-2 mb-4 shrink-0">
-                    <Input
-                      className="glass-input flex-1 min-w-0"
-                      placeholder="Adicionar comentário do cliente..."
-                      value={novoComentario}
-                      onChange={(e) => setNovoComentario(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (
-                          e.key === "Enter" &&
-                          novoComentario.trim() &&
-                          novaDataComentario &&
-                          !criarComentario.isPending
-                        )
-                          criarComentario.mutate();
-                      }}
-                    />
-                    <Input
-                      className="glass-input w-36 shrink-0"
-                      type="date"
-                      value={novaDataComentario}
-                      onChange={(e) => setNovaDataComentario(e.target.value)}
-                    />
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      disabled={!novoComentario.trim() || !novaDataComentario || criarComentario.isPending}
-                      onClick={() => criarComentario.mutate()}
-                      title="Adicionar comentário"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                    {/* Lista de comentários */}
-                    {comentarios.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center gap-2 py-6 text-center text-muted-foreground">
-                        <MessageSquare className="h-6 w-6 opacity-20" />
-                        <p className="text-sm">Nenhum comentário registrado</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
-                      {comentarios.map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2"
-                        >
-                          {editandoComentarioId === c.id ? (
-                            <>
-                              <div className="min-w-0 flex-1 space-y-2">
-                                <Input
-                                  className="glass-input h-8 text-sm"
-                                  value={editandoComentarioTexto}
-                                  onChange={(e) => setEditandoComentarioTexto(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && editandoComentarioTexto.trim() && editandoComentarioData) {
-                                      atualizarComentario.mutate({
-                                        id: c.id,
-                                        texto: editandoComentarioTexto,
-                                        data: editandoComentarioData,
-                                      });
-                                    }
-                                  }}
-                                  placeholder="Comentário..."
-                                />
-                                <Input
-                                  className="glass-input h-8 text-sm w-36"
-                                  type="date"
-                                  value={editandoComentarioData}
-                                  onChange={(e) => setEditandoComentarioData(e.target.value)}
-                                />
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
-                                  disabled={!editandoComentarioTexto.trim() || !editandoComentarioData || atualizarComentario.isPending}
-                                  onClick={() =>
-                                    atualizarComentario.mutate({
-                                      id: c.id,
-                                      texto: editandoComentarioTexto,
-                                      data: editandoComentarioData,
-                                    })
-                                  }
-                                  title="Salvar"
-                                >
-                                  <Check className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground"
-                                  onClick={cancelarEdicaoComentario}
-                                  title="Cancelar"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium truncate" title={c.texto}>
-                                  {c.texto}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                  <p className="text-xs text-muted-foreground">
-                                    {new Date(c.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
-                                      timeZone: "UTC",
-                                    })}
-                                  </p>
-                                  {!centroCusto && c.centro_custo && (
-                                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-primary/20 text-primary">
-                                      {c.centro_custo}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
-                                  onClick={() => iniciarEdicaoComentario(c)}
-                                  title="Editar comentário"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  disabled={deletarComentario.isPending}
-                                  onClick={() => deletarComentario.mutate(c.id)}
-                                  title="Remover comentário"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* ── Distribuição por Função CLT ── */}
+            {dadosFuncoes.length > 0 && (
+              <div className="mb-6">
+                <Card className="glass-card">
+                  <CardHeader>
+                    <CardTitle>Distribuição por Função CLT</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ChartContainer config={chartConfigFuncoes} className="h-[350px] 2xl:h-[480px] w-full">
+                      <BarChart data={dadosFuncoes}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                          {dadosFuncoes.map((entry, i) => (
+                            <Cell key={`fn-${i}`} fill={entry.fill} />
+                          ))}
+                        </Bar>
+                        <ChartTooltip
+                          content={<ChartTooltipContent />}
+                        />
+                        <ChartLegend content={<ChartLegendContent />} />
+                      </BarChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
-          )}
-
-          {/* ── Etapas do Projeto ── */}
-          {dashboardData?.etapas && dashboardData.etapas.length > 0 && (
-            <div className="mb-6">
-              <Card className="glass-card">
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <ListChecks className="h-5 w-5 text-primary" />
-                  <CardTitle>Etapas do Projeto</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-center gap-4 mb-4 text-lg text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <span className="inline-block h-2 w-4 rounded-full bg-blue-500" />
-                      <span>Previsto</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="inline-block h-2 w-4 rounded-full bg-[#DA291B]" />
-                      <span>Realizado</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {(() => {
-                      const hojeRealStr = new Date().toISOString().split("T")[0];
-                      return dashboardData.etapas.map((etapa) => {
-                        let previstoEtapa = 0;
-                        let realizadoEtapa = 0;
-
-                        if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
-                          // Encontra o último dia em que o realizado AUMENTOU (progresso efetivamente lançado).
-                          // Como realizado é acumulado (carry-forward), buscamos o último índice em que
-                          // o valor cresceu em relação ao anterior, evitando que dias posteriores sem lançamento
-                          // inflem o previsto.
-                          let lastProgressIdx = -1;
-                          let prevRealizado = 0;
-                          for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
-                            if (etapa.evolucaoDiaria[i].realizado > prevRealizado) {
-                              lastProgressIdx = i;
-                              prevRealizado = etapa.evolucaoDiaria[i].realizado;
-                            }
-                          }
-
-                          if (lastProgressIdx !== -1) {
-                            // Usa previsto/realizado do último dia com lançamento real
-                            previstoEtapa = etapa.evolucaoDiaria[lastProgressIdx].previsto;
-                            realizadoEtapa = etapa.evolucaoDiaria[lastProgressIdx].realizado;
-                          } else {
-                            // Sem progresso: usa o previsto do último dia útil até hoje
-                            let lastBeforeToday = -1;
-                            for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
-                              if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
-                              else break;
-                            }
-                            previstoEtapa = lastBeforeToday !== -1 ? etapa.evolucaoDiaria[lastBeforeToday].previsto : 0;
-                            realizadoEtapa = 0;
-                          }
-                        } else {
-                          if ((etapa.dataFim && hojeRealStr >= etapa.dataFim) || etapa.concluida || etapa.percentualConcluido >= 100) {
-                            previstoEtapa = etapa.percentualConcluido ?? 0;
-                            realizadoEtapa = etapa.percentualConcluido ?? 0;
-                          } else {
-                            previstoEtapa = 0;
-                            realizadoEtapa = 0;
-                          }
-                        }
-
-                        // Dia selecionado para visualização do previsto
-                        const selectedDia = selectedDayPerEtapa[etapa.id] ?? "";
-                        const selectedDayData = selectedDia
-                          ? etapa.evolucaoDiaria?.find((d) => d.data === selectedDia)
-                          : undefined;
-                        const displayPrevisto = selectedDayData != null
-                          ? selectedDayData.previsto
-                          : previstoEtapa;
-                        const displayRealizado = selectedDayData != null
-                          ? selectedDayData.realizado
-                          : realizadoEtapa;
-
-                        return (
-                          <div
-                            key={etapa.id}
-                            className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-4"
-                          >
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-sm font-semibold">{etapa.nome}</span>
-                            {etapa.concluida || etapa.percentualConcluido >= 100 ? (
-                              <Check className="h-4 w-4 text-green-500 shrink-0" />
-                            ) : null}
-                          </div>
-                          {(etapa.dataInicio || etapa.dataFim) && (
-                            <div className="text-xs text-muted-foreground">
-                              {fmtDate(etapa.dataInicio) ?? "—"} - {fmtDate(etapa.dataFim) ?? "—"}
-                            </div>
-                          )}
-                          <div className="text-xs text-muted-foreground">
-                            {etapa.duracaoDias} dia{etapa.duracaoDias !== 1 ? "s" : ""} trabalhado{etapa.duracaoDias !== 1 ? "s" : ""}
-                          </div>
-                          {/* Seletor de dia para ver o previsto */}
-                          {etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0 && (
-                            <select
-                              value={selectedDia}
-                              onChange={(e) =>
-                                setSelectedDayPerEtapa((prev) => ({
-                                  ...prev,
-                                  [etapa.id]: e.target.value,
-                                }))
-                              }
-                              className="text-xs rounded-md px-2 py-1 border border-border bg-background text-foreground"
-                            >
-                              <option value="">Previsto hoje</option>
-                              {etapa.evolucaoDiaria.map((d) => {
-                                const diaMes = new Date(d.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  timeZone: "UTC",
-                                });
-                                const diaSemana = new Date(d.data + "T00:00:00Z").toLocaleDateString("pt-BR", {
-                                  weekday: "short",
-                                  timeZone: "UTC",
-                                });
-                                return (
-                                  <option key={d.data} value={d.data}>
-                                    {diaMes} ({diaSemana})
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          )}
-                          <div className="mt-2 space-y-1">
-                            {/* Barra Previsto (azul) */}
-                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-blue-500 transition-all"
-                                style={{
-                                  width: `${Math.min(100, displayPrevisto)}%`,
-                                }}
-                              />
-                            </div>
-                            {/* Barra Realizado (vermelho) */}
-                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-[#DA291B] transition-all"
-                                style={{
-                                  width: `${Math.min(100, displayRealizado)}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                          <div className="text-sm text-muted-foreground text-center mt-1">
-                            <span className="text-muted-foreground">
-                              Previsto: {displayPrevisto}%
-                            </span>
-                            <span className="mx-1">·</span>
-                            <span className="text-muted-foreground">
-                              Realizado: {displayRealizado}%
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* ── Status Contratual (com números absolutos) ── */}
-          <div className="mb-6">
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle>Status Contratação</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfigStatus} className="h-[260px] 2xl:h-[340px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={dadosStatus}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius="30%"
-                      outerRadius="65%"
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {dadosStatus.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                  </PieChart>
-                </ChartContainer>
-                {/* Números absolutos por status */}
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {dadosStatus.map((s) => (
-                    <div
-                      key={s.name}
-                      className="flex flex-col items-center rounded-lg border border-white/5 bg-white/5 px-3 py-3"
-                    >
-                      <span
-                        className="big-number text-[40px]"
-                        style={{ color: s.color }}
-                      >
-                        {s.value}
-                      </span>
-                      <span className="mt-0.5 text-xs text-muted-foreground">
-                        {s.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ── Distribuição por Função CLT ── */}
-          {dadosFuncoes.length > 0 && (
-            <div className="mb-6">
-              <Card className="glass-card">
-                <CardHeader>
-                  <CardTitle>Distribuição por Função CLT</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ChartContainer config={chartConfigFuncoes} className="h-[350px] 2xl:h-[480px] w-full">
-                    <BarChart data={dadosFuncoes}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                        {dadosFuncoes.map((entry, i) => (
-                          <Cell key={`fn-${i}`} fill={entry.fill} />
-                        ))}
-                      </Bar>
-                      <ChartTooltip
-                        content={<ChartTooltipContent />}
-                      />
-                      <ChartLegend content={<ChartLegendContent />} />
-                    </BarChart>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+            )}
 
           </div>
         </div>

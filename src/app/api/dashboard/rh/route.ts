@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const db = createServerClient();
     let query = db
       .from("colaboradores")
-      .select("cpf,nome,funcao_clt,idade,status,data_admissao,termino,aso,uf");
+      .select("cpf,nome,funcao_clt,idade,status,data_admissao,termino,aso,uf,sexo");
     if (centroCusto?.length) query = query.in("centro_custo", centroCusto);
     const { data, error } = await query;
 
@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
       (r) => r["data_admissao"] || (r["status"] && r["status"] !== "Pendente"),
     ).length;
     const aptoCount = comId.filter((r) => r["aso"] === "Apto").length;
+    const inaptoCount = comId.filter((r) => r["aso"] === "Inapto").length;
+    const pendenteCount = comId.filter((r) => !r["aso"] || r["aso"] === "Pendente").length;
     const percentualASO =
       totalCadastrados > 0 ? Math.round((aptoCount / totalCadastrados) * 10000) / 100 : 0;
 
@@ -71,6 +73,16 @@ export async function GET(request: NextRequest) {
       .map(([nome, total]) => ({ nome, total }))
       .sort((a, b) => b.total - a.total);
 
+    // ── Distribuição por sexo ────────────────────────────────────────────────
+    const sexoMap: Record<string, number> = {};
+    for (const r of comId) {
+      const s = String(r["sexo"] ?? "").trim().toUpperCase();
+      if (s === "M" || s === "MASCULINO") sexoMap["Masculino"] = (sexoMap["Masculino"] || 0) + 1;
+      else if (s === "F" || s === "FEMININO") sexoMap["Feminino"] = (sexoMap["Feminino"] || 0) + 1;
+      else sexoMap["Não informado"] = (sexoMap["Não informado"] || 0) + 1;
+    }
+    const distribuicaoSexo = Object.entries(sexoMap).map(([sexo, total]) => ({ sexo, total }));
+
     // ── Término detalhado — linhas brutas para tabela agrupada ───────────────
     // SELECT nome, funcao_clt, termino WHERE termino IS NOT NULL
     // ORDER BY funcao_clt ASC, termino ASC
@@ -91,7 +103,17 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       metricas: { totalCadastrados, totalAdmitidos, percentualASO },
-      agregacoes: { distribuicaoIdades, distribuicaoFuncoes, terminoDetalhado },
+      agregacoes: {
+        distribuicaoIdades,
+        distribuicaoFuncoes,
+        terminoDetalhado,
+        distribuicaoASO: [
+          { status: "Apto", total: aptoCount },
+          { status: "Inapto", total: inaptoCount },
+          { status: "Pendente", total: pendenteCount },
+        ],
+        distribuicaoSexo,
+      },
     });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {

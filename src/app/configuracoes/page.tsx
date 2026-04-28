@@ -1,7 +1,7 @@
 // src/app/configuracoes/page.tsx
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import { calculateWorkingDays, getNationalHolidays } from "@/lib/date-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -184,12 +184,14 @@ export default function ConfiguracoesPage() {
     enabled: !!centroCusto,
   });
 
-  // Sincroniza dias trabalhados do servidor
-  useEffect(() => {
+  // Sincroniza dias trabalhados do servidor (sem effect para evitar cascata)
+  const [prevDiasTrabalhadosData, setPrevDiasTrabalhadosData] = useState(diasTrabalhadosData);
+  if (prevDiasTrabalhadosData !== diasTrabalhadosData) {
+    setPrevDiasTrabalhadosData(diasTrabalhadosData);
     if (diasTrabalhadosData) {
       setDiasTrabalhados(diasTrabalhadosData);
     }
-  }, [diasTrabalhadosData]);
+  }
 
   // Query para buscar feriados
   const { data: feriadosData } = useQuery({
@@ -206,12 +208,14 @@ export default function ConfiguracoesPage() {
     enabled: !!centroCusto,
   });
 
-  // Sincroniza feriados do servidor
-  useEffect(() => {
+  // Sincroniza feriados do servidor (sem effect para evitar cascata)
+  const [prevFeriadosData, setPrevFeriadosData] = useState(feriadosData);
+  if (prevFeriadosData !== feriadosData) {
+    setPrevFeriadosData(feriadosData);
     if (feriadosData) {
       setFeriados(feriadosData);
     }
-  }, [feriadosData]);
+  }
 
   // Mutation para salvar feriados
   const feriadosMutation = useMutation({
@@ -280,7 +284,7 @@ export default function ConfiguracoesPage() {
   };
 
   // ── Feriados nacionais computados automaticamente ───────────────────────────
-  const feriadosNacionais = useMemo<string[]>(() => {
+  const feriadosNacionais = (() => {
     if (!projeto.data_inicio || !projeto.data_fim) return [];
     const start = new Date(projeto.data_inicio);
     const end = new Date(projeto.data_fim);
@@ -292,13 +296,13 @@ export default function ConfiguracoesPage() {
     }
     // Filtra apenas os que estão dentro do intervalo do projeto
     return all.filter((d) => d >= projeto.data_inicio! && d <= projeto.data_fim!).sort();
-  }, [projeto.data_inicio, projeto.data_fim]);
+  })();
 
   // Feriados exibidos = nacionais (automáticos) + regionais (manuais)
-  const feriadosParaExibir = useMemo<string[]>(() => {
+  const feriadosParaExibir = (() => {
     const set = new Set([...feriadosNacionais, ...feriados]);
     return Array.from(set).sort();
-  }, [feriadosNacionais, feriados]);
+  })();
 
   // (dias úteis não são mais exibidos em card; permanecem implícitos nos cálculos)
 
@@ -453,26 +457,29 @@ export default function ConfiguracoesPage() {
   const acessos = acessosData ?? [];
   const logs = logsResponse?.data ?? [];
 
-  // ── Sync projeto form state from server data ───────────────────────────────
-  useEffect(() => {
-    if (!projetoData) return;
-    setProjeto({
-      gerente_operacoes: projetoData.GERENTE_OPERACOES || "",
-      gerente_contrato: projetoData.GERENTE_CONTRATO || "",
-      nome_cliente: projetoData.NOME_CLIENTE || "",
-      centro_custo: projetoData.CENTRO_CUSTO || "",
-      data_inicio: projetoData.DATA_INICIO_PROJETO || "",
-      data_fim: projetoData.DATA_FIM_PROJETO || "",
-      colaboradores_previstos:
-        projetoData.COLABORADORES_PREVISTOS > 0
-          ? String(projetoData.COLABORADORES_PREVISTOS)
-          : "",
-      orcado_suprimentos:
-        projetoData.ORCADO_SUPRIMENTOS > 0
-          ? String(projetoData.ORCADO_SUPRIMENTOS)
-          : "",
-    });
-  }, [projetoData]);
+  // ── Sync projeto form state from server data (sem effect para evitar cascata)
+  const [prevProjetoData, setPrevProjetoData] = useState(projetoData);
+  if (prevProjetoData !== projetoData) {
+    setPrevProjetoData(projetoData);
+    if (projetoData) {
+      setProjeto({
+        gerente_operacoes: projetoData.GERENTE_OPERACOES || "",
+        gerente_contrato: projetoData.GERENTE_CONTRATO || "",
+        nome_cliente: projetoData.NOME_CLIENTE || "",
+        centro_custo: projetoData.CENTRO_CUSTO || "",
+        data_inicio: projetoData.DATA_INICIO_PROJETO || "",
+        data_fim: projetoData.DATA_FIM_PROJETO || "",
+        colaboradores_previstos:
+          projetoData.COLABORADORES_PREVISTOS > 0
+            ? String(projetoData.COLABORADORES_PREVISTOS)
+            : "",
+        orcado_suprimentos:
+          projetoData.ORCADO_SUPRIMENTOS > 0
+            ? String(projetoData.ORCADO_SUPRIMENTOS)
+            : "",
+      });
+    }
+  }
 
   // --- Mutations ---
   const projetoMutation = useMutation({

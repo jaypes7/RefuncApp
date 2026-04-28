@@ -23,7 +23,7 @@ import {
   Database,
   Camera,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -57,34 +57,39 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { centroCusto, setCentroCusto, centrosDisponiveis } = useFilter();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const [dashboardOpen, setDashboardOpen] = useState(
     pathname.startsWith("/dashboard"),
   );
   const [projectOpen, setProjectOpen] = useState(false);
-
-  // Evita hydration mismatch — ícone só renderiza no cliente
-  useEffect(() => setMounted(true), []);
 
   if (pathname === "/login") return null;
 
   const isDashboardActive = pathname.startsWith("/dashboard");
   const isDark = theme === "dark";
 
-  const handleSelectProject = (cc: string) => {
+  const handleSelectProject = (cc: string | null) => {
     setCentroCusto(cc);
     setProjectOpen(false);
-    // Invalida todas as queries para forçar recarregamento com novo centro de custo
-    queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
-    queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
-    queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
-    queryClient.invalidateQueries({ queryKey: ["seguranca-dashboard"], type: "all" });
-    queryClient.invalidateQueries({ queryKey: ["ocorrencias"], type: "all" });
-    queryClient.invalidateQueries({ queryKey: ["comentarios-cliente"], type: "all" });
-    queryClient.invalidateQueries({ queryKey: ["pendencias-manuais"], type: "all" });
-    queryClient.invalidateQueries({ queryKey: ["suprimentos-ordens"], type: "all" });
+    // Remove o cache para forçar loading state (skeleton) ao invés de mostrar dados stale do projeto anterior
+    queryClient.removeQueries({ queryKey: ["config"] });
+    queryClient.removeQueries({ queryKey: ["colaboradores"] });
+    queryClient.removeQueries({ queryKey: ["dashboard-principal"] });
+    queryClient.removeQueries({ queryKey: ["dashboard-rh"] });
+    queryClient.removeQueries({ queryKey: ["dashboard-logistica"] });
+    queryClient.removeQueries({ queryKey: ["dashboard-suprimentos"] });
+    queryClient.removeQueries({ queryKey: ["seguranca-dashboard"] });
+    queryClient.removeQueries({ queryKey: ["ocorrencias"] });
+    queryClient.removeQueries({ queryKey: ["comentarios-cliente"] });
+    queryClient.removeQueries({ queryKey: ["pendencias-manuais"] });
+    queryClient.removeQueries({ queryKey: ["suprimentos-ordens"] });
+    queryClient.removeQueries({ queryKey: ["registros-fotograficos"] });
+    // Estas queries não precisam limpar o cache, apenas refetch em background
     queryClient.invalidateQueries({ queryKey: ["centros-custo"], type: "all" });
-    queryClient.invalidateQueries({ queryKey: ["registros-fotograficos"], type: "all" });
   };
 
   const navItem = (isActive: boolean) =>
@@ -159,10 +164,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <div className="max-h-64 overflow-y-auto">
                   {user?.perfil === "admin" && (
                     <button
-                      onClick={() => {
-                        setCentroCusto(null);
-                        setProjectOpen(false);
-                      }}
+                      onClick={() => handleSelectProject(null)}
                       className={cn(
                         "w-full rounded px-2 py-1.5 text-left text-sm",
                         centroCusto === null
@@ -211,15 +213,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <div className="max-h-64 overflow-y-auto">
                   {user?.perfil === "admin" && (
                     <button
-                      onClick={() => {
-                        setCentroCusto(null);
-                        setProjectOpen(false);
-                        queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
-                        queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
-                        queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
-                        queryClient.invalidateQueries({ queryKey: ["centros-custo"], type: "all" });
-                        queryClient.invalidateQueries({ queryKey: ["registros-fotograficos"], type: "all" });
-                      }}
+                      onClick={() => handleSelectProject(null)}
                       className={cn(
                         "w-full rounded px-2 py-1.5 text-left text-sm",
                         centroCusto === null

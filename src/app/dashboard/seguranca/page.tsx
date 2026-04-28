@@ -188,7 +188,7 @@ export default function DashboardSegurancaPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <ProtectedRoute>
         <SegurancaSkeleton />

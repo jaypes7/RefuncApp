@@ -45,6 +45,8 @@ function mapColab(row: Record<string, unknown>) {
     FUNCAO_CLT: toStr(row["funcao_clt"]),
     TREINAMENTO: toStr(row["treinamento"]),
     PRE_ADMISSAO: toStr(row["pre_admissao"]),
+    TERMINO: toStr(row["termino"])?.split("T")[0] ?? null,
+    UF: toStr(row["uf"]),
   };
 }
 
@@ -204,7 +206,7 @@ function calcularRealizadoNaData(
     // Soma de TODOS os incrementos diários desta etapa até dateStr
     // (cada entrada representa o progresso daquele dia, não o total)
     const registros = progressoDiario
-      .filter((r) => r.etapa_id === etapa.id && r.data <= dateStr);
+      .filter((r) => r.etapa_id === etapa.id && r.data <= dateStr && r.data >= (etapa.dataInicio ?? ""));
 
     if (registros.length > 0) {
       const soma = registros.reduce((s, r) => s + r.percentual, 0);
@@ -239,7 +241,7 @@ function calcularRealizadoSuavizadoNaData(
 
     if (!ini || !fim) continue;
 
-    const registros = progressoDiario.filter((r) => r.etapa_id === etapa.id && r.data <= dateStr);
+    const registros = progressoDiario.filter((r) => r.etapa_id === etapa.id && r.data <= dateStr && r.data >= ini);
     const pctRealAteAgora = Math.min(100, registros.reduce((s, r) => s + r.percentual, 0));
     if (registros.length > 0) temAlgumDado = true;
 
@@ -340,9 +342,10 @@ function gerarCurvaSEtapas(
     return { labels: [], planejado: [], realizado: [], detalhes: [], valoresHoje: null };
   }
 
-  // Data do último registro diário
-  const ultimaDataComDado = progressoDiario.length > 0
-    ? progressoDiario.map((r) => r.data).sort().reverse()[0]
+  // Data do último registro diário (apenas registros com progresso real > 0)
+  const progressoReal = progressoDiario.filter((r) => r.percentual > 0);
+  const ultimaDataComDado = progressoReal.length > 0
+    ? progressoReal.map((r) => r.data).sort().reverse()[0]
     : null;
 
   const labels: string[] = [];
@@ -352,11 +355,18 @@ function gerarCurvaSEtapas(
 
   const MS_PER_DAY = 86_400_000;
 
+  // Limite até onde o realizado é calculado: o que for maior entre hoje e a última
+  // data com dado preenchido. Isso permite exibir progresso adiantado (ex: usuário
+  // preenche 29/04 quando hoje é 28/04) sem mostrar valores para dias sem dado.
+  const limiteRealizado = ultimaDataComDado && ultimaDataComDado > hojeStr
+    ? ultimaDataComDado
+    : hojeStr;
+
   for (const dateStr of diasPlot) {
     labels.push(fmt(dateStr));
     planejado.push(calcularPlanejadoNaData(dateStr, etapas, totalDias, dataInicio, diasTrabalhados));
 
-    if (dateStr > hojeStr) {
+    if (dateStr > limiteRealizado) {
       realizado.push(null);
     } else {
       realizado.push(calcularRealizadoSuavizadoNaData(dateStr, etapas, totalDias, progressoDiario, diasTrabalhados));
@@ -464,10 +474,26 @@ function gerarCurvaSEtapas(
     }
   }
 
-  // DIÁRIO: último dia com dado (ou último dia do gráfico se não houver dados)
-  const dataReferenciaDiaria = ultimaDataComDado && diasPlot.includes(ultimaDataComDado)
-    ? ultimaDataComDado
-    : (diasPlot[diasPlot.length - 1] ?? dataInicio);
+  // DIÁRIO: indicador padrão (quando nenhum dia está selecionado no SELECT).
+  // Usa o último dia com dado preenchido, limitado a hoje para não mostrar
+  // planejado de datas futuras no indicador padrão. Se não há dados, usa o
+  // último dia útil <= hoje.
+  let dataReferenciaDiaria: string;
+  if (ultimaDataComDado) {
+    // Limita a hoje: se o último dado é futuro, usa hoje como teto para o indicador padrão
+    const dataCap = ultimaDataComDado <= hojeStr ? ultimaDataComDado : hojeStr;
+    if (diasPlot.includes(dataCap)) {
+      dataReferenciaDiaria = dataCap;
+    } else {
+      // dataCap não é dia trabalhado — pega o último dia útil <= dataCap
+      const ultimoDiaUtilAteCap = [...diasPlot].reverse().find((d) => d <= dataCap);
+      dataReferenciaDiaria = ultimoDiaUtilAteCap ?? diasPlot[0] ?? dataInicio;
+    }
+  } else {
+    // Sem dados de progresso — usa o último dia útil <= hoje
+    const ultimoDiaUtilAteHoje = [...diasPlot].reverse().find((d) => d <= hojeStr);
+    dataReferenciaDiaria = ultimoDiaUtilAteHoje ?? diasPlot[0] ?? dataInicio;
+  }
 
   const plDiario = calcularPlanejadoNaData(dataReferenciaDiaria, etapas, totalDias, dataInicio, diasTrabalhados);
   const reDiario = ultimaDataComDado
@@ -475,6 +501,8 @@ function gerarCurvaSEtapas(
     : 0;
 
   // ETAPAS: visão acumulada total do projeto (100% planejado vs realizado total)
+  // O previsto é sempre 100% porque referencia o projeto como um todo.
+  // O realizado é calculado até o último dia com dado real preenchido.
   const reTotal = ultimaDataComDado
     ? (calcularRealizadoNaData(ultimaDataComDado, etapas, totalDias, progressoDiario) ?? 0)
     : 0;
@@ -596,7 +624,7 @@ export async function GET(request: NextRequest) {
 
     let colabQuery = db
       .from("colaboradores")
-      .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao");
+      .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao,termino,uf");
     if (centroCusto?.length) colabQuery = colabQuery.in("centro_custo", centroCusto);
 
     let configQuery = db.from("configuracoes").select("*");
@@ -896,6 +924,10 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        const temRegistros = progressoDoCc.some(
+          (p) => p.etapa_id === e.id && p.data >= (e.dataInicio ?? "") && p.data <= (e.dataFim ?? "")
+        );
+
         return {
           id: e.id,
           nome: e.nome,
@@ -905,6 +937,7 @@ export async function GET(request: NextRequest) {
           dataInicio: e.dataInicio,
           dataFim: e.dataFim,
           evolucaoDiaria,
+          temRegistros,
         };
       }),
       pendencias: pendencias.slice(0, 10),
@@ -917,6 +950,20 @@ export async function GET(request: NextRequest) {
       agregacoes: {
         distribuicaoFuncoes: agruparPorFuncao(colaboradores),
         distribuicaoMob: agruparPorMob(colaboradores),
+        terminoDetalhado: colaboradores
+          .filter((c) => c.TERMINO && String(c.TERMINO).trim() !== "")
+          .map((c) => ({
+            nome: String(c.NOME ?? "").trim(),
+            funcao_clt: c.FUNCAO_CLT ? String(c.FUNCAO_CLT).trim() : null,
+            termino: String(c.TERMINO).split("T")[0],
+            status: c.STATUS ? String(c.STATUS).trim() : null,
+            uf: c.UF ? String(c.UF).trim().toUpperCase() : null,
+          }))
+          .sort((a, b) => {
+            const fnCmp = (a.funcao_clt ?? "").localeCompare(b.funcao_clt ?? "", "pt-BR");
+            if (fnCmp !== 0) return fnCmp;
+            return a.termino.localeCompare(b.termino);
+          }),
       },
     });
   } catch (error) {

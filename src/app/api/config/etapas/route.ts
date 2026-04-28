@@ -39,10 +39,12 @@ export async function POST(request: NextRequest) {
     const projectStartDate = configData?.data_inicio_projeto;
     const projectEndDate = configData?.data_fim_projeto;
 
+    type RawEtapa = { id: number; dataInicio?: string; dataFim?: string; responsavel?: string };
+
     // Validar que as datas das etapas estão dentro do intervalo do projeto
     if (projectStartDate && projectEndDate) {
       for (const etapa of etapas) {
-        const rawEtapa = body.etapas?.find((e: any) => e.id === etapa.id);
+        const rawEtapa = (body.etapas as RawEtapa[] | undefined)?.find((e) => e.id === etapa.id);
         const dataInicio = (rawEtapa?.dataInicio as string | undefined) || null;
         const dataFim = (rawEtapa?.dataFim as string | undefined) || null;
 
@@ -134,7 +136,7 @@ export async function POST(request: NextRequest) {
 
     if (etapasComIdReal.length > 0) {
       const payload = etapasComIdReal.map((e, idx) => {
-        const rawEtapa = body.etapas?.find((raw: any) => raw.id === e.id || idMap[String(raw.id)] === e.id);
+        const rawEtapa = (body.etapas as RawEtapa[] | undefined)?.find((raw) => raw.id === e.id || idMap[String(raw.id)] === e.id);
         return {
           id: e.id,
           nome: e.nome,

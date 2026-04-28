@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 
 import { z } from "zod";
@@ -352,38 +352,39 @@ export default function OnboardingPage() {
   // ============================================================================
   // VERIFICAÇÃO DE CPF EM TEMPO REAL
   // ============================================================================
-  const checkCpfDuplicado = useCallback(
-    debounce(async (cpf: string) => {
-      if (cpf.length !== 14) return;
+  const checkCpfDuplicado = useMemo(
+    () =>
+      debounce(async (cpf: string) => {
+        if (cpf.length !== 14) return;
 
-      cpfBeingChecked.current = cpf;
-      setCpfChecking(true);
+        cpfBeingChecked.current = cpf;
+        setCpfChecking(true);
 
-      try {
-        const cpfNumerico = cpf.replace(/\D/g, "");
-        const response = await fetch(
-          `/api/colaboradores?search=${cpfNumerico}&limit=1`
-        );
-        const data = await response.json();
+        try {
+          const cpfNumerico = cpf.replace(/\D/g, "");
+          const response = await fetch(
+            `/api/colaboradores?search=${cpfNumerico}&limit=1`
+          );
+          const data = await response.json();
 
-        // Só atualiza se o CPF verificado ainda for o atual
-        if (cpfBeingChecked.current === cpf) {
-          if (data.data && data.data.length > 0) {
-            setCpfError(`CPF já cadastrado: ${data.data[0].NOME}`);
-          } else {
+          // Só atualiza se o CPF verificado ainda for o atual
+          if (cpfBeingChecked.current === cpf) {
+            if (data.data && data.data.length > 0) {
+              setCpfError(`CPF já cadastrado: ${data.data[0].NOME}`);
+            } else {
+              setCpfError(null);
+            }
+          }
+        } catch {
+          if (cpfBeingChecked.current === cpf) {
             setCpfError(null);
           }
+        } finally {
+          if (cpfBeingChecked.current === cpf) {
+            setCpfChecking(false);
+          }
         }
-      } catch {
-        if (cpfBeingChecked.current === cpf) {
-          setCpfError(null);
-        }
-      } finally {
-        if (cpfBeingChecked.current === cpf) {
-          setCpfChecking(false);
-        }
-      }
-    }, 500),
+      }, 500),
     []
   );
 
@@ -486,7 +487,7 @@ export default function OnboardingPage() {
     }
     // Só verifica se o CPF está completo
     checkCpfDuplicado(cpfValue);
-  }, [cpfValue]);
+  }, [cpfValue, checkCpfDuplicado]);
 
   // Calcular idade automaticamente quando dtNascimento mudar
   useEffect(() => {
