@@ -25,7 +25,7 @@ import {
   ColaboradorCreateSchema,
   type Colaborador,
 } from "@/lib/schemas";
-import { CARGOS_AGRUPADOS } from "@/constants/cargos";
+import { expandirCargos } from "@/lib/cargos";
 import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import { logAdicionar } from "@/lib/logs";
 
@@ -227,16 +227,8 @@ export async function GET(request: NextRequest) {
     // ── Filtro por cargo (individual ou grupo) ────────────────────────────
     const cargosSelecionados = cargo?.split(",").filter(Boolean);
     if (cargosSelecionados?.length) {
-      const funcoesFinais = new Set<string>();
-      cargosSelecionados.forEach((item) => {
-        const grupo = (CARGOS_AGRUPADOS as Record<string, readonly string[]>)[item];
-        if (grupo) {
-          grupo.forEach((c) => funcoesFinais.add(c));
-        } else {
-          funcoesFinais.add(item);
-        }
-      });
-      query = query.in("funcao_clt", [...funcoesFinais]);
+      const funcoesFinais = await expandirCargos(cargosSelecionados);
+      query = query.in("funcao_clt", funcoesFinais);
     }
 
     // ── Filtro por centro de custo ────────────────────────────────────────

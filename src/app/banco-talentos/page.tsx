@@ -42,16 +42,9 @@ import { BancoTalentosImportModal } from "@/components/BancoTalentosImportModal"
 import { BancoTalentosAddEditModal } from "@/components/BancoTalentosAddEditModal";
 import { BancoTalentosRealocarModal } from "@/components/BancoTalentosRealocarModal";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
-import { cn } from "@/lib/utils";
+import { cn, maskCPF, formatTelefone } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatCPF(cpf: string | null | undefined): string {
-  if (!cpf) return "—";
-  const clean = String(cpf).replace(/\D/g, "");
-  if (clean.length !== 11) return cpf;
-  return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-}
 
 function getInitials(name: string): string {
   const parts = name.trim().split(" ").filter(Boolean);
@@ -145,7 +138,7 @@ export default function BancoTalentosPage() {
 
   const opcoesCpf = useMemo(() => {
     const valores = new Set(todosTalentosData?.map((t) => t.cpf).filter(Boolean) as string[] ?? []);
-    return Array.from(valores).sort().map((v) => ({ value: v, label: formatCPF(v) }));
+    return Array.from(valores).sort().map((v) => ({ value: v, label: maskCPF(v) || "—" }));
   }, [todosTalentosData]);
 
   const opcoesMunicipio = useMemo(() => {
@@ -233,10 +226,10 @@ export default function BancoTalentosPage() {
         t.nome || "",
         t.idade != null ? String(t.idade) : "",
         t.dt_nasc ? new Date(t.dt_nasc).toLocaleDateString("pt-BR") : "",
-        formatCPF(t.cpf),
+        maskCPF(t.cpf) || "—",
         t.municipio || "",
         t.uf || "",
-        t.telefone || "",
+        formatTelefone(t.telefone) || "",
       ]);
 
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -424,7 +417,7 @@ export default function BancoTalentosPage() {
                             {/* CPF */}
                             <TableCell className="py-3">
                               <span className="font-mono text-sm text-muted-foreground">
-                                {formatCPF(talento.cpf)}
+                                {maskCPF(talento.cpf) || "—"}
                               </span>
                             </TableCell>
 
@@ -440,7 +433,7 @@ export default function BancoTalentosPage() {
                             {/* Telefone */}
                             <TableCell className="py-3">
                               <span className="font-mono text-sm text-muted-foreground">
-                                {talento.telefone || "—"}
+                                {formatTelefone(talento.telefone) || "—"}
                               </span>
                             </TableCell>
 

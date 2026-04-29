@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { maskCPF, formatTelefone } from "@/lib/utils";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ interface ExportButtonProps {
 /** Monta os cabeçalhos legíveis e os valores de cada linha para a planilha. */
 function toSheetRow(c: ColaboradorRow): Record<string, string | number | null> {
   return {
-    CPF:                  c.CPF ?? "",
+    CPF:                  maskCPF(c.CPF) ?? "",
     Nome:                 c.NOME ?? "",
     Status:               c.STATUS ?? "",
     "Função CLT":         c.FUNCAO_CLT ?? "",
@@ -92,7 +93,7 @@ function toSheetRow(c: ColaboradorRow): Record<string, string | number | null> {
     "Turno Trabalho":     c.TURNO_TRABALHO ?? "",
     Município:            c.MUNICIPIO ?? "",
     UF:                   c.UF ?? "",
-    Telefone:             c.TELEFONE ?? "",
+    Telefone:             formatTelefone(c.TELEFONE) ?? "",
     RE:                   c.RE ?? "",
     MOB:                  c.MOB ?? "",
     ASO:                  c.ASO ?? "",

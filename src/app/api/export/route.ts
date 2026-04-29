@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import { logExport } from "@/lib/logs";
-import { CARGOS_AGRUPADOS } from "@/constants/cargos";
+import { expandirCargos } from "@/lib/cargos";
 
 // ============================================================================
 // TIPOS
@@ -200,8 +200,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (cargo) {
-      const grupo = (CARGOS_AGRUPADOS as Record<string, readonly string[]>)[cargo];
-      const cargosFiltro = grupo ? [...grupo] : [cargo];
+      const cargosFiltro = await expandirCargos([cargo]);
       colaboradores = colaboradores.filter((c) =>
         cargosFiltro.includes(c.FUNCAO_CLT ?? ""),
       );

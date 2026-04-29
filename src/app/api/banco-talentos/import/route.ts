@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         cpf: cpfRaw || null,
         municipio: toStr(getBySchema(row, headerMap, "municipio") ?? "") || null,
         uf: toStr(getBySchema(row, headerMap, "uf") ?? "") || null,
-        telefone: toStr(getBySchema(row, headerMap, "telefone") ?? "") || null,
+        telefone: toStr(getBySchema(row, headerMap, "telefone") ?? "").replace(/\D/g, "") || null,
       });
     }
 

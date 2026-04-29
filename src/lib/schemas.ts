@@ -180,16 +180,18 @@ export const DateRequiredSchema = z.preprocess(
 /**
  * Schema para telefone
  * Aceita: formato válido, string vazia (converte para undefined), null, undefined
+ * Normaliza para somente dígitos antes de persistir.
  */
 export const TelefoneSchema = z.preprocess(
   (val) => {
     if (val === null || val === undefined) return undefined;
     if (typeof val === "string" && val.trim() === "") return undefined;
-    return val;
+    // Remove máscara e mantém só os dígitos
+    return String(val).replace(/\D/g, "");
   },
   z
     .string()
-    .regex(/^\(\d{2}\)\s?\d{4,5}-?\d{4}$|^\d{10,11}$/, "Telefone inválido")
+    .regex(/^\d{10,11}$/, "Telefone inválido")
     .optional()
 );
 
@@ -820,5 +822,22 @@ export const ColaboradorRestritoSchema = z.object({
   tipo_demissao: z.preprocess(emptyStringToUndefined, z.string().optional()),
   motivo_demissao: z.preprocess(emptyStringToUndefined, z.string().optional()),
 });
+
+// ============================================================================
+// SCHEMA DE CARGOS
+// ============================================================================
+
+/**
+ * Schema de um cargo persistido na tabela `configuracoes_cargos` (Supabase).
+ * Usado pelas rotas /api/config/cargos para validar criação.
+ */
+export const CargoSchema = z.object({
+  id: z.string().uuid().optional(),
+  nome: z.string().min(1, "Nome é obrigatório"),
+  grupo: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  ativo: z.boolean().default(true),
+});
+
+export type Cargo = z.infer<typeof CargoSchema>;
 
 export type ColaboradorRestrito = z.infer<typeof ColaboradorRestritoSchema>;

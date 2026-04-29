@@ -1,10 +1,16 @@
 /**
  * ============================================================================
- * CONSTANTES: CARGOS
+ * CONSTANTES: CARGOS (LEGADO / DEPRECATED)
  * ============================================================================
  *
- * Lista completa de cargos disponíveis para seleção no sistema.
- * Usada nos formulários de cadastro e edição de colaboradores.
+ * ⚠️ DEPRECATED: A fonte de verdade dos cargos agora é a tabela
+ * `configuracoes_cargos` no Supabase, acessível via:
+ *   - Hook client-side: `useCargos()` (src/hooks/use-cargos.ts)
+ *   - Helpers server-side: `getCargosAgrupados()` / `expandirCargos()` (src/lib/cargos.ts)
+ *
+ * Este arquivo é mantido temporariamente como referência/backup.
+ * Não adicione novos dados aqui.
+ * ============================================================================
  */
 
 export const CARGOS = [

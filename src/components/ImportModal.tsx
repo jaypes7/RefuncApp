@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { buildHeaderMap } from "@/lib/import-utils";
+import { maskCPF } from "@/lib/utils";
 
 // ============================================================================
 // TIPOS
@@ -305,7 +306,7 @@ export function ImportModal({
                       <tbody>
                         {previewData.map((row, i) => (
                           <tr key={i} className="border-b border-border/50 opacity-70">
-                            <td className="p-1 font-mono">{row.CPF}</td>
+                            <td className="p-1 font-mono">{maskCPF(row.CPF) || "—"}</td>
                             <td className="p-1 truncate max-w-[120px]">{row.NOME}</td>
                             <td className="p-1 text-right">{row.STATUS}</td>
                           </tr>

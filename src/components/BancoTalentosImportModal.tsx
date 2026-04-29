@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { bancoTalentosApi } from "@/lib/axios";
+import { maskCPF } from "@/lib/utils";
 
 interface ImportModalProps {
   open: boolean;
@@ -189,7 +190,7 @@ export function BancoTalentosImportModal({ open, onOpenChange, onSuccess }: Impo
                       <tbody>
                         {previewData.map((row, i) => (
                           <tr key={i} className="border-b border-border/50 opacity-70">
-                            <td className="p-1 font-mono">{row.cpf || "—"}</td>
+                            <td className="p-1 font-mono">{maskCPF(row.cpf) || "—"}</td>
                             <td className="p-1 truncate max-w-[140px]">{row.nome}</td>
                             <td className="p-1">{row.municipio}</td>
                           </tr>

@@ -40,7 +40,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { cn } from "@/lib/utils";
+import { cn, maskCPF, formatTelefone } from "@/lib/utils";
 import { colaboradoresApi, exportApi, type Colaborador } from "@/lib/axios";
 import { ImportModal } from "@/components/ImportModal";
 import { ColaboradorDetailsModal } from "@/components/ColaboradorDetailsModal";
@@ -98,15 +98,6 @@ function getInitials(name: string): string {
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
-
-function formatCPF(cpf: string | number | null | undefined): string {
-  if (!cpf) return "";
-  const cpfString = String(cpf).trim();
-  const clean = cpfString.replace(/\D/g, "");
-  if (clean.length !== 11) return cpfString;
-  return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-}
-
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -322,7 +313,7 @@ export default function CentralPage() {
         c.DEMISSAO || "",
         c.MUNICIPIO || "",
         c.UF || "",
-        c.TELEFONE || "",
+        formatTelefone(c.TELEFONE) || "",
         c.TURNO_TRABALHO || "",
         c.CHECK_IN || "",
         c.HOTEL || "",
@@ -644,7 +635,7 @@ export default function CentralPage() {
                           {/* CPF */}
                           <TableCell className="py-3 overflow-hidden">
                             <span className="font-mono text-sm text-muted-foreground">
-                              {formatCPF(colab.CPF || "")}
+                              {maskCPF(colab.CPF) || "—"}
                             </span>
                           </TableCell>
 
