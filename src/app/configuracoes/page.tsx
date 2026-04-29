@@ -521,6 +521,9 @@ export default function ConfiguracoesPage() {
 
       queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["projetos"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["config", "acessos"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
       toast.success("Configurações do projeto salvas!");
     },
     onError: () => toast.error("Erro ao salvar configurações do projeto"),
