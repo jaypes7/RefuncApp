@@ -55,6 +55,8 @@ import {
 } from "@/components/ui/select";
 
 import { colaboradoresApi, type Colaborador } from "@/lib/axios";
+import { maskCPF, formatTelefone } from "@/lib/utils";
+import { IMaskInput } from "react-imask";
 import { CargoCombobox } from "@/components/CargoCombobox";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -417,7 +419,7 @@ export default function EditarColaboradorPage() {
               {form.NOME?.trim() || "Editar Colaborador"}
             </h1>
             <p className="text-muted-foreground">
-              Edição de dados cadastrais · CPF {form.CPF}
+              Edição de dados cadastrais · CPF {maskCPF(form.CPF) || "—"}
             </p>
           </div>
         </div>
@@ -513,7 +515,7 @@ export default function EditarColaboradorPage() {
                 />
                 <F
                   label="CPF"
-                  value={form.CPF}
+                  value={maskCPF(form.CPF)}
                   onChange={t("CPF")}
                   placeholder="000.000.000-00"
                   readOnly
@@ -570,12 +572,16 @@ export default function EditarColaboradorPage() {
                   onChange={s("UF")}
                   options={O_UF}
                 />
-                <F
-                  label="Telefone"
-                  value={form.TELEFONE}
-                  onChange={t("TELEFONE")}
-                  placeholder="(00) 00000-0000"
-                />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Telefone</label>
+                  <IMaskInput
+                    mask="(00) 00000-0000"
+                    placeholder="(00) 00000-0000"
+                    value={formatTelefone(form.TELEFONE)}
+                    onAccept={(value: string) => set("TELEFONE", value || "")}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
                 <F
                   label="Idade"
                   value={form.IDADE?.toString() ?? ""}

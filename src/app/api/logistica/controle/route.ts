@@ -224,7 +224,7 @@ function rowToLogistica(
         result.data_nascimento = sanitizeDate(val) ?? undefined;
         break;
       case "telefone":
-        result.telefone = sanitizeText(val) ?? undefined;
+        result.telefone = sanitizeText(val)?.replace(/\D/g, "") ?? undefined;
         break;
       case "uf":
         result.uf = sanitizeText(val, { upper: true }) ?? undefined;

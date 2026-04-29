@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -16,7 +16,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
+import { IMaskInput } from "react-imask";
 import { bancoTalentosApi, type BancoTalento } from "@/lib/axios";
+import { sanitizeTelefone, formatTelefone } from "@/lib/utils";
 
 const Schema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
@@ -45,6 +47,7 @@ export function BancoTalentosAddEditModal({ open, onOpenChange, talento }: Props
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
@@ -85,7 +88,7 @@ export function BancoTalentosAddEditModal({ open, onOpenChange, talento }: Props
         idade: values.idade ? parseInt(values.idade) : null,
         municipio: values.municipio || null,
         uf: values.uf || null,
-        telefone: values.telefone || null,
+        telefone: sanitizeTelefone(values.telefone) || null,
       };
 
       if (isEdit && talento?.id) {
@@ -163,7 +166,20 @@ export function BancoTalentosAddEditModal({ open, onOpenChange, talento }: Props
             {/* Telefone */}
             <div className="col-span-2 space-y-1">
               <label htmlFor="bt-telefone" className="text-sm font-medium">Telefone</label>
-              <Input id="bt-telefone" {...register("telefone")} placeholder="(00) 00000-0000" />
+              <Controller
+                name="telefone"
+                control={control}
+                render={({ field }) => (
+                  <IMaskInput
+                    id="bt-telefone"
+                    mask="(00) 00000-0000"
+                    placeholder="(00) 00000-0000"
+                    value={formatTelefone(field.value) || ""}
+                    onAccept={(value: string) => field.onChange(value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                )}
+              />
             </div>
           </div>
 

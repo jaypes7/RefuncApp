@@ -17,7 +17,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CARGOS } from "@/constants/cargos";
+import { useCargos } from "@/hooks/use-cargos";
 
 interface CargoComboboxProps {
   value?: string;
@@ -33,6 +33,7 @@ export function CargoCombobox({
   disabled = false,
 }: CargoComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const { cargos, isLoading } = useCargos();
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -42,10 +43,10 @@ export function CargoCombobox({
           role="combobox"
           aria-expanded={open}
           className="w-full justify-between h-11 bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-left font-normal"
-          disabled={disabled}
+          disabled={disabled || isLoading}
         >
           <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value || placeholder}
+            {isLoading ? "Carregando cargos..." : value || placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -58,10 +59,10 @@ export function CargoCombobox({
           />
           <CommandList className="max-h-75 overflow-auto">
             <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">
-              Nenhum cargo encontrado.
+              {isLoading ? "Carregando..." : "Nenhum cargo encontrado."}
             </CommandEmpty>
             <CommandGroup className="p-1">
-              {CARGOS.map((cargo) => (
+              {cargos.map((cargo) => (
                 <CommandItem
                   key={cargo}
                   value={cargo}

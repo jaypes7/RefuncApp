@@ -297,7 +297,7 @@ export default function OnboardingPage() {
       // Colunas 36-38
       MUNICIPIO: data.municipio,
       UF: data.uf,
-      TELEFONE: data.telefone,
+      TELEFONE: data.telefone ? data.telefone.replace(/\D/g, "") : undefined,
       CENTRO_CUSTO: data.centroCusto || centroCusto,
     };
   };

@@ -9,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { type Colaborador } from "@/lib/axios";
+import { maskCPF, formatTelefone } from "@/lib/utils";
 import {
   User,
   Briefcase,
@@ -41,14 +42,6 @@ function parseDisplayDate(value: string | number | null | undefined): string {
     return `${year}-${month}-${day}`;
   }
   return str.split("T")[0];
-}
-
-// Helper para formatar CPF
-function formatCPF(cpf: string | number | null | undefined): string {
-  if (!cpf) return "-";
-  const clean = String(cpf).replace(/\D/g, "");
-  if (clean.length !== 11) return String(cpf);
-  return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 }
 
 // Helper para determinar status geral
@@ -187,7 +180,7 @@ export function ColaboradorDetailsModal({
             <div className="min-w-0">
               <p className="text-lg truncate">{colaborador.NOME}</p>
               <p className="text-sm font-normal text-muted-foreground truncate">
-                {formatCPF(colaborador.CPF)} •{" "}
+                {maskCPF(colaborador.CPF) || "—"} •{" "}
                 {colaborador.FUNCAO_CLT || "Sem função"}
               </p>
             </div>
@@ -279,7 +272,7 @@ export function ColaboradorDetailsModal({
           {/* Dados Pessoais */}
           <Section title="Dados Pessoais" icon={User}>
             <div className="grid grid-cols-2 gap-3">
-              <InfoField label="CPF" value={formatCPF(colaborador.CPF)} />
+              <InfoField label="CPF" value={maskCPF(colaborador.CPF) || "—"} />
               <InfoField label="RE" value={colaborador.RE || "-"} />
               <InfoField
                 label="Idade"
@@ -294,7 +287,7 @@ export function ColaboradorDetailsModal({
                 value={colaborador.MUNICIPIO || "-"}
               />
               <InfoField label="UF" value={colaborador.UF || "-"} />
-              <InfoField label="Telefone" value={colaborador.TELEFONE || "-"} />
+              <InfoField label="Telefone" value={formatTelefone(colaborador.TELEFONE) || "-"} />
               <InfoField label="Pessoa" value={colaborador.PESSOA || "-"} />
             </div>
           </Section>

@@ -26,6 +26,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CargoCombobox } from "./CargoCombobox";
 import { colaboradoresApi, clinicasApi, type Colaborador } from "@/lib/axios";
+import { maskCPF, formatTelefone } from "@/lib/utils";
 
 const DATE_FIELDS = new Set(["DATA_ADMISSAO", "DT_NASCIMENTO"]);
 
@@ -82,6 +83,12 @@ function sanitizePayload(data: EditFormData): Partial<EditFormData> {
 
     if (value === "" || value === null || value === undefined) {
       // Omite a chave — Zod .partial() trata ausência como opcional
+      continue;
+    }
+
+    // Remove máscara do telefone antes de enviar
+    if (key === "TELEFONE" && typeof value === "string") {
+      result[key] = value.replace(/\D/g, "");
       continue;
     }
 
@@ -368,7 +375,7 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">CPF</label>
                   <Input
-                    value={colaborador.CPF}
+                    value={maskCPF(colaborador.CPF)}
                     disabled
                     className="bg-muted"
                   />
@@ -445,7 +452,7 @@ export function EditColaboradorModal({
                       <IMaskInput
                         mask="(00) 00000-0000"
                         placeholder="(00) 00000-0000"
-                        value={field.value || ""}
+                        value={formatTelefone(field.value) || ""}
                         onAccept={(value: string) => field.onChange(value)}
                         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       />

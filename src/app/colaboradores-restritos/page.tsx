@@ -45,15 +45,9 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { useAcessoRestrito } from "@/hooks/use-acesso-restrito";
 import { colaboradoresRestritosApi, type ColaboradorRestrito } from "@/lib/axios";
 import { ColaboradoresRestritosImportModal } from "@/components/ColaboradoresRestritosImportModal";
+import { maskCPF } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatCPF(cpf: string | null | undefined): string {
-  if (!cpf) return "—";
-  const clean = String(cpf).replace(/\D/g, "");
-  if (clean.length !== 11) return cpf;
-  return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-}
 
 function TableSkeleton() {
   return (
@@ -321,7 +315,7 @@ export default function ColaboradoresRestritosPage() {
 
                             <TableCell className="py-3">
                               <span className="font-mono text-sm text-muted-foreground">
-                                {formatCPF(item.cpf)}
+                                {maskCPF(item.cpf) || "—"}
                               </span>
                             </TableCell>
 

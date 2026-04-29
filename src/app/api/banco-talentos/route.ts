@@ -11,7 +11,10 @@ const CreateSchema = z.object({
   cpf: z.string().max(14).optional().nullable(),
   municipio: z.string().max(255).optional().nullable(),
   uf: z.string().max(2).optional().nullable(),
-  telefone: z.string().max(100).optional().nullable(),
+  telefone: z.preprocess(
+    (val) => (typeof val === "string" ? val.replace(/\D/g, "") : val),
+    z.string().max(11).optional().nullable(),
+  ),
 });
 
 export async function GET(request: NextRequest) {

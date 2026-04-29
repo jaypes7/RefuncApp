@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { colaboradoresRestritosApi } from "@/lib/axios";
+import { maskCPF } from "@/lib/utils";
 
 interface ImportModalProps {
   open: boolean;
@@ -193,7 +194,7 @@ export function ColaboradoresRestritosImportModal({ open, onOpenChange, onSucces
                         {previewData.map((row, i) => (
                           <tr key={i} className="border-b border-border/50 opacity-70">
                             <td className="p-1 truncate max-w-[140px]">{row.nome}</td>
-                            <td className="p-1 font-mono">{row.cpf || "—"}</td>
+                            <td className="p-1 font-mono">{maskCPF(row.cpf) || "—"}</td>
                             <td className="p-1 truncate max-w-[120px]">{row.tipo_demissao || "—"}</td>
                             <td className="p-1 truncate max-w-[140px]">{row.motivo_demissao || "—"}</td>
                           </tr>
