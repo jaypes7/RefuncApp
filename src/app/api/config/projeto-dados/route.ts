@@ -68,63 +68,46 @@ export async function POST(request: NextRequest) {
           : null,
     };
 
-    let error;
-
-    if (centroCustoOriginal) {
-      // Modo edição: atualiza o registro existente pelo centro de custo original
-      const { error: updateError } = await supabase
+    // ── Edição com mudança de centro de custo: usa stored procedure transacional ──
+    if (centroCustoOriginal && centroCustoOriginal !== targetCentroCusto) {
+      // Verifica duplicidade antes de executar a migração
+      const { data: existing } = await supabase
         .from("configuracoes")
-        .update(payload)
-        .eq("centro_custo", centroCustoOriginal);
-      error = updateError;
-    } else {
-      // Modo criação/upsert legado
-      const { error: upsertError } = await supabase
-        .from("configuracoes")
-        .upsert(payload, { onConflict: "centro_custo" });
-      error = upsertError;
-    }
+        .select("centro_custo")
+        .eq("centro_custo", targetCentroCusto)
+        .maybeSingle();
 
-    if (error) {
-      if (error.code === "23505") {
+      if (existing) {
         return NextResponse.json(
           { error: "Centro de custo já existe" },
           { status: 409 },
         );
       }
-      throw new Error(`Erro ao salvar no Supabase: ${error.message}`);
-    }
 
-    // ── Cascade update: migra centro_custo nas tabelas filhas quando o CC mudou ──
-    if (centroCustoOriginal && centroCustoOriginal !== targetCentroCusto) {
-      const tabelas = [
-        "colaboradores",
-        "comentarios_cliente",
-        "configuracoes_clinicas",
-        "configuracoes_hoteis",
-        "etapas",
-        "etapas_progresso_diario",
-        "logistica_controle",
-        "ocorrencias",
-        "pendencias_manuais",
-        "registros_fotograficos",
-        "rh_colaboradores",
-        "seguranca_fits",
-        "suprimentos_ordens",
-      ];
+      const { error: rpcError } = await supabase.rpc("migrar_centro_custo", {
+        antigo: centroCustoOriginal,
+        novo: targetCentroCusto,
+      });
 
-      for (const tabela of tabelas) {
-        const { error: migrateError } = await supabase
-          .from(tabela)
-          .update({ centro_custo: targetCentroCusto })
-          .eq("centro_custo", centroCustoOriginal);
+      if (rpcError) {
+        throw new Error(
+          `Falha ao migrar centro de custo: ${rpcError.message}`,
+        );
+      }
+    } else {
+      // Criação ou edição sem mudança de CC
+      const { error } = await supabase
+        .from("configuracoes")
+        .upsert(payload, { onConflict: "centro_custo" });
 
-        if (migrateError) {
-          console.error(
-            `[POST /config/projeto-dados] Erro ao migrar ${tabela}:`,
-            migrateError.message,
+      if (error) {
+        if (error.code === "23505") {
+          return NextResponse.json(
+            { error: "Centro de custo já existe" },
+            { status: 409 },
           );
         }
+        throw new Error(`Erro ao salvar no Supabase: ${error.message}`);
       }
     }
 
