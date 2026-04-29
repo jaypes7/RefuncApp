@@ -9,6 +9,7 @@
 
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { createServerClient } from "@/lib/supabase";
 
 // ============================================================================
 // CONFIGURAÇÃO
@@ -216,4 +217,36 @@ export function resolveCentroCusto(
   }
 
   return autorizados;
+}
+
+// ============================================================================
+// ACESSO RESTRITO — Verificação em tempo real no banco
+// ============================================================================
+
+/**
+ * Verifica se o usuário atual está na tabela isolada de acessos restritos.
+ * NUNCA confia no JWT — sempre consulta o banco em tempo real.
+ *
+ * @throws Error("UNAUTHORIZED") — sem sessão válida → HTTP 401
+ * @throws Error("FORBIDDEN")    — RE não está na lista de permitidos → HTTP 403
+ */
+export async function requireAcessoRestrito(): Promise<JWTPayload> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  const db = createServerClient();
+  const { data } = await db
+    .from("acessos_restritos_permitidos")
+    .select("re")
+    .eq("re", user.re)
+    .single();
+
+  if (!data) {
+    throw new Error("FORBIDDEN");
+  }
+
+  return user;
 }

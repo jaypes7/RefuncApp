@@ -91,6 +91,8 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   termino: ["TERMINO", "TÉRMINO", "TÉRMINO CONTRATO"],
   prorrogacao: ["PRORROGACAO", "PRORROGAÇÃO"],
   check_in: ["CHECK IN", "CHECK-IN", "DATA CHECK IN", "DATA CHECK-IN"],
+  tipo_demissao: ["TIPODEMISSAO"],
+  motivo_demissao: ["MOTIVODEMISSAO"],
 };
 
 // ── Mapeamento schemaId → chave da API (coluna na planilha) ─────────────────
@@ -158,6 +160,8 @@ export const SCHEMA_TO_API: Record<string, string | null> = {
   vr: "VR",
   termino: "TERMINO",
   prorrogacao: "PRORROGACAO",
+  tipo_demissao: "tipo_demissao",
+  motivo_demissao: "motivo_demissao",
 };
 
 // ── Sanitização ──────────────────────────────────────────────────────────────
@@ -403,5 +407,29 @@ export function rowToColaborador(row: RawRow, headerMap: Map<string, string>): R
     }
   }
   
+  return result;
+}
+
+/**
+ * Converte uma linha bruta da planilha em um objeto pronto para a API
+ * de colaboradores restritos (campos: nome, cpf, tipo_demissao, motivo_demissao).
+ */
+export function rowToColaboradorRestrito(row: RawRow, headerMap: Map<string, string>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  for (const [rawHeader, schemaId] of headerMap.entries()) {
+    const rawValue = row[rawHeader];
+    const apiKey = SCHEMA_TO_API[schemaId];
+    if (!apiKey) continue;
+
+    if (schemaId === "cpf") {
+      const cpf = sanitizeCPF(rawValue);
+      if (cpf) result[apiKey] = cpf;
+    } else if (["nome", "tipo_demissao", "motivo_demissao"].includes(schemaId)) {
+      const text = sanitizeText(rawValue);
+      if (text) result[apiKey] = text;
+    }
+  }
+
   return result;
 }
