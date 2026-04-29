@@ -447,7 +447,7 @@ export default function DashboardRhPage() {
                 <Card className="glass-card flex flex-col overflow-hidden h-full">
                   <CardHeader className="flex flex-row items-center gap-2 pb-2">
                     <CalendarClock className="h-4 w-4 text-primary" />
-                    <CardTitle>Lista de Términos</CardTitle>
+                    <CardTitle>Lista de Términos de Contrato</CardTitle>
                     <span className="text-sm font-normal text-muted-foreground">
                       ({terminoFiltrado.length} / {data?.agregacoes?.terminoDetalhado?.length ?? 0} colaboradores)
                     </span>

@@ -1651,11 +1651,11 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* Card Lista de Términos */}
+              {/* Card Lista de Funções */}
               <Card className="glass-card h-[480px] 2xl:h-[520px]">
                 <CardHeader className="flex flex-row items-center gap-2 pb-2">
                   <CalendarClock className="h-4 w-4 text-primary" />
-                  <CardTitle>Lista de Términos</CardTitle>
+                  <CardTitle>Lista de Funções</CardTitle>
                   <span className="text-sm font-normal text-muted-foreground">
                     ({dashboardData?.agregacoes?.terminoDetalhado?.length ?? 0} colaboradores)
                   </span>
