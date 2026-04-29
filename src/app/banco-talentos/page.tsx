@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   Search,
   Download,
+  Upload,
   Plus,
   MoreHorizontal,
   Pencil,
@@ -14,6 +15,7 @@ import {
   Database,
   Loader2,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -109,6 +111,7 @@ export default function BancoTalentosPage() {
   const [addEditOpen, setAddEditOpen] = useState(false);
   const [realocarOpen, setRealocarOpen] = useState(false);
   const [selectedTalento, setSelectedTalento] = useState<BancoTalento | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   // ── Queries ─────────────────────────────────────────────────────────────────
 
@@ -195,6 +198,63 @@ export default function BancoTalentosPage() {
     setAddEditOpen(true);
   };
 
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      toast.info("Preparando exportação...");
+
+      const response = await fetch("/api/export/banco-talentos");
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Erro desconhecido" }));
+        throw new Error(err.error || `HTTP ${response.status}`);
+      }
+
+      const json = await response.json();
+      const allTalentos: BancoTalento[] = json.data ?? [];
+
+      if (allTalentos.length === 0) {
+        toast.warning("Não há talentos para exportar");
+        return;
+      }
+
+      const headers = [
+        "PESSOA",
+        "NOME",
+        "IDADE",
+        "DT_NASC",
+        "CPF",
+        "MUNICIPIO",
+        "UF",
+        "TELEFONE",
+      ];
+
+      const rows = allTalentos.map((t) => [
+        t.pessoa || "",
+        t.nome || "",
+        t.idade != null ? String(t.idade) : "",
+        t.dt_nasc ? new Date(t.dt_nasc).toLocaleDateString("pt-BR") : "",
+        formatCPF(t.cpf),
+        t.municipio || "",
+        t.uf || "",
+        t.telefone || "",
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws["!cols"] = headers.map(() => ({ wch: 18 }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Banco de Talentos");
+      const dateStr = new Date().toISOString().split("T")[0];
+      XLSX.writeFile(wb, `banco_talentos_refuncapp_${dateStr}.xlsx`);
+
+      toast.success(`${allTalentos.length} talentos exportados com sucesso!`);
+    } catch (error) {
+      console.error("Erro ao exportar:", error);
+      toast.error(error instanceof Error ? error.message : "Erro ao exportar talentos");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const talentos = data?.data ?? [];
@@ -245,6 +305,16 @@ export default function BancoTalentosPage() {
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={handleExport}
+                disabled={isExporting}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {isExporting ? "Exportando..." : "Exportar"}
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
