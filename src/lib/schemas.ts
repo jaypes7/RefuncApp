@@ -808,3 +808,17 @@ export type PerfilUsuario = z.infer<typeof PerfilEnum>;
 export type RhRecord = z.infer<typeof RhSchema>;
 export type LogisticaRecord = z.infer<typeof LogisticaSchema>;
 export type SegurancaRecord = z.infer<typeof SegurancaSchema>;
+
+// ============================================================================
+// SCHEMA DE COLABORADORES RESTRITOS
+// ============================================================================
+
+export const ColaboradorRestritoSchema = z.object({
+  id: z.string().uuid().optional(),
+  nome: z.string().min(1, "Nome é obrigatório"),
+  cpf: z.preprocess(emptyStringToUndefined, CPFSchema.optional()),
+  tipo_demissao: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  motivo_demissao: z.preprocess(emptyStringToUndefined, z.string().optional()),
+});
+
+export type ColaboradorRestrito = z.infer<typeof ColaboradorRestritoSchema>;

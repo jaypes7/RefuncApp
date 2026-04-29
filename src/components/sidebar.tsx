@@ -22,6 +22,7 @@ import {
   Building2,
   Database,
   Camera,
+  ShieldAlert,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
@@ -31,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
+import { useAcessoRestrito } from "@/hooks/use-acesso-restrito";
 import {
   Popover,
   PopoverContent,
@@ -48,6 +50,47 @@ const dashboardSubItems = [
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+}
+
+/**
+ * Link condicional para Colaboradores Restritos.
+ * Só renderiza se o usuário logado estiver na tabela de acessos restritos.
+ */
+function ColaboradoresRestritosLink({
+  collapsed,
+  pathname,
+}: {
+  collapsed: boolean;
+  pathname: string;
+}) {
+  const { data: hasAccess } = useAcessoRestrito();
+
+  if (!hasAccess) return null;
+
+  const isActive = pathname === "/colaboradores-restritos";
+
+  return (
+    <Link href="/colaboradores-restritos">
+      <span
+        className={cn(
+          "flex items-center gap-2.5 text-xs font-semibold transition-colors duration-150 cursor-pointer",
+          !collapsed && "py-1.5 pr-3 pl-2.5 rounded-r-sm border-l-2",
+          !collapsed && isActive &&
+            "border-l-destructive text-white bg-destructive/10",
+          !collapsed && !isActive &&
+            "border-l-transparent text-white/70 hover:text-white hover:bg-white/10",
+          collapsed && "justify-center rounded-sm py-2",
+          collapsed && isActive && "bg-destructive/10 text-white",
+          collapsed && !isActive &&
+            "text-white/70 hover:text-white hover:bg-white/10",
+        )}
+        title={collapsed ? "Colaboradores Restritos" : undefined}
+      >
+        <ShieldAlert className="h-4 w-4 shrink-0" />
+        {!collapsed && <span>Colaboradores Restritos</span>}
+      </span>
+    </Link>
+  );
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
@@ -386,6 +429,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </span>
             </Link>
           </CanAccess>
+
+          {/* Colaboradores Restritos — visível apenas para REs autorizados */}
+          <ColaboradoresRestritosLink collapsed={collapsed} pathname={pathname} />
 
         </nav>
 
