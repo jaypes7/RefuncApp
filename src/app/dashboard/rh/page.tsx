@@ -44,6 +44,7 @@ import {
   ShieldCheck,
   CalendarClock,
   Globe,
+  Briefcase,
 } from "lucide-react";
 import { dashboardRhApi } from "@/lib/axios";
 import { useFilter } from "@/contexts/FilterContext";
@@ -75,6 +76,10 @@ const configSexo = {
 };
 
 const configEscolaridade = {
+  total: { label: "Colaboradores" },
+};
+
+const configExperiencia = {
   total: { label: "Colaboradores" },
 };
 
@@ -250,6 +255,16 @@ export default function DashboardRhPage() {
       { name: "Técnico", value: 80, fill: "#416e7d" },
       { name: "Superior", value: 55, fill: "#9c3022" },
       { name: "Pós-graduação", value: 20, fill: "#ffa78b" },
+    ];
+    return fakeData;
+  }, []);
+
+  // ── Dados fictícios de experiência na função (temporário) ─────────────────
+  const dadosExperiencia = useMemo(() => {
+    const fakeData = [
+      { name: "Júnior (até 2 anos)", value: 85, fill: "#ff460a" },
+      { name: "Pleno (2,5 a 4 anos)", value: 60, fill: "#19365b" },
+      { name: "Sênior (5 anos+)", value: 35, fill: "#416e7d" },
     ];
     return fakeData;
   }, []);
@@ -753,8 +768,8 @@ export default function DashboardRhPage() {
               </Card>
             </div>
 
-            {/* ASO + Escolaridade — grid side-by-side */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* ASO + Escolaridade + Experiência — grid side-by-side */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               {/* Card ASO — Distribuição de Saúde Ocupacional */}
               <Card className="glass-card">
                 <CardHeader className="flex flex-row items-center gap-2 pb-2">
@@ -848,6 +863,51 @@ export default function DashboardRhPage() {
                   {/* Legenda custom */}
                   <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2">
                     {dadosEscolaridade.map((entry) => (
+                      <div key={entry.name} className="flex items-center gap-2 text-xs min-w-0">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: entry.fill }}
+                        />
+                        <span className="truncate font-medium text-foreground">{entry.name}</span>
+                        <span className="ml-auto shrink-0 font-semibold tabular-nums">{entry.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Card Experiência na função — Dados fictícios temporários */}
+              <Card className="glass-card">
+                <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                  <Briefcase className="h-4 w-4 text-primary" />
+                  <CardTitle>Experiência na função</CardTitle>
+                  <span className="ml-auto text-[10px] uppercase tracking-wide text-yellow-500 font-semibold">
+                    Dados fictícios
+                  </span>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer config={configExperiencia} className="h-[260px] 2xl:h-[340px] w-full">
+                    <PieChart>
+                      <Pie
+                        data={dadosExperiencia}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="38%"
+                        outerRadius="68%"
+                        paddingAngle={2}
+                      >
+                        {dadosExperiencia.map((entry, i) => (
+                          <Cell key={`exp-${i}`} fill={entry.fill} stroke="transparent" />
+                        ))}
+                      </Pie>
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                    </PieChart>
+                  </ChartContainer>
+                  {/* Legenda custom */}
+                  <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2">
+                    {dadosExperiencia.map((entry) => (
                       <div key={entry.name} className="flex items-center gap-2 text-xs min-w-0">
                         <span
                           className="h-2.5 w-2.5 shrink-0 rounded-full"
