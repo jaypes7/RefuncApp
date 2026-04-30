@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     const pessoa = searchParams.get("pessoa") ?? "";
     const cpf = searchParams.get("cpf") ?? "";
     const municipio = searchParams.get("municipio") ?? "";
+    const uf = searchParams.get("uf") ?? "";
     const offset = (page - 1) * limit;
 
     const supabase = createServerClient();
@@ -63,6 +64,14 @@ export async function GET(request: NextRequest) {
         query = query.ilike("municipio", `%${vals[0]}%`);
       } else if (vals.length > 1) {
         query = query.or(vals.map((v) => `municipio.ilike.%${v}%`).join(","));
+      }
+    }
+    if (uf) {
+      const vals = uf.split(",").filter(Boolean);
+      if (vals.length === 1) {
+        query = query.eq("uf", vals[0]);
+      } else if (vals.length > 1) {
+        query = query.in("uf", vals);
       }
     }
 
