@@ -160,6 +160,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Sincroniza novas etapas com o checklist ─────────────────────────────
+    if (etapasComIdReal.length > 0) {
+      const { data: checklistExistentes } = await supabase
+        .from("checklist_etapas")
+        .select("etapa_origem_id")
+        .eq("centro_custo", centroCusto)
+        .in(
+          "etapa_origem_id",
+          etapasComIdReal.map((e) => e.id),
+        );
+
+      const existentesSet = new Set((checklistExistentes ?? []).map((e) => e.etapa_origem_id));
+      const novasParaChecklist = etapasComIdReal
+        .filter((e) => !existentesSet.has(e.id))
+        .map((e, idx) => ({
+          centro_custo: centroCusto,
+          etapa_origem_id: e.id,
+          nome: e.nome,
+          ordem: idx + 1,
+        }));
+
+      if (novasParaChecklist.length > 0) {
+        const { error: syncError } = await supabase
+          .from("checklist_etapas")
+          .insert(novasParaChecklist);
+
+        if (syncError) {
+          console.error("[POST /config/etapas] erro ao sincronizar checklist:", syncError.message);
+        }
+      }
+    }
+
     await logConfig(
       user.re,
       "Cronograma",

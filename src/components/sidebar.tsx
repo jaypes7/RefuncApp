@@ -318,7 +318,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </CanAccess>
 
           {/* Checklist Mobilização */}
-          <CanAccess role="user">
+          <CanAccess role="admin">
             <Link href="/checklist-mobilizacao">
               <span
                 className={navItem(pathname === "/checklist-mobilizacao")}

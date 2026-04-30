@@ -3,7 +3,9 @@
  * API: /api/checklist-mobilizacao
  * ============================================================================
  *
- * GET: Lista etapas do cronograma + subetapas do checklist filtradas por centro de custo.
+ * GET: Lista etapas do checklist (checklist_etapas) + subetapas filtradas por
+ *      centro de custo. Se não houver etapas no checklist, clona automaticamente
+ *      do cronograma (etapas) — lazy sync.
  * POST: Cria nova subetapa no checklist.
  */
 
@@ -20,33 +22,63 @@ import { ZodError } from "zod";
 
 export async function GET(request: NextRequest) {
   try {
-    const currentUser = await requireAuth("user");
+    const currentUser = await requireAuth("admin");
     const { searchParams } = new URL(request.url);
     const ccParam = searchParams.get("centro_custo") || undefined;
     const centroCusto = resolveCentroCusto(currentUser, ccParam);
 
     const db = createServerClient();
 
-    let etapasQuery = db.from("etapas").select("id, nome").order("ordem", { ascending: true });
+    // 1. Busca etapas do checklist
+    let etapasQuery = db
+      .from("checklist_etapas")
+      .select("id, nome, centro_custo, etapa_origem_id, ordem")
+      .order("ordem", { ascending: true });
     if (centroCusto?.length) etapasQuery = etapasQuery.in("centro_custo", centroCusto) as typeof etapasQuery;
 
+    let { data: etapasChecklist, error: etapasError } = await etapasQuery;
+
+    if (etapasError) throw new Error(etapasError.message);
+
+    // 2. Lazy sync: se não há etapas no checklist, clona do cronograma
+    const precisaSync = (!etapasChecklist || etapasChecklist.length === 0) && centroCusto?.length;
+    if (precisaSync) {
+      const { data: etapasCronograma, error: cronogramaError } = await db
+        .from("etapas")
+        .select("id, nome, centro_custo, ordem")
+        .in("centro_custo", centroCusto)
+        .order("ordem", { ascending: true });
+
+      if (cronogramaError) throw new Error(cronogramaError.message);
+
+      if (etapasCronograma && etapasCronograma.length > 0) {
+        const payload = etapasCronograma.map((e) => ({
+          centro_custo: e.centro_custo,
+          etapa_origem_id: e.id,
+          nome: e.nome,
+          ordem: e.ordem ?? 0,
+        }));
+
+        const { data: inseridas, error: insertError } = await db
+          .from("checklist_etapas")
+          .insert(payload)
+          .select("id, nome, centro_custo, etapa_origem_id, ordem");
+
+        if (insertError) throw new Error(insertError.message);
+        etapasChecklist = inseridas ?? [];
+      }
+    }
+
+    // 3. Busca subetapas
     let subetapasQuery = db.from("checklist_subetapas").select("*").order("ordem", { ascending: true });
     if (centroCusto?.length) subetapasQuery = subetapasQuery.in("centro_custo", centroCusto) as typeof subetapasQuery;
 
-    const [{ data: etapas, error: etapasError }, { data: subetapas, error: subetapasError }] = await Promise.all([
-      etapasQuery,
-      subetapasQuery,
-    ]);
+    const { data: subetapas, error: subetapasError } = await subetapasQuery;
 
-    if (etapasError) throw new Error(etapasError.message);
     if (subetapasError) throw new Error(subetapasError.message);
 
-    // Deduplica etapas por id — múltiplos centros de custo podem compartilhar
-    // os mesmos ids de etapa (1, 2, 3…) quando cadastrados via configuração.
-    const uniqueEtapas = Array.from(new Map((etapas ?? []).map((e) => [e.id, e])).values());
-
     return NextResponse.json({
-      etapas: uniqueEtapas,
+      etapas: etapasChecklist ?? [],
       subetapas: subetapas ?? [],
     });
   } catch (error) {
@@ -65,7 +97,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const currentUser = await requireAuth("user");
+    const currentUser = await requireAuth("admin");
     const { searchParams } = new URL(request.url);
     const ccParam = searchParams.get("centro_custo") || undefined;
     const centroCusto = resolveCentroCusto(currentUser, ccParam);

@@ -1,10 +1,10 @@
 /**
  * ============================================================================
- * API: /api/checklist-mobilizacao/[id]
+ * API: /api/checklist-mobilizacao/etapas/[id]
  * ============================================================================
  *
- * PATCH: Atualiza uma subetapa existente.
- * DELETE: Remove uma subetapa.
+ * PATCH:  Atualiza nome/ordem de uma etapa do checklist.
+ * DELETE: Remove a etapa do checklist e todas as subetapas associadas.
  */
 
 export const dynamic = "force-dynamic";
@@ -12,39 +12,31 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
-import { ChecklistSubetapaSchema } from "@/lib/schemas";
+import { ChecklistEtapaSchema } from "@/lib/schemas";
 import { ZodError } from "zod";
 
-interface RouteParams {
-  params: Promise<{ id: string }>;
-}
+// ── PUT ─────────────────────────────────────────────────────────────────────
 
-// ── PATCH ───────────────────────────────────────────────────────────────────
-
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireAuth("admin");
     const { id } = await params;
+    const etapaId = Number(id);
+    if (!etapaId || isNaN(etapaId)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
 
     const body = await request.json();
-    const parsed = ChecklistSubetapaSchema.partial().parse(body);
+    const parsed = ChecklistEtapaSchema.partial().parse(body);
 
     const db = createServerClient();
     const { error } = await db
-      .from("checklist_subetapas")
+      .from("checklist_etapas")
       .update({
-        etapa_id: parsed.etapa_id,
         nome: parsed.nome,
-        setor: parsed.setor,
-        responsavel: parsed.responsavel,
-        previsto: parsed.previsto,
-        avanco: parsed.avanco,
-        data_inicio: parsed.data_inicio,
-        data_termino: parsed.data_termino,
-        observacao: parsed.observacao,
         ordem: parsed.ordem,
       })
-      .eq("id", id);
+      .eq("id", etapaId);
 
     if (error) throw new Error(error.message);
 
@@ -59,22 +51,39 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (error instanceof Error && error.message === "FORBIDDEN") {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
-    console.error("[PATCH /checklist-mobilizacao/[id]]", error);
+    console.error("[PATCH /checklist-mobilizacao/etapas/[id]]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
 
 // ── DELETE ──────────────────────────────────────────────────────────────────
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireAuth("admin");
     const { id } = await params;
+    const etapaId = Number(id);
+    if (!etapaId || isNaN(etapaId)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
 
     const db = createServerClient();
-    const { error } = await db.from("checklist_subetapas").delete().eq("id", id);
 
-    if (error) throw new Error(error.message);
+    // Remove subetapas associadas primeiro
+    const { error: delSubError } = await db
+      .from("checklist_subetapas")
+      .delete()
+      .eq("etapa_id", etapaId);
+
+    if (delSubError) throw new Error(delSubError.message);
+
+    // Remove a etapa
+    const { error: delError } = await db
+      .from("checklist_etapas")
+      .delete()
+      .eq("id", etapaId);
+
+    if (delError) throw new Error(delError.message);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -84,7 +93,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     if (error instanceof Error && error.message === "FORBIDDEN") {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
-    console.error("[DELETE /checklist-mobilizacao/[id]]", error);
+    console.error("[DELETE /checklist-mobilizacao/etapas/[id]]", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
