@@ -21,7 +21,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { IMaskInput } from "react-imask";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -212,6 +212,7 @@ function calcularIdade(dataNascimento: string | undefined): number | undefined {
 // ============================================================================
 
 export default function OnboardingPage() {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -310,6 +311,8 @@ export default function OnboardingPage() {
     },
     onSuccess: () => {
       toast.success("Colaborador cadastrado com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
       setShowSuccess(true);
       setTimeout(() => {
         router.push("/central");
@@ -335,6 +338,8 @@ export default function OnboardingPage() {
     },
     onSuccess: () => {
       toast.success("Rascunho salvo com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
       router.push("/central");
     },
     onError: (error: unknown) => {

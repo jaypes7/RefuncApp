@@ -23,6 +23,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -298,6 +299,7 @@ function SectionTitle({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function EditarColaboradorPage() {
+  const queryClient = useQueryClient();
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
@@ -365,6 +367,8 @@ export default function EditarColaboradorPage() {
     try {
       await colaboradoresApi.atualizar(id, form);
       toast.success("Dados salvos com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
       setSaved(true);
       setTimeout(() => router.push("/central"), 900);
     } catch {

@@ -382,6 +382,8 @@ export default function CentralPage() {
     onSuccess: () => {
       toast.success("Colaborador removido com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
     },
     onError: (error: unknown) => {
       const e = error as { response?: { data?: { error?: string } } };
@@ -422,9 +424,11 @@ export default function CentralPage() {
             Erro ao carregar colaboradores
           </p>
           <Button
-            onClick={() =>
-              queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" })
-            }
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
+              queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+              queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
+            }}
           >
             Tentar novamente
           </Button>
@@ -504,7 +508,7 @@ export default function CentralPage() {
                 <div className="relative flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar por nome, RE ou CPF..."
+                    placeholder="Pesquisa avançada"
                     value={search}
                     onChange={(e) => {
                       setSearch(e.target.value);
@@ -566,25 +570,25 @@ export default function CentralPage() {
               <Table className="table-fixed w-full">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent bg-muted/40">
-                    <TableHead className="pl-5 w-[30%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="pl-5 w-[30%] truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Nome
                     </TableHead>
-                    <TableHead className="w-[8%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="w-[8%] truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       RE
                     </TableHead>
-                    <TableHead className="w-[14%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="w-[14%] truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       CPF
                     </TableHead>
-                    <TableHead className="w-[10%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="w-[10%] truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       C. Custo
                     </TableHead>
-                    <TableHead className="w-[20%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="w-[18%] truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Função
                     </TableHead>
-                    <TableHead className="w-[10%] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="w-[12%] truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Status do Contrato
                     </TableHead>
-                    <TableHead className="pr-5 w-[8%] text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <TableHead className="pr-5 w-[8%] text-right truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Ações
                     </TableHead>
                   </TableRow>
@@ -800,6 +804,8 @@ export default function CentralPage() {
         onSuccess={() => {
           // Recarrega a lista de colaboradores após upload
           queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
         }}
       />
 

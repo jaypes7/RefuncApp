@@ -47,7 +47,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, pendenciasApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente, type PendenciaManual } from "@/lib/axios";
+import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, pendenciasApi, colaboradoresApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente, type PendenciaManual, type Colaborador } from "@/lib/axios";
 import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 import { ExportPdfButton } from "@/components/export-pdf-button";
@@ -221,12 +221,46 @@ export default function DashboardPage() {
 
   const dashboardData: DashboardPrincipalData | undefined = data;
 
+  // Busca todos os colaboradores para a lista de funções (inclui contratos indeterminados)
+  const { data: colaboradoresData } = useQuery({
+    queryKey: ["colaboradores", centroCusto],
+    queryFn: async () => {
+      const first = await colaboradoresApi.listar({
+        centro_custo: centroCusto || undefined,
+        limit: 100,
+        page: 1,
+      });
+      const all = [...first.data.data];
+      const totalPages = first.data.pagination.totalPages;
+      if (totalPages > 1) {
+        const promises = [];
+        for (let p = 2; p <= totalPages; p++) {
+          promises.push(
+            colaboradoresApi.listar({
+              centro_custo: centroCusto || undefined,
+              limit: 100,
+              page: p,
+            })
+          );
+        }
+        const rest = await Promise.all(promises);
+        for (const r of rest) {
+          all.push(...r.data.data);
+        }
+      }
+      return { data: all, pagination: first.data.pagination };
+    },
+    enabled: !!centroCusto,
+    staleTime: 0,
+  });
+
   // Estado para seleção de dia previsto por etapa (cards de etapas)
   const [selectedDayPerEtapa, setSelectedDayPerEtapa] = useState<Record<number, string>>({});
   const [selectedCurvaDayIdx, setSelectedCurvaDayIdx] = useState<number>(-1);
 
   // ── Lista de Funções — agrupada por funcao_clt ──────────────────────────
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [filterNomeFuncoes, setFilterNomeFuncoes] = useState("");
 
   const toggleGroup = (funcao: string) => {
     setExpandedGroups((prev) => {
@@ -257,6 +291,22 @@ export default function DashboardPage() {
     }
     return Array.from(grupos.entries()).map(([funcao, membros]) => ({ funcao, membros }));
   }, [dashboardData]);
+
+  // ── Lista de Funções — agrupada por FUNCAO_CLT (todos os colaboradores) ───
+  const funcoesAgrupado = useMemo(() => {
+    const lista = colaboradoresData?.data ?? [];
+    if (lista.length === 0) return [];
+    const filtrada = filterNomeFuncoes
+      ? lista.filter((row) => (row.NOME as string)?.toLowerCase().includes(filterNomeFuncoes.toLowerCase()))
+      : lista;
+    const grupos = new Map<string, Colaborador[]>();
+    for (const row of filtrada) {
+      const fn = row.FUNCAO_CLT ?? "Não informado";
+      if (!grupos.has(fn)) grupos.set(fn, []);
+      grupos.get(fn)!.push(row);
+    }
+    return Array.from(grupos.entries()).map(([funcao, membros]) => ({ funcao, membros }));
+  }, [colaboradoresData, filterNomeFuncoes]);
 
   // ── Ocorrências manuais ──────────────────────────────────────────────────────
   const queryClient = useQueryClient();
@@ -489,6 +539,12 @@ export default function DashboardPage() {
     return result;
   }, [dashboardData]);
 
+  // Nomes das funções agrupadas em "Outros"
+  const funcoesOutrosNomes = useMemo(() => {
+    const lista = dashboardData?.agregacoes?.distribuicaoFuncoes ?? [];
+    return lista.slice(9).map((f) => f.nome);
+  }, [dashboardData]);
+
   // Cálculos dos KPIs
   const kpis = useMemo(() => {
     const etapasAtrasadas = dashboardData?.etapas?.filter((e) => isEtapaAtrasada(e)).length ?? 0;
@@ -570,6 +626,15 @@ export default function DashboardPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => refetch()}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Atualizar
+              </Button>
               <ExportPdfButton targetRef={contentRef} filename="dashboard-principal" />
               <ExportPdfButton
                 targetRef={evolucaoTimelineRef}
@@ -1467,31 +1532,17 @@ export default function DashboardPage() {
                           let realizadoEtapa = 0;
 
                           if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
-                            // Encontra o último dia em que o realizado AUMENTOU (progresso efetivamente lançado).
-                            // Como realizado é acumulado (carry-forward), buscamos o último índice em que
-                            // o valor cresceu em relação ao anterior, evitando que dias posteriores sem lançamento
-                            // inflem o previsto.
-                            let lastProgressIdx = -1;
-                            let prevRealizado = 0;
+                            // Busca o dia atual ou o último dia antes de hoje
+                            let todayIdx = -1;
                             for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
-                              if (etapa.evolucaoDiaria[i].realizado > prevRealizado) {
-                                lastProgressIdx = i;
-                                prevRealizado = etapa.evolucaoDiaria[i].realizado;
-                              }
+                              if (etapa.evolucaoDiaria[i].data <= hojeRealStr) todayIdx = i;
+                              else break;
                             }
-
-                            if (lastProgressIdx !== -1) {
-                              // Usa previsto/realizado do último dia com lançamento real
-                              previstoEtapa = etapa.evolucaoDiaria[lastProgressIdx].previsto;
-                              realizadoEtapa = etapa.evolucaoDiaria[lastProgressIdx].realizado;
+                            if (todayIdx !== -1) {
+                              previstoEtapa = etapa.evolucaoDiaria[todayIdx].previsto;
+                              realizadoEtapa = etapa.evolucaoDiaria[todayIdx].realizado;
                             } else {
-                              // Sem progresso: usa o previsto do último dia útil até hoje
-                              let lastBeforeToday = -1;
-                              for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
-                                if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
-                                else break;
-                              }
-                              previstoEtapa = lastBeforeToday !== -1 ? etapa.evolucaoDiaria[lastBeforeToday].previsto : 0;
+                              previstoEtapa = 0;
                               realizadoEtapa = 0;
                             }
                           } else {
@@ -1657,18 +1708,24 @@ export default function DashboardPage() {
                   <CalendarClock className="h-4 w-4 text-primary" />
                   <CardTitle>Lista de Funções</CardTitle>
                   <span className="text-sm font-normal text-muted-foreground">
-                    ({dashboardData?.agregacoes?.terminoDetalhado?.length ?? 0} colaboradores)
+                    ({funcoesAgrupado.reduce((acc, g) => acc + g.membros.length, 0)} colaboradores)
                   </span>
                 </CardHeader>
                 <CardContent className="flex flex-col flex-1 overflow-hidden">
+                  <Input
+                    placeholder="Pesquisa avançada"
+                    value={filterNomeFuncoes}
+                    onChange={(e) => setFilterNomeFuncoes(e.target.value)}
+                    className="mb-3 h-8 text-sm"
+                  />
                   {/* Lista agrupada por função com scroll fixo */}
                   <div className="flex-1 overflow-y-auto space-y-3 pr-1 pb-2">
-                    {terminoAgrupado.length === 0 ? (
+                    {funcoesAgrupado.length === 0 ? (
                       <p className="py-8 text-center text-sm text-muted-foreground">
                         Nenhum colaborador encontrado.
                       </p>
                     ) : (
-                      terminoAgrupado.map(({ funcao, membros }) => {
+                      funcoesAgrupado.map(({ funcao, membros }) => {
                         const isOpen = expandedGroups.has(funcao);
                         return (
                           <div key={funcao} className="rounded-lg border border-white/5 bg-white/5">
@@ -1691,14 +1748,14 @@ export default function DashboardPage() {
                               <div className="space-y-1 px-3 pb-2">
                                 {membros.map((m, i) => (
                                   <div
-                                    key={`${m.nome}-${i}`}
+                                    key={`${m.NOME}-${i}`}
                                     className="flex items-center justify-between rounded-md px-3 py-2 border border-white/5 bg-white/5"
                                   >
-                                    <span className="text-sm 2xl:text-base font-medium truncate max-w-[60%]" title={m.nome}>
-                                      {m.nome}
+                                    <span className="text-sm 2xl:text-base font-medium truncate max-w-[60%]" title={m.NOME}>
+                                      {m.NOME}
                                     </span>
                                     <span className="text-xs 2xl:text-sm font-medium tabular-nums text-muted-foreground">
-                                      {m.funcao_clt ?? "Não informado"}
+                                      {m.FUNCAO_CLT ?? "Não informado"}
                                     </span>
                                   </div>
                                 ))}
@@ -1721,10 +1778,10 @@ export default function DashboardPage() {
                     <CardTitle>Distribuição por Função CLT</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ChartContainer config={chartConfigFuncoes} className="h-[350px] 2xl:h-[480px] w-full">
-                      <BarChart data={dadosFuncoes}>
+                    <ChartContainer config={chartConfigFuncoes} className="h-[300px] 2xl:h-[400px] w-full">
+                      <BarChart data={dadosFuncoes} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
+                        <XAxis dataKey="name" tick={false} />
                         <YAxis />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                           {dadosFuncoes.map((entry, i) => (
@@ -1732,11 +1789,49 @@ export default function DashboardPage() {
                           ))}
                         </Bar>
                         <ChartTooltip
-                          content={<ChartTooltipContent />}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const d = payload[0].payload as { name: string; value: number };
+                              const isOutros = d.name === "Outros";
+                              return (
+                                <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm max-w-xs">
+                                  <p className="font-semibold">{d.name}</p>
+                                  <p className="text-muted-foreground">{d.value} colaborador{d.value !== 1 ? "es" : ""}</p>
+                                  {isOutros && funcoesOutrosNomes.length > 0 && (
+                                    <div className="mt-1.5 border-t border-border pt-1.5">
+                                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Funções agrupadas:</p>
+                                      <ul className="space-y-0.5">
+                                        {funcoesOutrosNomes.map((nome) => (
+                                          <li key={nome} className="text-[11px] text-foreground">{nome}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
                         />
-                        <ChartLegend content={<ChartLegendContent />} />
                       </BarChart>
                     </ChartContainer>
+                    {/* Legenda custom */}
+                    <div className="mt-4 grid grid-cols-3 gap-x-6 gap-y-2">
+                      {dadosFuncoes.map((entry) => (
+                        <div
+                          key={entry.name}
+                          className="flex items-center gap-2 text-xs min-w-0"
+                          title={entry.name === "Outros" && funcoesOutrosNomes.length > 0 ? funcoesOutrosNomes.join("\n") : undefined}
+                        >
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: entry.fill }}
+                          />
+                          <span className="truncate font-medium text-foreground">{entry.name}</span>
+                          <span className="ml-auto shrink-0 font-semibold tabular-nums">{entry.value}</span>
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               </div>

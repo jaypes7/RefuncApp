@@ -355,7 +355,7 @@ export type DashboardPrincipalData = {
 
 /** Shape retornada por GET /api/dashboard/rh */
 export type DashboardRhData = {
-  metricas: { totalCadastrados: number; totalAdmitidos: number; percentualASO: number };
+  metricas: { totalCadastrados: number; totalAdmitidos: number; percentualASO: number; mediaIdade: number };
   agregacoes: {
     distribuicaoIdades: DashboardData["agregacoes"]["distribuicaoIdades"];
     distribuicaoFuncoes: DashboardData["agregacoes"]["distribuicaoFuncoes"];

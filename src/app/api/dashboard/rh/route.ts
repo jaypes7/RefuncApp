@@ -51,6 +51,18 @@ export async function GET(request: NextRequest) {
     const percentualASO =
       totalCadastrados > 0 ? Math.round((aptoCount / totalCadastrados) * 10000) / 100 : 0;
 
+    // ── Média de idade ───────────────────────────────────────────────────────
+    let somaIdades = 0;
+    let countIdades = 0;
+    for (const r of comId) {
+      const idade = parseInt(String(r["idade"] ?? ""), 10);
+      if (!isNaN(idade) && idade > 0) {
+        somaIdades += idade;
+        countIdades++;
+      }
+    }
+    const mediaIdade = countIdades > 0 ? Math.round(somaIdades / countIdades) : 0;
+
     // ── Distribuição por faixa etária ────────────────────────────────────────
     const faixas: Record<string, number> = { "18-25": 0, "26-35": 0, "36-45": 0, "46+": 0 };
     for (const r of comId) {
@@ -102,7 +114,7 @@ export async function GET(request: NextRequest) {
       });
 
     return NextResponse.json({
-      metricas: { totalCadastrados, totalAdmitidos, percentualASO },
+      metricas: { totalCadastrados, totalAdmitidos, percentualASO, mediaIdade },
       agregacoes: {
         distribuicaoIdades,
         distribuicaoFuncoes,

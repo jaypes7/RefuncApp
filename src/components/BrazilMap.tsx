@@ -28,6 +28,27 @@ interface GeoCollection {
   features: GeoFeature[];
 }
 
+// Cache de módulo para evitar re-fetch quando o componente é remontado
+let cachedGeographies: GeoFeature[] | null = null;
+let geoPromise: Promise<GeoFeature[]> | null = null;
+
+function loadGeographies(): Promise<GeoFeature[]> {
+  if (cachedGeographies) return Promise.resolve(cachedGeographies);
+  if (!geoPromise) {
+    geoPromise = fetch(geoUrl)
+      .then((res) => res.json())
+      .then((geoData: GeoCollection) => {
+        cachedGeographies = geoData.features || [];
+        return cachedGeographies;
+      })
+      .catch((err) => {
+        console.error("Erro ao carregar GeoJSON:", err);
+        return [];
+      });
+  }
+  return geoPromise;
+}
+
 // Escala de cor por threshold
 function getColor(count: number, max: number): string {
   if (count === 0) return "#e2e2e2";
@@ -50,7 +71,7 @@ export function BrazilMap({ data }: BrazilMapProps) {
   const map = useMemo(() => new Map(data.map((d) => [d.uf.toUpperCase(), d.count])), [data]);
   const max = Math.max(...data.map((d) => d.count), 1);
 
-  const [geographies, setGeographies] = useState<GeoFeature[]>([]);
+  const [geographies, setGeographies] = useState<GeoFeature[]>(cachedGeographies ?? []);
   const [tooltip, setTooltip] = useState<TooltipState>({
     visible: false,
     x: 0,
@@ -59,14 +80,11 @@ export function BrazilMap({ data }: BrazilMapProps) {
   });
 
   useEffect(() => {
-    fetch(geoUrl)
-      .then((res) => res.json())
-      .then((geoData: GeoCollection) => {
-        setGeographies(geoData.features || []);
-      })
-      .catch((err) => {
-        console.error("Erro ao carregar GeoJSON:", err);
-      });
+    if (cachedGeographies) {
+      setGeographies(cachedGeographies);
+      return;
+    }
+    loadGeographies().then((features) => setGeographies(features));
   }, []);
 
   // Projeção e path generator — fitSize centraliza e maximiza o mapa no SVG
@@ -114,35 +132,37 @@ export function BrazilMap({ data }: BrazilMapProps) {
 
   return (
     <div className="w-full relative flex flex-col h-full" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <svg viewBox="0 0 800 600" className="w-full flex-1 min-h-0">
-        <g>
-          {pathStrings.map(({ feature, d }, index) => {
-            const sigla = String(
-              feature.properties?.sigla ?? feature.properties?.SIGLA ?? ""
-            ).toUpperCase();
-            const count = map.get(sigla) ?? 0;
-            return (
-              <path
-                key={String(feature.properties?.id ?? sigla ?? `geo-${index}`)}
-                d={d}
-                fill={getColor(count, max)}
-                stroke="#fff"
-                strokeWidth={0.6}
-                className="outline-none hover:cursor-pointer"
-                style={{ transition: "fill 150ms ease" }}
-                onMouseEnter={() => handleMouseEnter(feature, count)}
-                onMouseLeave={handleMouseLeave}
-                onMouseOver={(e) => {
-                  (e.currentTarget as SVGPathElement).style.fill = "#416e7d";
-                }}
-                onMouseOut={(e) => {
-                  (e.currentTarget as SVGPathElement).style.fill = getColor(count, max);
-                }}
-              />
-            );
-          })}
-        </g>
-      </svg>
+      <div className="flex-1 min-h-0 relative">
+        <svg viewBox="0 0 800 600" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
+          <g>
+            {pathStrings.map(({ feature, d }, index) => {
+              const sigla = String(
+                feature.properties?.sigla ?? feature.properties?.SIGLA ?? ""
+              ).toUpperCase();
+              const count = map.get(sigla) ?? 0;
+              return (
+                <path
+                  key={String(feature.properties?.id ?? sigla ?? `geo-${index}`)}
+                  d={d}
+                  fill={getColor(count, max)}
+                  stroke="#fff"
+                  strokeWidth={0.6}
+                  className="outline-none hover:cursor-pointer"
+                  style={{ transition: "fill 150ms ease" }}
+                  onMouseEnter={() => handleMouseEnter(feature, count)}
+                  onMouseLeave={handleMouseLeave}
+                  onMouseOver={(e) => {
+                    (e.currentTarget as SVGPathElement).style.fill = "#416e7d";
+                  }}
+                  onMouseOut={(e) => {
+                    (e.currentTarget as SVGPathElement).style.fill = getColor(count, max);
+                  }}
+                />
+              );
+            })}
+          </g>
+        </svg>
+      </div>
 
       {/* Tooltip custom */}
       {tooltip.visible && (

@@ -35,19 +35,24 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* ── Coluna Esquerda (Branding) ── */}
       <div className="flex w-full flex-col items-center justify-center bg-primary px-6 py-10 text-center text-primary-foreground md:w-1/2 md:min-h-screen">
-        <div className="max-w-md space-y-20">
-          <h1 className="text-3xl leading-tight sm:text-4xl md:text-5xl">
-            <span className="block font-light tracking-wide">
-              GESTÃO DE
-            </span>
-            <span className="block text-4xl font-bold uppercase tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl">
-              MOBILIZAÇÃO
-            </span>
-            <span className="block font-light tracking-wide">
-              DE CONTRATOS
-            </span>
-          </h1>
-          <p className="text-lg font-medium text-primary-foreground/80 md:text-xl lg:text-2xl">
+        <div className="max-w-md space-y-16">
+          <div className="space-y-3">
+            <h1 className="text-3xl leading-tight sm:text-4xl md:text-5xl">
+              <span className="block font-light tracking-wide">
+                GESTÃO DE
+              </span>
+              <span className="block text-4xl font-bold uppercase tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl">
+                MOBILIZAÇÃO
+              </span>
+              <span className="block font-light tracking-wide">
+                DE CONTRATOS
+              </span>
+            </h1>
+            <p className="text-sm font-medium text-primary-foreground/90 md:text-base lg:text-lg">
+              Controle, agilidade e segurança nas operações da sua unidade de trabalho
+            </p>
+          </div>
+          <p className="text-xl font-semibold text-primary-foreground md:text-2xl lg:text-3xl">
             Fazer. Inovar. Solucionar.
           </p>
         </div>
