@@ -50,6 +50,7 @@ import { useFilter } from "@/contexts/FilterContext";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { BrazilMap } from "@/components/BrazilMap";
 import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 
@@ -73,30 +74,40 @@ const configSexo = {
   total: { label: "Colaboradores" },
 };
 
+const configEscolaridade = {
+  total: { label: "Colaboradores" },
+};
+
 // ============================================================================
 // HELPERS — cores de término
 // ============================================================================
 
-/** Retorna classificação de urgência baseada em comparação de datas (YYYY-MM-DD). */
-function urgenciaTermino(termino: string): "vencido" | "proximo" | "normal" {
-  const hoje = new Date().toISOString().split("T")[0];
-  if (termino < hoje) return "vencido";
-  const em30 = new Date();
-  em30.setDate(em30.getDate() + 30);
-  const em30Str = em30.toISOString().split("T")[0];
-  if (termino <= em30Str) return "proximo";
+/** Retorna classificação de urgência baseada em comparação de datas (YYYY-MM-DD).
+ *  critico = vencido ou vence em até 7 dias  (vermelho)
+ *  alerta  = vence entre 8 e 15 dias           (amarelo)
+ *  normal  = vence em mais de 15 dias          (cinza)
+ */
+function urgenciaTermino(termino: string): "critico" | "alerta" | "normal" {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const t = new Date(termino + "T00:00:00");
+  const diffMs = t.getTime() - hoje.getTime();
+  const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDias <= 7) return "critico";
+  if (diffDias <= 15) return "alerta";
   return "normal";
 }
 
-function classeTermino(urgencia: "vencido" | "proximo" | "normal"): string {
-  if (urgencia === "vencido") return "border border-red-500/30 bg-red-500/10";
-  if (urgencia === "proximo") return "border border-yellow-500/30 bg-yellow-500/10";
+function classeTermino(urgencia: "critico" | "alerta" | "normal"): string {
+  if (urgencia === "critico") return "border border-red-500/30 bg-red-500/10";
+  if (urgencia === "alerta") return "border border-yellow-500/30 bg-yellow-500/10";
   return "border border-white/5 bg-white/5";
 }
 
-function corTextoTermino(urgencia: "vencido" | "proximo" | "normal"): string {
-  if (urgencia === "vencido") return "text-red-400";
-  if (urgencia === "proximo") return "text-yellow-400";
+function corTextoTermino(urgencia: "critico" | "alerta" | "normal"): string {
+  if (urgencia === "critico") return "text-red-400";
+  if (urgencia === "alerta") return "text-yellow-400";
   return "text-muted-foreground";
 }
 
@@ -167,8 +178,9 @@ export default function DashboardRhPage() {
 
   // ── Filtros da seção "Término de Contrato" ────────────────────────────────
   const [filterNome, setFilterNome] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterDias, setFilterDias] = useState("all");
   const [filterCargo, setFilterCargo] = useState("all");
+  const [mostrarMapa, setMostrarMapa] = useState(true);
 
   const { centroCusto } = useFilter();
 
@@ -177,7 +189,7 @@ export default function DashboardRhPage() {
   if (prevCcRh !== centroCusto) {
     setPrevCcRh(centroCusto);
     setFilterNome("");
-    setFilterStatus("all");
+    setFilterDias("all");
     setFilterCargo("all");
   }
 
@@ -230,6 +242,18 @@ export default function DashboardRhPage() {
 
   const totalFuncoes = data?.agregacoes?.distribuicaoFuncoes?.length ?? 0;
 
+  // ── Dados fictícios de escolaridade (temporário) ─────────────────────────
+  const dadosEscolaridade = useMemo(() => {
+    const fakeData = [
+      { name: "Ensino Fundamental", value: 45, fill: "#ff460a" },
+      { name: "Ensino Médio", value: 120, fill: "#19365b" },
+      { name: "Técnico", value: 80, fill: "#416e7d" },
+      { name: "Superior", value: 55, fill: "#9c3022" },
+      { name: "Pós-graduação", value: 20, fill: "#ffa78b" },
+    ];
+    return fakeData;
+  }, []);
+
   // ── Dados ASO (Apto / Inapto / Pendente) ──────────────────────────────────
 
   const dadosASO = useMemo(() => {
@@ -252,11 +276,19 @@ export default function DashboardRhPage() {
     const lista = data?.agregacoes?.terminoDetalhado ?? [];
     return lista.filter((m) => {
       if (filterNome && !m.nome?.toLowerCase().includes(filterNome.toLowerCase())) return false;
-      if (filterStatus !== "all" && (m as Record<string, unknown>).status !== filterStatus) return false;
+      if (filterDias !== "all") {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const terminoDate = new Date(m.termino + "T00:00:00");
+        const diffMs = terminoDate.getTime() - hoje.getTime();
+        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const limite = Number(filterDias);
+        if (diffDias < 0 || diffDias > limite) return false;
+      }
       if (filterCargo !== "all" && m.funcao_clt !== filterCargo) return false;
       return true;
     });
-  }, [data, filterNome, filterStatus, filterCargo]);
+  }, [data, filterNome, filterDias, filterCargo]);
 
   const terminoAgrupado = useMemo(() => {
     if (terminoFiltrado.length === 0) return [];
@@ -360,6 +392,15 @@ export default function DashboardRhPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => refetch()}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Atualizar
+              </Button>
               <ExportPdfButton targetRef={contentRef} filename="dashboard-rh" />
               <SheetUpload
                 endpoint="/api/rh/colaboradores"
@@ -423,14 +464,22 @@ export default function DashboardRhPage() {
             {(data?.agregacoes?.terminoDetalhado?.length ?? 0) > 0 && (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:h-[520px]">
 
-                {/* ── Card: Mapa do Brasil ── */}
+                {/* ── Card: Mapa do Brasil / Gráfico UF ── */}
                 <Card className="glass-card flex flex-col overflow-hidden h-full">
                   <CardHeader className="flex flex-row items-center gap-2 pb-2">
                     <Globe className="h-4 w-4 text-primary" />
-                    <CardTitle>Densidade Demográfica</CardTitle>
+                    <CardTitle>Distribuição MO por estado</CardTitle>
                     <span className="text-sm font-normal text-muted-foreground">
                       ({distribuicaoUF.reduce((acc, e) => acc + e.count, 0)} colaboradores)
                     </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-auto text-xs h-7"
+                      onClick={() => setMostrarMapa((v) => !v)}
+                    >
+                      {mostrarMapa ? "Ver gráfico" : "Ver mapa"}
+                    </Button>
                   </CardHeader>
                   <CardContent className="flex flex-col flex-1 overflow-hidden">
                     {distribuicaoUF.length === 0 ? (
@@ -438,7 +487,71 @@ export default function DashboardRhPage() {
                         Sem dados de UF disponíveis
                       </div>
                     ) : (
-                      <BrazilMap data={distribuicaoUF.map(({ uf, count }) => ({ uf, count }))} />
+                      <AnimatePresence mode="wait">
+                        {mostrarMapa ? (
+                          <motion.div
+                            key="mapa"
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.98 }}
+                            transition={{ duration: 0.25 }}
+                            className="flex flex-col flex-1"
+                          >
+                            <BrazilMap data={distribuicaoUF.map(({ uf, count }) => ({ uf, count }))} />
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key="grafico"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.25 }}
+                            className="flex flex-col flex-1"
+                          >
+                            <ChartContainer config={{}} className="flex-1 w-full min-h-0">
+                              <BarChart
+                                data={distribuicaoUF}
+                                layout="vertical"
+                                margin={{ top: 5, right: 40, left: 0, bottom: 5 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e2e2" horizontal={false} />
+                                <XAxis
+                                  type="number"
+                                  tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
+                                  tickLine={false}
+                                  axisLine={false}
+                                  unit="%"
+                                />
+                                <YAxis
+                                  dataKey="uf"
+                                  type="category"
+                                  tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
+                                  tickLine={false}
+                                  axisLine={false}
+                                  width={40}
+                                />
+                                <ChartTooltip
+                                  content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                      const d = payload[0].payload as { uf: string; count: number; percent: string };
+                                      return (
+                                        <div className="rounded-md border bg-background px-2 py-1 text-xs shadow-sm">
+                                          <span className="font-semibold">{d.uf}</span>
+                                          <span className="ml-2 text-muted-foreground">
+                                            {d.count} colab. ({d.percent}%)
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  }}
+                                />
+                                <Bar dataKey="percent" name="%" radius={[0, 6, 6, 0]} fill="#ff460a" />
+                              </BarChart>
+                            </ChartContainer>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     )}
                   </CardContent>
                 </Card>
@@ -457,21 +570,19 @@ export default function DashboardRhPage() {
                     {/* Filtros */}
                     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <Input
-                        placeholder="Buscar por nome..."
+                        placeholder="Pesquisa avançada"
                         value={filterNome}
                         onChange={(e) => setFilterNome(e.target.value)}
                         className="glass-input"
                       />
-                      <Select value={filterStatus} onValueChange={setFilterStatus}>
+                      <Select value={filterDias} onValueChange={setFilterDias}>
                         <SelectTrigger className="glass-input">
-                          <SelectValue placeholder="Status" />
+                          <SelectValue placeholder="Prazo" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Todos os status</SelectItem>
-                          <SelectItem value="Ativo">Ativo</SelectItem>
-                          <SelectItem value="Inativo">Inativo</SelectItem>
-                          <SelectItem value="Pendente">Pendente</SelectItem>
-                          <SelectItem value="Desligado">Desligado</SelectItem>
+                          <SelectItem value="all">Todos os prazos</SelectItem>
+                          <SelectItem value="15">Vence em 15 dias</SelectItem>
+                          <SelectItem value="7">Vence em 7 dias</SelectItem>
                         </SelectContent>
                       </Select>
                       <Select value={filterCargo} onValueChange={setFilterCargo}>
@@ -490,16 +601,12 @@ export default function DashboardRhPage() {
                     {/* Legenda de urgência */}
                     <div className="mb-3 flex flex-wrap gap-3 text-xs">
                       <div className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
-                        <span className="text-muted-foreground">Vencido</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
                         <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
-                        <span className="text-muted-foreground">Vence em até 30 dias</span>
+                        <span className="text-muted-foreground">Vence em 15 dias</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                        <span className="text-muted-foreground">Vigente</span>
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
+                        <span className="text-muted-foreground">Vence em 7 dias</span>
                       </div>
                     </div>
 
@@ -548,8 +655,11 @@ export default function DashboardRhPage() {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:h-[420px]">
               {/* Faixa Etária */}
               <Card className="glass-card h-full">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center gap-2">
                   <CardTitle>Distribuição por Faixa Etária</CardTitle>
+                  <span className="text-sm font-normal text-muted-foreground">
+                    (Média: {data?.metricas?.mediaIdade ?? 0} anos)
+                  </span>
                 </CardHeader>
                 <CardContent className="flex flex-col flex-1 overflow-hidden">
                   {dadosIdades.length === 0 ? (
@@ -642,66 +752,114 @@ export default function DashboardRhPage() {
               </Card>
             </div>
 
-            {/* Card ASO — Distribuição de Saúde Ocupacional */}
-            <Card className="glass-card">
-              <CardHeader className="flex flex-row items-center gap-2 pb-2">
-                <ShieldCheck className="h-4 w-4 text-primary" />
-                <CardTitle>Distribuição ASO</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {dadosASO.length === 0 ? (
-                  <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
-                    Sem dados de ASO disponíveis
-                  </div>
-                ) : (
-                  <>
-                    <ChartContainer config={configASO} className="h-[260px] 2xl:h-[340px] w-full">
-                      <BarChart data={dadosASO} margin={{ top: 20, right: 60, left: 20, bottom: 20 }}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="#e2e2e2"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="name"
-                          stroke="#e2e2e2"
-                          tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <YAxis
-                          stroke="#e2e2e2"
-                          tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
-                          tickLine={false}
-                          axisLine={false}
-                          allowDecimals={false}
-                        />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <ChartLegend content={<ChartLegendContent />} />
-                        <Bar dataKey="value" name="Colaboradores" radius={[6, 6, 0, 0]}>
-                          {dadosASO.map((entry, i) => (
-                            <Cell key={`aso-${i}`} fill={entry.fill} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ChartContainer>
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      {dadosASO.map((s) => (
-                        <div
-                          key={s.name}
-                          className="flex flex-col items-center rounded-lg border border-[#e2e2e2] bg-[#e2e2e2]/10 px-3 py-3"
-                        >
-                          <span className="big-number text-[40px]" style={{ color: s.fill }}>
-                            {s.value}
-                          </span>
-                          <span className="mt-0.5 text-xs text-muted-foreground">{s.name}</span>
-                        </div>
-                      ))}
+            {/* ASO + Escolaridade — grid side-by-side */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Card ASO — Distribuição de Saúde Ocupacional */}
+              <Card className="glass-card">
+                <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  <CardTitle>Distribuição ASO</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {dadosASO.length === 0 ? (
+                    <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+                      Sem dados de ASO disponíveis
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                  ) : (
+                    <>
+                      <ChartContainer config={configASO} className="h-[260px] 2xl:h-[340px] w-full">
+                        <BarChart data={dadosASO} margin={{ top: 20, right: 60, left: 20, bottom: 20 }}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e2e2e2"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="name"
+                            stroke="#e2e2e2"
+                            tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            stroke="#e2e2e2"
+                            tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
+                            tickLine={false}
+                            axisLine={false}
+                            allowDecimals={false}
+                          />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <ChartLegend content={<ChartLegendContent />} />
+                          <Bar dataKey="value" name="Colaboradores" radius={[6, 6, 0, 0]}>
+                            {dadosASO.map((entry, i) => (
+                              <Cell key={`aso-${i}`} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ChartContainer>
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        {dadosASO.map((s) => (
+                          <div
+                            key={s.name}
+                            className="flex flex-col items-center rounded-lg border border-[#e2e2e2] bg-[#e2e2e2]/10 px-3 py-3"
+                          >
+                            <span className="big-number text-[40px]" style={{ color: s.fill }}>
+                              {s.value}
+                            </span>
+                            <span className="mt-0.5 text-xs text-muted-foreground">{s.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Card Escolaridade — Dados fictícios temporários */}
+              <Card className="glass-card">
+                <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                  <GraduationCap className="h-4 w-4 text-primary" />
+                  <CardTitle>Escolaridade</CardTitle>
+                  <span className="ml-auto text-[10px] uppercase tracking-wide text-yellow-500 font-semibold">
+                    Dados fictícios
+                  </span>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer config={configEscolaridade} className="h-[260px] 2xl:h-[340px] w-full">
+                    <PieChart>
+                      <Pie
+                        data={dadosEscolaridade}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="38%"
+                        outerRadius="68%"
+                        paddingAngle={2}
+                      >
+                        {dadosEscolaridade.map((entry, i) => (
+                          <Cell key={`esc-${i}`} fill={entry.fill} stroke="transparent" />
+                        ))}
+                      </Pie>
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                    </PieChart>
+                  </ChartContainer>
+                  {/* Legenda custom */}
+                  <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2">
+                    {dadosEscolaridade.map((entry) => (
+                      <div key={entry.name} className="flex items-center gap-2 text-xs min-w-0">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: entry.fill }}
+                        />
+                        <span className="truncate font-medium text-foreground">{entry.name}</span>
+                        <span className="ml-auto shrink-0 font-semibold tabular-nums">{entry.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
           </div>
         </div>

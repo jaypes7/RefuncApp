@@ -96,9 +96,8 @@ export default function BancoTalentosPage() {
   const limit = 20;
 
   // Filtros avançados
-  const [filtroPessoa, setFiltroPessoa] = useState<string[]>([]);
-  const [filtroCpf, setFiltroCpf] = useState<string[]>([]);
   const [filtroMunicipio, setFiltroMunicipio] = useState<string[]>([]);
+  const [filtroUf, setFiltroUf] = useState<string[]>([]);
 
   const [importOpen, setImportOpen] = useState(false);
   const [addEditOpen, setAddEditOpen] = useState(false);
@@ -109,13 +108,15 @@ export default function BancoTalentosPage() {
   // ── Queries ─────────────────────────────────────────────────────────────────
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["banco-talentos", page, limit, debouncedSearch, filtroPessoa, filtroCpf, filtroMunicipio],
+    queryKey: ["banco-talentos", page, limit, debouncedSearch, filtroMunicipio, filtroUf],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit };
       if (debouncedSearch) params.search = debouncedSearch;
-      if (filtroPessoa.length > 0) params.pessoa = filtroPessoa.join(",");
-      if (filtroCpf.length > 0) params.cpf = filtroCpf.join(",");
-      if (filtroMunicipio.length > 0) params.municipio = filtroMunicipio.join(",");
+      if (filtroMunicipio.length > 0) {
+        const municipios = filtroMunicipio.map((m) => m.split(" / ")[0]);
+        params.municipio = [...new Set(municipios)].join(",");
+      }
+      if (filtroUf.length > 0) params.uf = filtroUf.join(",");
       const response = await bancoTalentosApi.listar(params);
       return response.data;
     },
@@ -131,18 +132,18 @@ export default function BancoTalentosPage() {
     staleTime: Infinity,
   });
 
-  const opcoesPessoa = useMemo(() => {
-    const valores = new Set(todosTalentosData?.map((t) => t.pessoa).filter(Boolean) as string[] ?? []);
-    return Array.from(valores).sort().map((v) => ({ value: v, label: v }));
-  }, [todosTalentosData]);
-
-  const opcoesCpf = useMemo(() => {
-    const valores = new Set(todosTalentosData?.map((t) => t.cpf).filter(Boolean) as string[] ?? []);
-    return Array.from(valores).sort().map((v) => ({ value: v, label: maskCPF(v) || "—" }));
-  }, [todosTalentosData]);
-
   const opcoesMunicipio = useMemo(() => {
-    const valores = new Set(todosTalentosData?.map((t) => t.municipio).filter(Boolean) as string[] ?? []);
+    const combos = new Set<string>();
+    (todosTalentosData ?? []).forEach((t) => {
+      if (t.municipio) {
+        combos.add(t.uf ? `${t.municipio} / ${t.uf}` : t.municipio);
+      }
+    });
+    return Array.from(combos).sort().map((v) => ({ value: v, label: v }));
+  }, [todosTalentosData]);
+
+  const opcoesUf = useMemo(() => {
+    const valores = new Set(todosTalentosData?.map((t) => t.uf).filter(Boolean) as string[] ?? []);
     return Array.from(valores).sort().map((v) => ({ value: v, label: v }));
   }, [todosTalentosData]);
 
@@ -329,37 +330,30 @@ export default function BancoTalentosPage() {
           ) : (
             <>
               {/* ── Search & Filters ── */}
-              <div className="glass-card rounded-md px-4 py-3 space-y-3">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar por nome, CPF ou pessoa..."
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    className="h-9 pl-9 text-sm border-slate-300 bg-white placeholder:text-slate-400 focus-visible:border-primary/60 focus-visible:ring-primary/20 dark:border-input dark:bg-input/30 dark:placeholder:text-muted-foreground/60"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <MultiSelectFilter
-                    placeholder="Pessoa (Oracle)"
-                    selected={filtroPessoa}
-                    onChange={(v) => { setFiltroPessoa(v); setPage(1); }}
-                    options={opcoesPessoa}
-                    width="w-48"
-                  />
-                  <MultiSelectFilter
-                    placeholder="CPF"
-                    selected={filtroCpf}
-                    onChange={(v) => { setFiltroCpf(v); setPage(1); }}
-                    options={opcoesCpf}
-                    width="w-48"
-                  />
+              <div className="glass-card rounded-md px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Pesquisa avançada"
+                      value={search}
+                      onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                      className="h-9 pl-9 text-sm border-slate-300 bg-white placeholder:text-slate-400 focus-visible:border-primary/60 focus-visible:ring-primary/20 dark:border-input dark:bg-input/30 dark:placeholder:text-muted-foreground/60"
+                    />
+                  </div>
                   <MultiSelectFilter
                     placeholder="Município"
                     selected={filtroMunicipio}
                     onChange={(v) => { setFiltroMunicipio(v); setPage(1); }}
                     options={opcoesMunicipio}
                     width="w-56"
+                  />
+                  <MultiSelectFilter
+                    placeholder="UF"
+                    selected={filtroUf}
+                    onChange={(v) => { setFiltroUf(v); setPage(1); }}
+                    options={opcoesUf}
+                    width="w-28"
                   />
                 </div>
               </div>

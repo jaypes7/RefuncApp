@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (data.success && data.user) {
           setUser(data.user);
-          router.push(data.user.perfil === "guest" ? "/dashboard" : "/central");
+          router.push(data.user.perfil === "admin" ? "/configuracoes" : "/central");
         } else {
           throw new Error("Resposta inválida do servidor");
         }

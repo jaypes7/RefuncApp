@@ -272,7 +272,7 @@ export default function ColaboradoresRestritosPage() {
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar por nome ou CPF..."
+                    placeholder="Pesquisa avançada"
                     value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     className="h-9 pl-9 text-sm border-slate-300 bg-white placeholder:text-slate-400 focus-visible:border-primary/60 focus-visible:ring-primary/20 dark:border-input dark:bg-input/30 dark:placeholder:text-muted-foreground/60"
