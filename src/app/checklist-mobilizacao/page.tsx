@@ -498,15 +498,23 @@ export default function ChecklistMobilizacaoPage() {
                                 {items.length} subetapa{items.length !== 1 ? "s" : ""}
                               </span>
                               {items.length > 0 && (
-                                <div className="flex items-center gap-2">
-                                  <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full bg-primary transition-all"
-                                      style={{ width: `${Math.min(100, avanco * 100)}%` }}
-                                    />
+                                <>
+                                  <span className="text-xs text-muted-foreground">
+                                    {(() => {
+                                      const concluidas = items.filter((s) => s.avanco != null && s.avanco >= 1).length;
+                                      return `${concluidas}/${items.length} atividade${items.length !== 1 ? "s" : ""} concluída${items.length !== 1 ? "s" : ""}`;
+                                    })()}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full bg-primary transition-all"
+                                        style={{ width: `${Math.min(100, avanco * 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">{(avanco * 100).toFixed(0)}%</span>
                                   </div>
-                                  <span className="text-xs text-muted-foreground">{(avanco * 100).toFixed(0)}%</span>
-                                </div>
+                                </>
                               )}
                             </div>
                           </>

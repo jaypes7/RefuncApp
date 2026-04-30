@@ -1,7 +1,7 @@
 // src/app/cronograma/page.tsx
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -214,47 +214,41 @@ export default function CronogramaPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Sincroniza cronograma quando projetoQueryData muda (sem effect)
-  const [prevProjetoQueryData, setPrevProjetoQueryData] = useState(projetoQueryData);
-  if (prevProjetoQueryData !== projetoQueryData) {
-    setPrevProjetoQueryData(projetoQueryData);
-    if (projetoQueryData?.ETAPAS_PROJETO) {
-      const etapasSalvas = projetoQueryData.ETAPAS_PROJETO;
-      const novasEtapas = etapasSalvas.length
-        ? etapasSalvas.map((salva) => {
-            const diasSalvos = salva.dataInicio && salva.dataFim
-              ? calcularDiasUteisEtapa(salva.dataInicio, salva.dataFim, diasTrabalhadosData)
-              : salva.duracaoDias;
-            return {
-              id: salva.id,
-              nome: salva.nome || `Etapa ${salva.id}`,
-              dias: diasSalvos,
-              concluida: salva.concluida ?? false,
-              percentual_concluido: salva.percentualConcluido ?? 0,
-              data_inicio: salva.dataInicio,
-              data_fim: salva.dataFim,
-              responsavel: salva.responsavel ?? null,
-            };
-          })
-        : [];
-      const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
-      setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
-    }
-  }
+  // Sincroniza cronograma quando projetoQueryData ou diasTrabalhadosData mudam
+  useEffect(() => {
+    if (!projetoQueryData?.ETAPAS_PROJETO) return;
+    const etapasSalvas = projetoQueryData.ETAPAS_PROJETO;
+    const novasEtapas = etapasSalvas.length
+      ? etapasSalvas.map((salva) => {
+          const diasSalvos = salva.dataInicio && salva.dataFim
+            ? calcularDiasUteisEtapa(salva.dataInicio, salva.dataFim, diasTrabalhadosData)
+            : salva.duracaoDias;
+          return {
+            id: salva.id,
+            nome: salva.nome || `Etapa ${salva.id}`,
+            dias: diasSalvos,
+            concluida: salva.concluida ?? false,
+            percentual_concluido: salva.percentualConcluido ?? 0,
+            data_inicio: salva.dataInicio,
+            data_fim: salva.dataFim,
+            responsavel: salva.responsavel ?? null,
+          };
+        })
+      : [];
+    const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
+    setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
+  }, [projetoQueryData, diasTrabalhadosData]);
 
-  // Sincroniza progressoDiario quando os dados chegam do servidor (sem effect)
-  const [prevProgressoDiarioData, setPrevProgressoDiarioData] = useState(progressoDiarioData);
-  if (prevProgressoDiarioData !== progressoDiarioData) {
-    setPrevProgressoDiarioData(progressoDiarioData);
-    if (progressoDiarioData) {
-      const mapa: Record<number, Record<string, number>> = {};
-      for (const entry of progressoDiarioData) {
-        if (!mapa[entry.etapa_id]) mapa[entry.etapa_id] = {};
-        mapa[entry.etapa_id][entry.data] = entry.percentual;
-      }
-      setProgressoDiario(mapa);
+  // Sincroniza progressoDiario quando os dados chegam do servidor
+  useEffect(() => {
+    if (!progressoDiarioData) return;
+    const mapa: Record<number, Record<string, number>> = {};
+    for (const entry of progressoDiarioData) {
+      if (!mapa[entry.etapa_id]) mapa[entry.etapa_id] = {};
+      mapa[entry.etapa_id][entry.data] = entry.percentual;
     }
-  }
+    setProgressoDiario(mapa);
+  }, [progressoDiarioData]);
 
   // Total de dias corridos = fim - início (inclusive)
   // Extrai datas para deps estáveis (evita optional chaining no array de deps)
