@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -11,6 +11,10 @@ import {
   Save,
   X,
   ListChecks,
+  Pencil,
+  FolderPlus,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,10 +22,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFilter } from "@/contexts/FilterContext";
-import { checklistMobilizacaoApi, type ChecklistSubetapa } from "@/lib/axios";
-import { cn } from "@/lib/utils";
-
-type EtapaBase = { id: number; nome: string };
+import { useRouter } from "next/navigation";
+import {
+  checklistMobilizacaoApi,
+  checklistEtapasApi,
+  type ChecklistSubetapa,
+  type ChecklistEtapa,
+} from "@/lib/axios";
 
 type EditingRow = {
   id?: string;
@@ -40,10 +47,30 @@ export default function ChecklistMobilizacaoPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { centroCusto } = useFilter();
+  const router = useRouter();
+
+  // Proteção: apenas admins podem acessar o checklist
+  useEffect(() => {
+    if (user && user.perfil !== "admin") {
+      router.replace("/dashboard");
+    }
+  }, [user, router]);
 
   const [expandedEtapa, setExpandedEtapa] = useState<Set<number>>(new Set());
   const [editingRows, setEditingRows] = useState<Record<string, EditingRow>>({});
   const [addingForEtapa, setAddingForEtapa] = useState<number | null>(null);
+
+  // Estado para editar nome da etapa
+  const [editingEtapaId, setEditingEtapaId] = useState<number | null>(null);
+  const [editingEtapaNome, setEditingEtapaNome] = useState("");
+
+  // Estado para nova etapa
+  const [novaEtapaOpen, setNovaEtapaOpen] = useState(false);
+  const [novaEtapaNome, setNovaEtapaNome] = useState("");
+
+  // Estado para ordem manual das etapas (apenas frontend)
+  const [etapasOrder, setEtapasOrder] = useState<number[]>([]);
+  const [ordemAlterada, setOrdemAlterada] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["checklist-mobilizacao", centroCusto],
@@ -53,10 +80,68 @@ export default function ChecklistMobilizacaoPage() {
     },
   });
 
-  const etapas = data?.etapas ?? [];
+  const etapasRaw = data?.etapas ?? [];
   const subetapas = data?.subetapas ?? [];
 
-  // Agrupa subetapas por etapa_id usando filter direto (evita problemas de tipos em Map keys)
+  // Sincroniza etapasOrder com novas etapas do backend (mantém ordem manual,
+  // apenas adiciona novas IDs no final)
+  const idsAtuais = etapasRaw.map((e) => e.id);
+  const idsOrderSet = new Set(etapasOrder);
+  const novosIds = idsAtuais.filter((id) => !idsOrderSet.has(id));
+  const etapasOrderFinal = novosIds.length > 0 ? [...etapasOrder, ...novosIds] : etapasOrder;
+
+  // Se ainda não inicializou, usa a ordem do backend
+  const etapasOrderAtual = etapasOrderFinal.length === 0 && idsAtuais.length > 0
+    ? idsAtuais
+    : etapasOrderFinal;
+
+  // Ordena etapas conforme ordem manual
+  const etapas = [...etapasRaw].sort((a, b) => {
+    const idxA = etapasOrderAtual.indexOf(a.id);
+    const idxB = etapasOrderAtual.indexOf(b.id);
+    return idxA - idxB;
+  });
+
+  const reordenarMutation = useMutation({
+    mutationFn: (etapas: Array<{ id: number; ordem: number }>) =>
+      checklistEtapasApi.reordenar(etapas),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["checklist-mobilizacao"], type: "all" });
+    },
+    onError: (e: unknown) => {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || "Erro ao reordenar etapas.");
+    },
+  });
+
+  const moverEtapa = (id: number, direcao: "cima" | "baixo") => {
+    const order = etapasOrder.length > 0 ? [...etapasOrder] : [...idsAtuais];
+    const idx = order.indexOf(id);
+    if (idx === -1) return;
+
+    if (direcao === "cima" && idx > 0) {
+      [order[idx], order[idx - 1]] = [order[idx - 1], order[idx]];
+    } else if (direcao === "baixo" && idx < order.length - 1) {
+      [order[idx], order[idx + 1]] = [order[idx + 1], order[idx]];
+    } else {
+      return; // já está no limite
+    }
+
+    // Atualiza estado local imediatamente (UI responsiva)
+    setEtapasOrder(order);
+    setOrdemAlterada(true);
+  };
+
+  const salvarOrdem = () => {
+    const order = etapasOrder.length > 0 ? etapasOrder : idsAtuais;
+    const payload = order.map((etapaId, index) => ({ id: etapaId, ordem: index + 1 }));
+    reordenarMutation.mutate(payload, {
+      onSuccess: () => {
+        toast.success("Ordem salva.");
+        setOrdemAlterada(false);
+      },
+    });
+  };
 
   const toggleEtapa = (id: number) => {
     setExpandedEtapa((prev) => {
@@ -121,6 +206,8 @@ export default function ChecklistMobilizacaoPage() {
     }));
   };
 
+  // ── Mutations de Subetapas ────────────────────────────────────────────────
+
   const createMutation = useMutation({
     mutationFn: (payload: Omit<ChecklistSubetapa, "id" | "created_at">) => checklistMobilizacaoApi.criar(payload),
     onSuccess: () => {
@@ -159,6 +246,57 @@ export default function ChecklistMobilizacaoPage() {
     },
   });
 
+  // ── Mutations de Etapas ───────────────────────────────────────────────────
+
+  const createEtapaMutation = useMutation({
+    mutationFn: (nome: string) =>
+      checklistEtapasApi.criar({
+        centro_custo: centroCusto ?? "",
+        nome,
+        ordem: 0,
+        etapa_origem_id: null,
+      }),
+    onSuccess: () => {
+      toast.success("Etapa adicionada.");
+      queryClient.invalidateQueries({ queryKey: ["checklist-mobilizacao"], type: "all" });
+      setNovaEtapaOpen(false);
+      setNovaEtapaNome("");
+    },
+    onError: (e: unknown) => {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || "Erro ao adicionar etapa.");
+    },
+  });
+
+  const updateEtapaMutation = useMutation({
+    mutationFn: ({ id, nome }: { id: number; nome: string }) =>
+      checklistEtapasApi.atualizar(id, { nome }),
+    onSuccess: () => {
+      toast.success("Etapa atualizada.");
+      queryClient.invalidateQueries({ queryKey: ["checklist-mobilizacao"], type: "all" });
+      setEditingEtapaId(null);
+      setEditingEtapaNome("");
+    },
+    onError: (e: unknown) => {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || "Erro ao atualizar etapa.");
+    },
+  });
+
+  const deleteEtapaMutation = useMutation({
+    mutationFn: (id: number) => checklistEtapasApi.remover(id),
+    onSuccess: () => {
+      toast.success("Etapa removida.");
+      queryClient.invalidateQueries({ queryKey: ["checklist-mobilizacao"], type: "all" });
+    },
+    onError: (e: unknown) => {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || "Erro ao remover etapa.");
+    },
+  });
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   const handleSave = (key: string) => {
     const row = editingRows[key];
     if (!row.nome.trim()) {
@@ -194,6 +332,28 @@ export default function ChecklistMobilizacaoPage() {
     }
   };
 
+  const handleSaveEtapaNome = (id: number) => {
+    if (!editingEtapaNome.trim()) {
+      toast.error("Nome da etapa é obrigatório.");
+      return;
+    }
+    updateEtapaMutation.mutate({ id, nome: editingEtapaNome.trim() });
+  };
+
+  const handleDeleteEtapa = (etapa: ChecklistEtapa) => {
+    if (confirm(`Remover a etapa "${etapa.nome}" e todas as suas subetapas?`)) {
+      deleteEtapaMutation.mutate(etapa.id);
+    }
+  };
+
+  const handleAddEtapa = () => {
+    if (!novaEtapaNome.trim()) {
+      toast.error("Nome da etapa é obrigatório.");
+      return;
+    }
+    createEtapaMutation.mutate(novaEtapaNome.trim());
+  };
+
   const mediaAvanco = (items: ChecklistSubetapa[]) => {
     if (items.length === 0) return 0;
     const valid = items.filter((i) => i.avanco != null);
@@ -205,9 +365,67 @@ export default function ChecklistMobilizacaoPage() {
     <ProtectedRoute>
       <div className="min-h-screen w-full p-4 md:p-8">
         <div className="mx-auto max-w-7xl space-y-6">
-          <div>
-            <h1 className="page-title">Checklist Mobilização</h1>
-            <p className="page-subtitle">Controle de etapas e subetapas do projeto</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="page-title">Checklist Mobilização</h1>
+              <p className="page-subtitle">Controle de etapas e subetapas do projeto</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {ordemAlterada && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="gap-1"
+                  onClick={salvarOrdem}
+                  disabled={reordenarMutation.isPending}
+                >
+                  <Save className="h-4 w-4" />
+                  {reordenarMutation.isPending ? "Salvando..." : "Salvar Posição"}
+                </Button>
+              )}
+              {!novaEtapaOpen ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setNovaEtapaOpen(true)}
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  Nova Etapa
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={novaEtapaNome}
+                    onChange={(e) => setNovaEtapaNome(e.target.value)}
+                    placeholder="Nome da nova etapa"
+                    className="h-8 w-64 text-sm"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddEtapa();
+                      if (e.key === "Escape") {
+                        setNovaEtapaOpen(false);
+                        setNovaEtapaNome("");
+                      }
+                    }}
+                  />
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleAddEtapa}>
+                    <Save className="h-4 w-4 text-green-600" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      setNovaEtapaOpen(false);
+                      setNovaEtapaNome("");
+                    }}
+                  >
+                    <X className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           {isLoading ? (
@@ -230,38 +448,122 @@ export default function ChecklistMobilizacaoPage() {
                 const avanco = mediaAvanco(items);
                 const editKey = `new-${etapa.id}`;
                 const isAdding = addingForEtapa === etapa.id;
+                const isEditingNome = editingEtapaId === etapa.id;
 
                 return (
                   <Card key={etapa.id} className="glass-card">
                     <CardHeader className="flex flex-row items-center gap-3 pb-2">
                       <ListChecks className="h-5 w-5 text-primary" />
                       <div className="flex-1">
-                        <CardTitle className="text-base">{etapa.nome}</CardTitle>
-                        <div className="mt-1 flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground">
-                            {items.length} subetapa{items.length !== 1 ? "s" : ""}
-                          </span>
-                          {items.length > 0 && (
-                            <div className="flex items-center gap-2">
-                              <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-primary transition-all"
-                                  style={{ width: `${Math.min(100, avanco * 100)}%` }}
-                                />
-                              </div>
-                              <span className="text-xs text-muted-foreground">{(avanco * 100).toFixed(0)}%</span>
+                        {isEditingNome ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={editingEtapaNome}
+                              onChange={(e) => setEditingEtapaNome(e.target.value)}
+                              className="h-7 text-sm"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSaveEtapaNome(etapa.id);
+                                if (e.key === "Escape") {
+                                  setEditingEtapaId(null);
+                                  setEditingEtapaNome("");
+                                }
+                              }}
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => handleSaveEtapaNome(etapa.id)}
+                            >
+                              <Save className="h-3.5 w-3.5 text-green-600" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                setEditingEtapaId(null);
+                                setEditingEtapaNome("");
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <CardTitle className="text-base">{etapa.nome}</CardTitle>
+                            <div className="mt-1 flex items-center gap-3">
+                              <span className="text-xs text-muted-foreground">
+                                {items.length} subetapa{items.length !== 1 ? "s" : ""}
+                              </span>
+                              {items.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full bg-primary transition-all"
+                                      style={{ width: `${Math.min(100, avanco * 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{(avanco * 100).toFixed(0)}%</span>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+                          </>
+                        )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 gap-1"
-                        onClick={() => toggleEtapa(etapa.id)}
-                      >
-                        {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </Button>
+
+                      {!isEditingNome && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => moverEtapa(etapa.id, "cima")}
+                            title="Mover para cima"
+                          >
+                            <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => moverEtapa(etapa.id, "baixo")}
+                            title="Mover para baixo"
+                          >
+                            <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setEditingEtapaId(etapa.id);
+                              setEditingEtapaNome(etapa.nome);
+                            }}
+                            title="Editar nome"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => handleDeleteEtapa(etapa)}
+                            title="Excluir etapa"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1"
+                            onClick={() => toggleEtapa(etapa.id)}
+                          >
+                            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      )}
                     </CardHeader>
 
                     {isOpen && (
@@ -339,14 +641,24 @@ export default function ChecklistMobilizacaoPage() {
                                     <td className="py-1.5 pr-3 text-muted-foreground">{item.data_termino ? item.data_termino.split("-").reverse().join("/") : "—"}</td>
                                     <td className="py-1.5 pr-3 text-muted-foreground truncate max-w-[120px]" title={item.observacao ?? undefined}>{item.observacao || "—"}</td>
                                     <td className="py-1.5 text-right">
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-7 w-7"
-                                        onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                      </Button>
+                                      <div className="flex justify-end gap-1">
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7"
+                                          onClick={(e) => { e.stopPropagation(); startEdit(item); }}
+                                        >
+                                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                        </Button>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7"
+                                          onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                        </Button>
+                                      </div>
                                     </td>
                                   </tr>
                                 );
