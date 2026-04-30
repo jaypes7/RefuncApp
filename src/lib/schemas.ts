@@ -604,7 +604,7 @@ export const ColaboradoresQuerySchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
   cargo: z.string().optional(),
-  centro_custo: z.string().optional(),
+  centro_custo: z.string().nullable().optional(),
 });
 
 // ============================================================================
@@ -839,5 +839,26 @@ export const CargoSchema = z.object({
 });
 
 export type Cargo = z.infer<typeof CargoSchema>;
+
+// ============================================================================
+// SCHEMA DE CHECKLIST MOBILIZAÇÃO
+// ============================================================================
+
+export const ChecklistSubetapaSchema = z.object({
+  id: z.string().uuid().optional(),
+  centro_custo: z.string().optional(),
+  etapa_id: z.coerce.number().min(1, "Etapa é obrigatória"),
+  nome: z.string().min(1, "Nome é obrigatório"),
+  setor: z.string().optional(),
+  responsavel: z.string().optional(),
+  previsto: z.coerce.number().min(0).max(1).optional(),
+  avanco: z.coerce.number().min(0).max(1).optional(),
+  data_inicio: z.preprocess(emptyStringToUndefined, DateSchema.optional()),
+  data_termino: z.preprocess(emptyStringToUndefined, DateSchema.optional()),
+  observacao: z.preprocess((val) => (val === null ? undefined : val), z.string().optional()),
+  ordem: z.coerce.number().optional(),
+});
+
+export type ChecklistSubetapa = z.infer<typeof ChecklistSubetapaSchema>;
 
 export type ColaboradorRestrito = z.infer<typeof ColaboradorRestritoSchema>;

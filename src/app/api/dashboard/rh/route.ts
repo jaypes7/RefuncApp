@@ -64,14 +64,15 @@ export async function GET(request: NextRequest) {
     const mediaIdade = countIdades > 0 ? Math.round(somaIdades / countIdades) : 0;
 
     // ── Distribuição por faixa etária ────────────────────────────────────────
-    const faixas: Record<string, number> = { "18-25": 0, "26-35": 0, "36-45": 0, "46+": 0 };
+    const faixas: Record<string, number> = { "18-25": 0, "26-35": 0, "36-45": 0, "46-59": 0, "60+": 0 };
     for (const r of comId) {
       const idade = parseInt(String(r["idade"] ?? ""), 10);
       if (isNaN(idade) || idade < 18) continue;
       if (idade <= 25) faixas["18-25"]++;
       else if (idade <= 35) faixas["26-35"]++;
       else if (idade <= 45) faixas["36-45"]++;
-      else faixas["46+"]++;
+      else if (idade <= 59) faixas["46-59"]++;
+      else faixas["60+"]++;
     }
     const distribuicaoIdades = Object.entries(faixas).map(([faixa, total]) => ({ faixa, total }));
 
