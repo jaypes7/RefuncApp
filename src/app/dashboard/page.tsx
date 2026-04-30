@@ -922,7 +922,7 @@ export default function DashboardPage() {
                   <Card className="glass-card lg:col-span-2">
                     <CardHeader className="flex flex-row items-start justify-between gap-4">
                       <div>
-                        <CardTitle>Evolução do projeto</CardTitle>
+                        <CardTitle>Evolução do Projeto</CardTitle>
                         <p className="mt-1 text-xs text-muted-foreground">
                           Avanço Planejado vs. Realizado do Cronograma
                         </p>
@@ -1734,9 +1734,9 @@ export default function DashboardPage() {
                               onClick={() => toggleGroup(funcao)}
                               className="flex w-full items-center justify-between px-3 py-2 text-left"
                             >
-                              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+                              <span className="text-xs font-bold uppercase tracking-wider text-black">
                                 {funcao}
-                                <span className="ml-2 font-normal normal-case">({membros.length})</span>
+                                <span className="ml-2 font-bold normal-case">({membros.length})</span>
                               </span>
                               {isOpen ? (
                                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -1754,7 +1754,7 @@ export default function DashboardPage() {
                                     <span className="text-sm 2xl:text-base font-medium truncate max-w-[60%]" title={m.NOME}>
                                       {m.NOME}
                                     </span>
-                                    <span className="text-xs 2xl:text-sm font-medium tabular-nums text-muted-foreground">
+                                    <span className="text-xs 2xl:text-sm font-bold tabular-nums text-muted-foreground">
                                       {m.FUNCAO_CLT ?? "Não informado"}
                                     </span>
                                   </div>

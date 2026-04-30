@@ -321,6 +321,7 @@ export default function DashboardRhPage() {
       arr.map((s, i) => ({
         ...s,
         fill: UF_COLORS[(baseIdx + i) % UF_COLORS.length],
+        percentValue: Math.round((s.count / total) * 100 * 10) / 10,
         percent: ((s.count / total) * 100).toFixed(1),
       }));
 
@@ -330,7 +331,7 @@ export default function DashboardRhPage() {
     const othersCount = sorted.slice(5).reduce((acc, s) => acc + s.count, 0);
     return [
       ...top5,
-      { uf: "Outros", count: othersCount, fill: "#9e708b", percent: ((othersCount / total) * 100).toFixed(1) },
+      { uf: "Outros", count: othersCount, fill: "#9e708b", percentValue: Math.round((othersCount / total) * 100 * 10) / 10, percent: ((othersCount / total) * 100).toFixed(1) },
     ];
   }, [data]);
 
@@ -468,7 +469,7 @@ export default function DashboardRhPage() {
                 <Card className="glass-card flex flex-col overflow-hidden h-full">
                   <CardHeader className="flex flex-row items-center gap-2 pb-2">
                     <Globe className="h-4 w-4 text-primary" />
-                    <CardTitle>Distribuição MO por estado</CardTitle>
+                    <CardTitle>Distribuição MO por Estado</CardTitle>
                     <span className="text-sm font-normal text-muted-foreground">
                       ({distribuicaoUF.reduce((acc, e) => acc + e.count, 0)} colaboradores)
                     </span>
@@ -546,7 +547,7 @@ export default function DashboardRhPage() {
                                     return null;
                                   }}
                                 />
-                                <Bar dataKey="percent" name="%" radius={[0, 6, 6, 0]} fill="#ff460a" />
+                                <Bar dataKey="percentValue" name="%" radius={[0, 6, 6, 0]} fill="#ff460a" />
                               </BarChart>
                             </ChartContainer>
                           </motion.div>

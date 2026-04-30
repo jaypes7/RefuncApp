@@ -395,6 +395,36 @@ export const dashboardRhApi = {
   },
 };
 
+export type ChecklistSubetapa = {
+  id: string;
+  centro_custo: string | null;
+  etapa_id: number;
+  nome: string;
+  setor: string | null;
+  responsavel: string | null;
+  previsto: number | null;
+  avanco: number | null;
+  data_inicio: string | null;
+  data_termino: string | null;
+  observacao: string | null;
+  ordem: number;
+  created_at?: string;
+};
+
+export const checklistMobilizacaoApi = {
+  listar: (centroCusto?: string | null) => {
+    const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+    return api.get<{ etapas: Array<{ id: number; nome: string }>; subetapas: ChecklistSubetapa[] }>(`/checklist-mobilizacao${params}`);
+  },
+  criar: (data: Omit<ChecklistSubetapa, "id" | "created_at">) => {
+    const params = data.centro_custo ? `?centro_custo=${encodeURIComponent(data.centro_custo)}` : "";
+    return api.post<{ id: string }>(`/checklist-mobilizacao${params}`, data);
+  },
+  atualizar: (id: string, data: Partial<Omit<ChecklistSubetapa, "id" | "created_at">>) =>
+    api.patch(`/checklist-mobilizacao/${id}`, data),
+  remover: (id: string) => api.delete(`/checklist-mobilizacao/${id}`),
+};
+
 export const dashboardLogisticaApi = {
   get: (centroCusto?: string | null) => {
     const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";

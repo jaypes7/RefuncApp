@@ -23,6 +23,7 @@ import {
   Database,
   Camera,
   ShieldAlert,
+  ListChecks,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
@@ -316,6 +317,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </Link>
           </CanAccess>
 
+          {/* Checklist Mobilização */}
+          <CanAccess role="user">
+            <Link href="/checklist-mobilizacao">
+              <span
+                className={navItem(pathname === "/checklist-mobilizacao")}
+                title={collapsed ? "Checklist Mobilização" : undefined}
+              >
+                <ListChecks className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Checklist Mobilização</span>}
+              </span>
+            </Link>
+          </CanAccess>
+
           {/* Central de colaboradores — visível apenas para user/admin */}
           <CanAccess role="user">
             <Link href="/central">
@@ -368,7 +382,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <div className="ml-3 mt-px space-y-px border-l border-white/10 pl-2.5">
                 {dashboardSubItems.map((sub) => {
                   const link = (
-                    <Link key={sub.href} href={sub.href}>
+                    <Link href={sub.href}>
                       <span
                         className={cn(
                           "flex items-center gap-2 rounded-sm px-2 py-1.5 text-[11px] font-medium transition-colors duration-150",
@@ -384,7 +398,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   );
                   return sub.userOnly ? (
                     <CanAccess key={sub.href} role="user">{link}</CanAccess>
-                  ) : link;
+                  ) : (
+                    <div key={sub.href}>{link}</div>
+                  );
                 })}
               </div>
             )}
@@ -394,7 +410,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <div className="mt-px space-y-px">
                 {dashboardSubItems.map((sub) => {
                   const link = (
-                    <Link key={sub.href} href={sub.href}>
+                    <Link href={sub.href}>
                       <span
                         className={cn(
                           "flex items-center justify-center rounded-sm py-1.5 transition-colors duration-150",
@@ -410,7 +426,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   );
                   return sub.userOnly ? (
                     <CanAccess key={sub.href} role="user">{link}</CanAccess>
-                  ) : link;
+                  ) : (
+                    <div key={sub.href}>{link}</div>
+                  );
                 })}
               </div>
             )}
