@@ -96,6 +96,17 @@ export async function GET(request: NextRequest) {
     }
     const distribuicaoSexo = Object.entries(sexoMap).map(([sexo, total]) => ({ sexo, total }));
 
+    // ── Distribuição por UF (todos os colaboradores válidos) ────────────────
+    const ufMap: Record<string, number> = {};
+    for (const r of comId) {
+      const rawUf = String(r["uf"] ?? "").trim().toUpperCase();
+      const uf = rawUf || "Não informado";
+      ufMap[uf] = (ufMap[uf] || 0) + 1;
+    }
+    const distribuicaoUF = Object.entries(ufMap)
+      .map(([uf, total]) => ({ uf, total }))
+      .sort((a, b) => b.total - a.total);
+
     // ── Término detalhado — linhas brutas para tabela agrupada ───────────────
     // SELECT nome, funcao_clt, termino WHERE termino IS NOT NULL
     // ORDER BY funcao_clt ASC, termino ASC
@@ -119,6 +130,7 @@ export async function GET(request: NextRequest) {
       agregacoes: {
         distribuicaoIdades,
         distribuicaoFuncoes,
+        distribuicaoUF,
         terminoDetalhado,
         distribuicaoASO: [
           { status: "Apto", total: aptoCount },
