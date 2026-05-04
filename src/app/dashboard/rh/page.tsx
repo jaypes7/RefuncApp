@@ -318,16 +318,9 @@ export default function DashboardRhPage() {
 
   // PieChart: distribuição por UF (top 5 + Outros) — usa lista completa, independe de filtros
   const distribuicaoUF = useMemo(() => {
-    const lista = data?.agregacoes?.terminoDetalhado ?? [];
-    const contagem = new Map<string, number>();
-    for (const row of lista) {
-      const r = row as Record<string, string>;
-      const rawUf = (r.uf || r.UF || "").trim();
-      const uf = rawUf ? rawUf.toUpperCase() : "Não informado";
-      contagem.set(uf, (contagem.get(uf) ?? 0) + 1);
-    }
-    const sorted = Array.from(contagem.entries())
-      .map(([uf, count]) => ({ uf, count }))
+    const lista = data?.agregacoes?.distribuicaoUF ?? [];
+    const sorted = lista
+      .map(({ uf, total }) => ({ uf, count: total }))
       .sort((a, b) => b.count - a.count);
 
     const total = sorted.reduce((acc, s) => acc + s.count, 0) || 1;

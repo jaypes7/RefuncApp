@@ -359,6 +359,7 @@ export type DashboardRhData = {
   agregacoes: {
     distribuicaoIdades: DashboardData["agregacoes"]["distribuicaoIdades"];
     distribuicaoFuncoes: DashboardData["agregacoes"]["distribuicaoFuncoes"];
+    distribuicaoUF: DashboardData["agregacoes"]["distribuicaoUF"];
     terminoDetalhado: Array<{ nome: string; funcao_clt: string | null; termino: string; status: string | null; uf: string | null }>;
     distribuicaoASO: Array<{ status: string; total: number }>;
     distribuicaoSexo: Array<{ sexo: string; total: number }>;
