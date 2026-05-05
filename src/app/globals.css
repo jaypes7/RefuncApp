@@ -312,3 +312,155 @@
     }
 }
 
+/* ─── TipTap / ProseMirror fixes ─────────────────────────────────────────── */
+@layer base {
+    /*
+     * O ProseMirror precisa de position:relative para que o cursor
+     * funcione corretamente ao clicar no início das linhas.
+     */
+    .ProseMirror {
+        position: relative;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+        min-height: 100%;
+        outline: none;
+    }
+
+    /* Garante que parágrafos vazios sejam clicáveis */
+    .ProseMirror p {
+        min-height: 1.5em;
+    }
+
+    /* Remove outline padrão do contenteditable que pode capturar clique */
+    .ProseMirror:focus {
+        outline: none;
+    }
+
+    /* Evita que a barra de espaço ative scroll da página —
+       o ProseMirror deve capturar o evento de tecla */
+    .ProseMirror {
+        caret-color: hsl(var(--foreground));
+    }
+}
+
+/* ─── TipTap Editor Custom Styles (sem prose) ────────────────────────────── */
+@layer components {
+    .tiptap-editor {
+        position: relative;
+        min-height: 100%;
+        outline: none;
+    }
+
+    .tiptap-editor .ProseMirror {
+        position: relative;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+        outline: none;
+    }
+
+    /* Garante que parágrafos vazios sejam clicáveis e tenham altura */
+    .tiptap-editor .ProseMirror p {
+        min-height: 1.6em;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+    }
+
+    /* Headings */
+    .tiptap-editor .ProseMirror h1 {
+        font-size: 1.5em;
+        font-weight: 700;
+        margin-top: 1em;
+        margin-bottom: 0.5em;
+        line-height: 1.3;
+    }
+    .tiptap-editor .ProseMirror h2 {
+        font-size: 1.25em;
+        font-weight: 600;
+        margin-top: 0.8em;
+        margin-bottom: 0.4em;
+        line-height: 1.3;
+    }
+    .tiptap-editor .ProseMirror h3 {
+        font-size: 1.1em;
+        font-weight: 600;
+        margin-top: 0.6em;
+        margin-bottom: 0.3em;
+    }
+
+    /* Lists */
+    .tiptap-editor .ProseMirror ul {
+        list-style-type: disc;
+        padding-left: 1.5em;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+    }
+    .tiptap-editor .ProseMirror ol {
+        list-style-type: decimal;
+        padding-left: 1.5em;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+    }
+    .tiptap-editor .ProseMirror li {
+        margin-top: 0.15em;
+        margin-bottom: 0.15em;
+    }
+
+    /* Blockquote */
+    .tiptap-editor .ProseMirror blockquote {
+        border-left: 3px solid hsl(var(--muted));
+        padding-left: 1em;
+        margin-left: 0;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+        color: hsl(var(--muted-foreground));
+    }
+
+    /* Bold / strong */
+    .tiptap-editor .ProseMirror strong {
+        font-weight: 700;
+    }
+
+    /* Italic */
+    .tiptap-editor .ProseMirror em {
+        font-style: italic;
+    }
+
+    /* Strikethrough */
+    .tiptap-editor .ProseMirror s {
+        text-decoration: line-through;
+    }
+
+    /* Table */
+    .tiptap-editor .ProseMirror table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+        font-size: 0.9em;
+    }
+    .tiptap-editor .ProseMirror th,
+    .tiptap-editor .ProseMirror td {
+        border: 1px solid hsl(var(--border));
+        padding: 0.4em 0.6em;
+        text-align: left;
+    }
+    .tiptap-editor .ProseMirror th {
+        background-color: hsl(var(--muted));
+        font-weight: 600;
+    }
+
+    /* Placeholder */
+    .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+        content: attr(data-placeholder);
+        float: left;
+        color: hsl(var(--muted-foreground));
+        pointer-events: none;
+        height: 0;
+    }
+
+    /* Focus no editor */
+    .tiptap-editor:focus-within .ProseMirror {
+        outline: none;
+    }
+}
+
