@@ -24,6 +24,7 @@ import {
   Camera,
   ShieldAlert,
   ListChecks,
+  FileText,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
@@ -435,6 +436,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
 
           
+          {/* Relatório Executivo — visível para user/admin */}
+          <CanAccess role="user">
+            <Link href="/relatorio-executivo">
+              <span
+                className={navItem(pathname === "/relatorio-executivo")}
+                title={collapsed ? "Relatório Executivo" : undefined}
+              >
+                <FileText className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Relatório Executivo</span>}
+              </span>
+            </Link>
+          </CanAccess>
+
           {/* Registros fotográficos — visível para user/admin */}
           <CanAccess role="user">
             <Link href="/registros-fotograficos">
