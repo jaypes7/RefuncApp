@@ -6,9 +6,11 @@
  * Página para geração de relatório executivo via IA (Kimi/Moonshot),
  * edição livre em rich text e exportação para PDF.
  *
- * Layout:
- *   1. Editor TipTap (com toolbar) — área de EDIÇÃO (topo)
- *   2. Prévia do PDF (sem toolbar, com gráfico) — área de EXPORTAÇÃO (base)
+ * Arquitetura (desacoplada):
+ *   • Editor TipTap é NÃO-CONTROLADO — recebe initialContent uma vez e
+ *     gerencia o estado internamente. O pai nunca repassa HTML de volta.
+ *   • Prévia do PDF reflete o estado via dangerouslySetInnerHTML.
+ *   • Exportação captura o container de prévia (que inclui gráfico + texto).
  */
 
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
@@ -19,7 +21,7 @@ import { RelatorioCurvaChart, type CurvaSData } from "@/components/relatorio-cur
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Wand2, Loader2, FileText, Pencil, Eye } from "lucide-react";
+import { Wand2, Loader2, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { marked } from "marked";
 
@@ -27,6 +29,7 @@ export default function RelatorioExecutivoPage() {
   const { centroCusto } = useFilter();
   const [relatorioMarkdown, setRelatorioMarkdown] = useState<string>("");
   const [relatorioHtmlEditado, setRelatorioHtmlEditado] = useState<string>("");
+  const [editorInitialContent, setEditorInitialContent] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [curvaSData, setCurvaSData] = useState<CurvaSData | null>(null);
   const [curvaSValoresHoje, setCurvaSValoresHoje] = useState<{
@@ -35,22 +38,23 @@ export default function RelatorioExecutivoPage() {
   } | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
-  const relatorioHtml = useMemo(() => {
+  // Converte Markdown (da IA) em HTML para inicializar o editor
+  const htmlDaIA = useMemo(() => {
     if (!relatorioMarkdown) return "";
     return marked.parse(relatorioMarkdown, { async: false }) as string;
   }, [relatorioMarkdown]);
 
-  // Sincroniza o HTML inicial quando o markdown muda (geração da IA)
+  // Quando a IA gera novo conteúdo, alimenta o editor UMA ÚNICA VEZ
   useEffect(() => {
-    if (relatorioHtml) {
-      setRelatorioHtmlEditado(relatorioHtml);
+    if (htmlDaIA && htmlDaIA !== editorInitialContent) {
+      setEditorInitialContent(htmlDaIA);
+      setRelatorioHtmlEditado(htmlDaIA);
     }
-  }, [relatorioHtml]);
+  }, [htmlDaIA]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGerar = useCallback(async () => {
     setIsGenerating(true);
     try {
-      // Busca relatório e curva S em paralelo
       const [relRes, dashRes] = await Promise.all([
         fetch("/api/relatorio/gerar", {
           method: "POST",
@@ -66,25 +70,18 @@ export default function RelatorioExecutivoPage() {
       }
 
       const relData = await relRes.json();
-      if (!relData.relatorio) {
-        throw new Error("Resposta vazia da IA");
-      }
+      if (!relData.relatorio) throw new Error("Resposta vazia da IA");
 
       setRelatorioMarkdown(relData.relatorio);
 
-      // Processa dados da Curva S
       if (dashRes.ok) {
         const dashData = await dashRes.json();
         const curva = dashData?.graficos?.curvaS as CurvaSData | undefined;
-        if (curva && curva.labels?.length > 0) {
-          setCurvaSData(curva);
-        }
+        if (curva && curva.labels?.length > 0) setCurvaSData(curva);
         const diario = dashData?.graficos?.curvaS?.valoresHoje?.diario as
           | { planejado: number; realizado: number }
           | undefined;
-        if (diario) {
-          setCurvaSValoresHoje(diario);
-        }
+        if (diario) setCurvaSValoresHoje(diario);
       }
 
       toast.success("Relatório gerado com sucesso!");
@@ -110,11 +107,7 @@ export default function RelatorioExecutivoPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={handleGerar} disabled={isGenerating} className="gap-2">
-            {isGenerating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Wand2 className="h-4 w-4" />
-            )}
+            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
             {isGenerating ? "Gerando..." : "Gerar com IA"}
           </Button>
           {hasRelatorio && <RelatorioExportPdf targetRef={exportRef} />}
@@ -133,7 +126,8 @@ export default function RelatorioExecutivoPage() {
           </CardHeader>
           <CardContent>
             <RelatorioEditor
-              content={relatorioHtmlEditado}
+              key={editorInitialContent ? "editor-mounted" : "editor-empty"}
+              initialContent={editorInitialContent}
               onChange={(html) => setRelatorioHtmlEditado(html)}
             />
           </CardContent>
@@ -150,75 +144,49 @@ export default function RelatorioExecutivoPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Container de EXPORTAÇÃO (sem toolbar, com gráfico) */}
           <div
             ref={exportRef}
             className="rounded-lg bg-white text-black"
             style={{ color: "#000000", backgroundColor: "#ffffff" }}
           >
-            {/* Cabeçalho do relatório */}
+            {/* Cabeçalho */}
             <div className="border-b border-gray-200 p-6">
-              <h2 className="text-lg font-bold text-gray-900">
-                Relatório Executivo
-              </h2>
-              <p className="text-sm text-gray-600">
-                Centro de Custo: {centroCusto ?? "Todos"}
-              </p>
+              <h2 className="text-lg font-bold text-gray-900">Relatório Executivo</h2>
+              <p className="text-sm text-gray-600">Centro de Custo: {centroCusto ?? "Todos"}</p>
             </div>
 
-            {/* Gráfico da Curva S */}
+            {/* Gráfico */}
             {curvaSData && curvaSData.labels.length > 0 && (
               <div className="border-b border-gray-200 p-6">
-                <h3 className="mb-2 text-base font-semibold text-gray-800">
-                  Curva de Avanço
-                </h3>
-                {/* Tooltip fixo com valores atuais */}
+                <h3 className="mb-2 text-base font-semibold text-gray-800">Curva de Avanço</h3>
                 {curvaSValoresHoje && (
                   <div className="mb-4 flex flex-wrap gap-3">
                     <div className="rounded-md bg-gray-50 px-3 py-1.5 text-xs">
                       <span className="text-gray-500">Planejado (dia atual):</span>{" "}
-                      <span className="font-semibold text-gray-700">
-                        {curvaSValoresHoje.planejado.toFixed(1)}%
-                      </span>
+                      <span className="font-semibold text-gray-700">{curvaSValoresHoje.planejado.toFixed(1)}%</span>
                     </div>
                     <div className="rounded-md bg-red-50 px-3 py-1.5 text-xs">
                       <span className="text-gray-500">Realizado (dia atual):</span>{" "}
-                      <span className="font-semibold text-red-700">
-                        {curvaSValoresHoje.realizado.toFixed(1)}%
-                      </span>
+                      <span className="font-semibold text-red-700">{curvaSValoresHoje.realizado.toFixed(1)}%</span>
                     </div>
                     <div className="rounded-md bg-gray-100 px-3 py-1.5 text-xs">
                       <span className="text-gray-500">Desvio:</span>{" "}
-                      <span
-                        className={`font-semibold ${
-                          curvaSValoresHoje.realizado >= curvaSValoresHoje.planejado
-                            ? "text-green-700"
-                            : "text-red-700"
-                        }`}
-                      >
+                      <span className={`font-semibold ${curvaSValoresHoje.realizado >= curvaSValoresHoje.planejado ? "text-green-700" : "text-red-700"}`}>
                         {(curvaSValoresHoje.realizado - curvaSValoresHoje.planejado).toFixed(1)} p.p.
                       </span>
                     </div>
                   </div>
                 )}
-                <RelatorioCurvaChart
-                  data={curvaSData}
-                  valoresHoje={curvaSValoresHoje ?? undefined}
-                />
+                <RelatorioCurvaChart data={curvaSData} valoresHoje={curvaSValoresHoje ?? undefined} />
               </div>
             )}
 
-            {/* Conteúdo do relatório */}
-            <div
-              className="p-6 prose prose-sm max-w-none"
-              style={{ color: "#1f2937" }}
-            >
+            {/* Conteúdo */}
+            <div className="p-6 prose prose-sm max-w-none" style={{ color: "#1f2937" }}>
               {relatorioHtmlEditado ? (
                 <div dangerouslySetInnerHTML={{ __html: relatorioHtmlEditado }} />
               ) : (
-                <p className="text-gray-400 italic">
-                  O relatório aparecerá aqui após a geração.
-                </p>
+                <p className="text-gray-400 italic">O relatório aparecerá aqui após a geração.</p>
               )}
             </div>
           </div>
@@ -226,8 +194,7 @@ export default function RelatorioExecutivoPage() {
           {!hasRelatorio && !isGenerating && (
             <div className="mt-8 text-center text-sm text-muted-foreground">
               Clique em <strong>&quot;Gerar com IA&quot;</strong> para criar o relatório com base nos dados do
-              dashboard e cronograma do centro de custo{" "}
-              <span className="font-semibold text-foreground">{centroCusto ?? "Todos"}</span>.
+              dashboard e cronograma do centro de custo <span className="font-semibold text-foreground">{centroCusto ?? "Todos"}</span>.
             </div>
           )}
 

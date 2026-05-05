@@ -3,9 +3,12 @@
 /**
  * RelatorioEditor
  * ─────────────────────────────────────────────────────────────────────────────
- * Editor rich text baseado em TipTap para edição do relatório executivo.
- * Suporta importação de Markdown (vindo da IA) e exportação do conteúdo
- * em HTML para geração de PDF.
+ * Editor rich text baseado em TipTap. NÃO-CONTROLADO após inicialização.
+ *
+ * O componente recebe `initialContent` apenas para montagem inicial.
+ * Após isso, o TipTap gerencia o estado internamente.
+ * O pai é notificado via `onChange`, mas NUNCA deve repassar o HTML
+ * de volta como prop — isso evita o loop que joga o cursor pro final.
  */
 
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -32,40 +35,30 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+
+export interface RelatorioEditorHandle {
+  getHTML: () => string;
+}
 
 interface RelatorioEditorProps {
-  content?: string;
+  initialContent?: string;
   onChange?: (html: string) => void;
   className?: string;
   readOnly?: boolean;
-  /** Ref para o container do conteúdo editável (sem toolbar). Usado para exportação PDF. */
-  contentRef?: React.Ref<HTMLDivElement>;
 }
 
 export function RelatorioEditor({
-  content = "",
+  initialContent = "",
   onChange,
   className,
   readOnly = false,
-  contentRef,
 }: RelatorioEditorProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const innerContentRef = useRef<HTMLDivElement>(null);
-  const lastContentRef = useRef<string>(content);
+  const hasInitialized = useRef(false);
 
-  // Forward ref para o container do conteúdo
-  useEffect(() => {
-    if (!contentRef) return;
-    const ref = contentRef as React.MutableRefObject<HTMLDivElement | null>;
-    ref.current = innerContentRef.current;
-  }, [contentRef]);
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
+  const extensions = useMemo(
+    () => [
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Table.configure({ resizable: true }),
       TableRow,
       TableCell,
@@ -75,31 +68,50 @@ export function RelatorioEditor({
       }),
       Markdown,
     ],
-    content,
+    []
+  );
+
+  const editor = useEditor({
+    extensions,
+    content: initialContent,
     editable: !readOnly,
     immediatelyRender: false,
-    onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML());
+    onUpdate: ({ editor: ed }) => {
+      onChange?.(ed.getHTML());
     },
   });
 
-  // Atualiza conteúdo quando a prop muda (ex: após gerar relatório)
+  // Sincroniza conteúdo inicial APENAS UMA VEZ (na montagem)
   useEffect(() => {
-    if (editor && content && content !== lastContentRef.current) {
-      lastContentRef.current = content;
-      editor.commands.setContent(content, { emitUpdate: false });
+    if (!editor || hasInitialized.current) return;
+    if (initialContent && initialContent !== "") {
+      editor.commands.setContent(initialContent, { emitUpdate: false });
     }
-  }, [content, editor]);
+    hasInitialized.current = true;
+  }, [editor, initialContent]);
 
   if (!editor) return null;
 
-  const btn = (active: boolean, onClick: () => void, icon: React.ReactNode, title: string) => (
+  const ToolbarButton = ({
+    active,
+    onClick,
+    icon,
+    title,
+  }: {
+    active: boolean;
+    onClick: () => void;
+    icon: React.ReactNode;
+    title: string;
+  }) => (
     <Button
       type="button"
       variant="ghost"
       size="icon"
       title={title}
-      onClick={onClick}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
       className={cn(
         "h-8 w-8 rounded-md",
         active && "bg-accent text-accent-foreground"
@@ -110,55 +122,30 @@ export function RelatorioEditor({
   );
 
   return (
-    <div ref={containerRef} className={cn("flex flex-col gap-2", className)}>
+    <div className={cn("flex flex-col gap-2", className)}>
       {!readOnly && (
-        <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/50 p-1.5">
-          {btn(editor.isActive("bold"), () => editor.chain().focus().toggleBold().run(), <Bold className="h-4 w-4" />, "Negrito")}
-          {btn(editor.isActive("italic"), () => editor.chain().focus().toggleItalic().run(), <Italic className="h-4 w-4" />, "Itálico")}
-          {btn(editor.isActive("strike"), () => editor.chain().focus().toggleStrike().run(), <Strikethrough className="h-4 w-4" />, "Tachado")}
+        <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/50 p-1.5 select-none">
+          <ToolbarButton active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} icon={<Bold className="h-4 w-4" />} title="Negrito" />
+          <ToolbarButton active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} icon={<Italic className="h-4 w-4" />} title="Itálico" />
+          <ToolbarButton active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()} icon={<Strikethrough className="h-4 w-4" />} title="Tachado" />
           <div className="mx-1 h-4 w-px bg-border" />
-          {btn(editor.isActive("heading", { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run(), <Heading1 className="h-4 w-4" />, "Título 1")}
-          {btn(editor.isActive("heading", { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run(), <Heading2 className="h-4 w-4" />, "Título 2")}
+          <ToolbarButton active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} icon={<Heading1 className="h-4 w-4" />} title="Título 1" />
+          <ToolbarButton active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} icon={<Heading2 className="h-4 w-4" />} title="Título 2" />
           <div className="mx-1 h-4 w-px bg-border" />
-          {btn(editor.isActive("bulletList"), () => editor.chain().focus().toggleBulletList().run(), <List className="h-4 w-4" />, "Lista")}
-          {btn(editor.isActive("orderedList"), () => editor.chain().focus().toggleOrderedList().run(), <ListOrdered className="h-4 w-4" />, "Lista numerada")}
-          {btn(editor.isActive("blockquote"), () => editor.chain().focus().toggleBlockquote().run(), <Quote className="h-4 w-4" />, "Citação")}
+          <ToolbarButton active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} icon={<List className="h-4 w-4" />} title="Lista" />
+          <ToolbarButton active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} icon={<ListOrdered className="h-4 w-4" />} title="Lista numerada" />
+          <ToolbarButton active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()} icon={<Quote className="h-4 w-4" />} title="Citação" />
           <div className="mx-1 h-4 w-px bg-border" />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="Inserir tabela"
-            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-            className="h-8 w-8 rounded-md"
-          >
-            <TableIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="Remover tabela"
-            onClick={() => editor.chain().focus().deleteTable().run()}
-            className="h-8 w-8 rounded-md"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <ToolbarButton active={false} onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} icon={<TableIcon className="h-4 w-4" />} title="Inserir tabela" />
+          <ToolbarButton active={false} onClick={() => editor.chain().focus().deleteTable().run()} icon={<Trash2 className="h-4 w-4" />} title="Remover tabela" />
           <div className="mx-1 h-4 w-px bg-border" />
-          {btn(false, () => editor.chain().focus().undo().run(), <Undo className="h-4 w-4" />, "Desfazer")}
-          {btn(false, () => editor.chain().focus().redo().run(), <Redo className="h-4 w-4" />, "Refazer")}
+          <ToolbarButton active={false} onClick={() => editor.chain().focus().undo().run()} icon={<Undo className="h-4 w-4" />} title="Desfazer" />
+          <ToolbarButton active={false} onClick={() => editor.chain().focus().redo().run()} icon={<Redo className="h-4 w-4" />} title="Refazer" />
         </div>
       )}
 
-      <div
-        ref={innerContentRef}
-        className={cn(
-          "min-h-[600px] rounded-lg border bg-background p-6 shadow-sm",
-          "prose prose-sm max-w-none dark:prose-invert",
-          "focus-within:ring-1 focus-within:ring-ring"
-        )}
-      >
-        <EditorContent editor={editor} className="outline-none" />
+      <div className="min-h-[400px] rounded-lg border bg-background p-6 shadow-sm focus-within:ring-1 focus-within:ring-ring">
+        <EditorContent editor={editor} className="tiptap-editor outline-none" />
       </div>
     </div>
   );
