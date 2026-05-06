@@ -14,10 +14,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 import { chatCompletions } from "@/lib/moonshot";
-import { calculateWorkingDays } from "@/lib/date-utils";
+import { calculateWorkingDays, addWorkingDays } from "@/lib/date-utils";
 
 // ============================================================================
 // HELPERS
@@ -105,6 +106,25 @@ function sanitizarRelatorio(texto: string): string {
  * cálculo automático seg-sex sem feriados), senão usa dias corridos.
  * Se a etapa não tem datas, usa percentualConcluido como fallback.
  */
+function calcularIntervaloCenario(
+  dataBase: string,
+  diasRestantes: number,
+  spi: number,
+): string {
+  const diasNecessarios = Math.max(1, Math.round(diasRestantes / spi));
+  const dataCentral = addWorkingDays(dataBase, diasNecessarios);
+  const inicio = new Date(dataCentral);
+  inicio.setDate(inicio.getDate() - 2);
+  const fim = new Date(dataCentral);
+  fim.setDate(fim.getDate() + 2);
+  const fmt = (d: Date) => {
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    return `${day}/${month}`;
+  };
+  return `${fmt(inicio)}–${fmt(fim)}`;
+}
+
 function calcularPlanejadoEtapa(
   dataBase: string,
   dataInicio: string | null,
@@ -154,6 +174,11 @@ export async function POST(request: NextRequest) {
     const ccParam = toStr(body.centro_custo) || undefined;
     const centrosCusto = resolveCentroCusto(currentUser, ccParam);
     const centroCusto = centrosCusto?.[0] ?? null;
+
+    const dataBaseRaw = toStr(body.data_base);
+    const dataBase = dataBaseRaw && /^\d{4}-\d{2}-\d{2}$/.test(dataBaseRaw)
+      ? dataBaseRaw
+      : new Date().toISOString().split("T")[0];
 
     const supabase = createServerClient();
 
@@ -244,7 +269,7 @@ export async function POST(request: NextRequest) {
     const totalOcorrencias = ocorrenciasRows?.length ?? 0;
 
     // ── Cálculo correto do progresso por etapa ──────────────────────────────
-    const hoje = new Date().toISOString().split("T")[0];
+    const hoje = dataBase;
     const dataInicioProj = configRow?.data_inicio_projeto ?? null;
     const dataFimProj = configRow?.data_fim_projeto ?? null;
     const diasTrabalhados = (configRow?.dias_trabalhados as string[] | undefined) ?? [];
@@ -259,7 +284,7 @@ export async function POST(request: NextRequest) {
         100,
         Math.round(
           (progressoRows ?? [])
-            .filter((r) => Number(r.etapa_id) === e.id)
+            .filter((r) => Number(r.etapa_id) === e.id && String(r.data ?? "") <= hoje)
             .reduce((s, r) => s + (Number(r.percentual) || 0), 0) * 10,
         ) / 10,
       );
@@ -294,6 +319,38 @@ export async function POST(request: NextRequest) {
     const spiGlobal = progressoPlanejadoGlobal > 0
       ? Math.round((progressoRealizadoGlobal / progressoPlanejadoGlobal) * 100) / 100
       : 1;
+
+    // ── Métricas temporais e cenários ───────────────────────────────────────
+    const diasDecorridos = dataInicioProj ? calculateWorkingDays(dataInicioProj, dataBase) : 0;
+    const diasRestantes = dataFimProj ? calculateWorkingDays(dataBase, dataFimProj) : 0;
+    const mediaRealizada = diasDecorridos > 0
+      ? Math.round((progressoRealizadoGlobal / diasDecorridos) * 10) / 10
+      : 0;
+    const ipn = diasRestantes > 0
+      ? Math.round(((100 - progressoRealizadoGlobal) / diasRestantes) * 10) / 10
+      : 0;
+
+    let spiOtimista: number;
+    let spiRealista: number;
+    let spiPessimista: number;
+
+    if (spiGlobal > 1) {
+      spiOtimista = spiGlobal;
+      spiRealista = 1.05;
+      spiPessimista = 0.95;
+    } else if (spiGlobal === 1) {
+      spiOtimista = 1.15;
+      spiRealista = spiGlobal;
+      spiPessimista = 0.95;
+    } else {
+      spiOtimista = 1.15;
+      spiRealista = 1.0;
+      spiPessimista = spiGlobal;
+    }
+
+    const cenarioOtimista = calcularIntervaloCenario(dataBase, diasRestantes, spiOtimista);
+    const cenarioRealista = calcularIntervaloCenario(dataBase, diasRestantes, spiRealista);
+    const cenarioPessimista = calcularIntervaloCenario(dataBase, diasRestantes, spiPessimista);
 
     // ── Monta payload de dados para a IA ────────────────────────────────────
     const dadosIA = {
@@ -359,9 +416,9 @@ export async function POST(request: NextRequest) {
 
 **Período:** ${dataInicioFmt} a ${dataFimFmt} | **Data-base:** ${dataBaseFmt}
 
-Este relatório executivo sobre a Curva de Mobilização ${cliente} (CMD) é destinado a gestores de projetos. O conteúdo abrange a análise do progresso do projeto, a leitura de desempenho, a interpretação executiva, cenários de prazo, indicadores-chave, recomendações e conclusão, evitando jargões excessivos e mantendo o foco na relevância dos dados.
+Este relatório executivo sobre a Curva de Mobilização ${cliente} (CMD) é destinado a gestores de projetos. O conteúdo abrange a análise do progresso do projeto, a leitura de desempenho, a interpretação executiva, indicadores-chave, cenários de prazo, recomendações e conclusão, evitando jargões excessivos e mantendo o foco na relevância dos dados.
 
-**Curva de Avanço**
+**1 - Curva de Avanço**
 
 **Status Geral**
 
@@ -375,14 +432,14 @@ SPI: ${spi} (${positivoStr})
 
 O projeto encontra-se ${adiantadoStr} em relação ao cronograma.
 
-**Leitura de Performance**
+**2 - Leitura e Performance**
 
 [COMPLETAR: 4 bullets curtos sobre o desempenho observado nas etapas abaixo]
 
 Etapas com progresso:
 ${etapasDestaque}
 
-**Interpretação Executiva**
+**3 - Interpretação Executiva**
 
 Apesar do desempenho ${positivoStr} atual:
 
@@ -390,26 +447,37 @@ Apesar do desempenho ${positivoStr} atual:
 
 Conclusão: ${adiantadoStr} atual não garante aderência ao prazo final.
 
-**Cenários de Prazo**
+**4 - Indicadores Chave**
 
-| Cenário | Resultado | Risco |
-|---------|-----------|-------|
-| Otimista | Conclusão antes de ${dataFimFmt} | Baixo |
-| Realista | Conclusão em ${dataFimFmt} | Médio |
-| Conservador | Conclusão após ${dataFimFmt} | Alto |
-| Crítico | Conclusão muito após ${dataFimFmt} | Muito alto |
+**4.1 - SPI (Schedule Performance Index) = ${spi} (${positivoStr})**
 
-**Indicadores-Chave**
+- SPI > 1 → adiantado
+- SPI = 1 → conforme o planejado
+- SPI < 1 → atrasado
 
-SPI atual: ${spi} (${positivoStr})
+Interpretação: projeto ${adiantadoStr}${spi > 1 ? " (bem acima do planejado)" : spi < 1 ? " (abaixo do planejado)" : ""}.
 
-[COMPLETAR: IPN estimado ou outro indicador relevante, se aplicável]
+**4.2 - IPN (Índice de Produção Necessária) = ${ipn}% ao dia**
 
-**Recomendação Executiva**
+- Média realizada: ~${mediaRealizada}%/dia
+- Período: de ${dataInicioFmt} a ${dataBaseFmt} ≈ ${diasDecorridos} dias
+- Fórmula: Média = Progresso / Dias
+
+"O projeto vem performando em média ${mediaRealizada}% ao dia, porém será necessário elevar esse ritmo para cerca de ${ipn}% ao dia para garantir a conclusão no prazo."
+
+**5 - Cenários de Prazos - (baseado no SPI)**
+
+| Cenário | SPI | Previsão de término |
+|---------|-----|---------------------|
+| Otimista | ${spiOtimista.toFixed(2).replace(".", ",")} | ${cenarioOtimista} |
+| Realista | ${spiRealista.toFixed(2).replace(".", ",")} | ${cenarioRealista} |
+| Pessimista | ${spiPessimista.toFixed(2).replace(".", ",")} | ${cenarioPessimista} |
+
+**6 - Recomendação Executiva**
 
 [COMPLETAR: 5 bullets acionáveis para a gestão]
 
-**Conclusão**
+**7 - Conclusão**
 
 [COMPLETAR: 1 a 2 parágrafos sintetizando a situação]`;
 
@@ -448,7 +516,7 @@ Complete todas as marcações [COMPLETAR] e devolva o relatório final. Nada mai
     const relatorio = sanitizarRelatorio(relatorioBruto);
     console.log("[Relatorio/gerar] Output length:", relatorio.length, "chars");
 
-    return NextResponse.json({ relatorio });
+    return NextResponse.json({ relatorio, data_base: dataBase });
   } catch (err: unknown) {
     console.error("[POST /api/relatorio/gerar]", err);
 
@@ -457,6 +525,9 @@ Complete todas as marcações [COMPLETAR] e devolva o relatório final. Nada mai
     }
     if (err instanceof Error && err.message === "FORBIDDEN") {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: err.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
     }
 
     const msg = err instanceof Error ? err.message : "Erro interno";
