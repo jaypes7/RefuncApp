@@ -475,22 +475,12 @@ function gerarCurvaSEtapas(
   }
 
   // DIÁRIO: indicador padrão (quando nenhum dia está selecionado no SELECT).
-  // Usa o último dia com dado preenchido, limitado a hoje para não mostrar
-  // planejado de datas futuras no indicador padrão. Se não há dados, usa o
-  // último dia útil <= hoje.
+  // Sempre reflete o dia atual (hoje). Se hoje não for um dia trabalhado,
+  // mostra o último dia trabalhado.
   let dataReferenciaDiaria: string;
-  if (ultimaDataComDado) {
-    // Limita a hoje: se o último dado é futuro, usa hoje como teto para o indicador padrão
-    const dataCap = ultimaDataComDado <= hojeStr ? ultimaDataComDado : hojeStr;
-    if (diasPlot.includes(dataCap)) {
-      dataReferenciaDiaria = dataCap;
-    } else {
-      // dataCap não é dia trabalhado — pega o último dia útil <= dataCap
-      const ultimoDiaUtilAteCap = [...diasPlot].reverse().find((d) => d <= dataCap);
-      dataReferenciaDiaria = ultimoDiaUtilAteCap ?? diasPlot[0] ?? dataInicio;
-    }
+  if (diasPlot.includes(hojeStr)) {
+    dataReferenciaDiaria = hojeStr;
   } else {
-    // Sem dados de progresso — usa o último dia útil <= hoje
     const ultimoDiaUtilAteHoje = [...diasPlot].reverse().find((d) => d <= hojeStr);
     dataReferenciaDiaria = ultimoDiaUtilAteHoje ?? diasPlot[0] ?? dataInicio;
   }
@@ -620,6 +610,11 @@ export async function GET(request: NextRequest) {
     const ccParam = searchParams.get("centro_custo") || undefined;
     const centroCusto = resolveCentroCusto(currentUser, ccParam);
 
+    const dataBaseParam = searchParams.get("data_base");
+    const hoje = dataBaseParam && /^\d{4}-\d{2}-\d{2}$/.test(dataBaseParam)
+      ? dataBaseParam
+      : new Date().toISOString().split("T")[0];
+
     const db = createServerClient();
 
     let colabQuery = db
@@ -697,7 +692,6 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Curva S ──────────────────────────────────────────────────────────────
-    const hoje = new Date().toISOString().split("T")[0];
     let curvaS: CurvaSResult | null = null;
     let statusProjeto: { atrasado: boolean; diasAtraso: number; percentualAtraso: number } | null = null;
 

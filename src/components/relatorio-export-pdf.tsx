@@ -21,6 +21,7 @@ interface RelatorioExportPdfProps {
   targetRef: React.RefObject<HTMLElement | null>;
   filename?: string;
   className?: string;
+  dataReferencia?: string;
 }
 
 /**
@@ -54,6 +55,7 @@ export function RelatorioExportPdf({
   targetRef,
   filename = "relatorio_executivo",
   className,
+  dataReferencia,
 }: RelatorioExportPdfProps) {
   const [isExporting, setIsExporting] = useState(false);
 
@@ -159,7 +161,7 @@ export function RelatorioExportPdf({
         }
       }
 
-      const dateStr = new Date().toISOString().split("T")[0];
+      const dateStr = dataReferencia ?? new Date().toISOString().split("T")[0];
       pdf.save(`${filename}_${dateStr}.pdf`);
 
       toast.success("PDF exportado com sucesso!");
