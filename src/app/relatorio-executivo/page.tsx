@@ -21,6 +21,15 @@ import { RelatorioCurvaChart, type CurvaSData } from "@/components/relatorio-cur
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Wand2, Loader2, Pencil, Eye, Save, CalendarDays, ChevronDown, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { marked } from "marked";
@@ -38,6 +47,7 @@ type RelatorioSalvo = {
   id: number;
   centro_custo: string;
   data_referencia: string;
+  nome: string;
   conteudo_html: string;
   created_at: string;
   updated_at: string;
@@ -55,6 +65,8 @@ export default function RelatorioExecutivoPage() {
   const [dataBase, setDataBase] = useState<string>(fmtDateInput());
   const [relatoriosSalvos, setRelatoriosSalvos] = useState<RelatorioSalvo[]>([]);
   const [mostrarSalvos, setMostrarSalvos] = useState(false);
+  const [dialogSalvarAberto, setDialogSalvarAberto] = useState(false);
+  const [nomeRelatorio, setNomeRelatorio] = useState("Relatório Executivo");
   const [curvaSData, setCurvaSData] = useState<CurvaSData | null>(null);
   const [curvaSValoresHoje, setCurvaSValoresHoje] = useState<{
     planejado: number;
@@ -146,6 +158,10 @@ export default function RelatorioExecutivoPage() {
       toast.error("Nenhum conteúdo para salvar.");
       return;
     }
+    if (!nomeRelatorio.trim()) {
+      toast.error("Informe um nome para o relatório.");
+      return;
+    }
     setIsSaving(true);
     try {
       const res = await fetch("/api/relatorio/salvar", {
@@ -155,13 +171,15 @@ export default function RelatorioExecutivoPage() {
           centro_custo: centroCusto,
           data_referencia: dataBase,
           conteudo_html: relatorioHtmlEditado,
+          nome: nomeRelatorio.trim(),
         }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Erro desconhecido" }));
         throw new Error(err.error || `Erro ${res.status}`);
       }
-      toast.success(`Relatório do dia ${fmtDateBR(dataBase)} salvo com sucesso!`);
+      toast.success(`Relatório "${nomeRelatorio.trim()}" salvo com sucesso!`);
+      setDialogSalvarAberto(false);
       await carregarRelatoriosSalvos();
     } catch (err: unknown) {
       console.error("[RelatorioExecutivo/Salvar]", err);
@@ -169,14 +187,15 @@ export default function RelatorioExecutivoPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [centroCusto, dataBase, relatorioHtmlEditado, carregarRelatoriosSalvos]);
+  }, [centroCusto, dataBase, relatorioHtmlEditado, nomeRelatorio, carregarRelatoriosSalvos]);
 
   const handleCarregarSalvo = useCallback((rel: RelatorioSalvo) => {
     setEditorInitialContent(rel.conteudo_html);
     setRelatorioHtmlEditado(rel.conteudo_html);
     setDataBase(rel.data_referencia);
+    setNomeRelatorio(rel.nome || "Relatório Executivo");
     setEditorKey(`editor-saved-${rel.id}-${Date.now()}`);
-    toast.info(`Relatório do dia ${fmtDateBR(rel.data_referencia)} carregado.`);
+    toast.info(`Relatório "${rel.nome || "Relatório Executivo"}" carregado.`);
   }, []);
 
   const handleExcluirSalvo = useCallback(async (rel: RelatorioSalvo, e: React.MouseEvent) => {
@@ -235,7 +254,7 @@ export default function RelatorioExecutivoPage() {
             {hasRelatorio && (
               <>
                 <Button
-                  onClick={handleSalvar}
+                  onClick={() => setDialogSalvarAberto(true)}
                   disabled={isSaving}
                   variant="secondary"
                   size="sm"
@@ -244,7 +263,7 @@ export default function RelatorioExecutivoPage() {
                   {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {isSaving ? "Salvando..." : "Salvar Relatório"}
                 </Button>
-                <RelatorioExportPdf targetRef={exportRef} dataReferencia={dataBase} />
+                <RelatorioExportPdf targetRef={exportRef} dataReferencia={dataBase} filename={nomeRelatorio.replace(/\s+/g, "_")} />
               </>
             )}
             {relatoriosSalvos.length > 0 && (
@@ -273,9 +292,9 @@ export default function RelatorioExecutivoPage() {
                             }}
                             className="flex-1 text-left"
                           >
-                            <span className="font-medium">{fmtDateBR(rel.data_referencia)}</span>
+                            <span className="font-medium">{rel.nome || "Relatório Executivo"}</span>
                             <span className="ml-2 text-xs text-muted-foreground">
-                              {rel.centro_custo}
+                              {fmtDateBR(rel.data_referencia)}
                             </span>
                           </button>
                           <button
@@ -300,6 +319,40 @@ export default function RelatorioExecutivoPage() {
           </div>
         </div>
       </div>
+
+      {/* Dialog de salvamento */}
+      <Dialog open={dialogSalvarAberto} onOpenChange={setDialogSalvarAberto}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Salvar Relatório</DialogTitle>
+            <DialogDescription>
+              Defina um nome para identificar este relatório. Você pode salvar vários relatórios do mesmo dia com nomes diferentes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <label htmlFor="nome-relatorio" className="text-sm font-medium">
+                Nome do relatório
+              </label>
+              <Input
+                id="nome-relatorio"
+                value={nomeRelatorio}
+                onChange={(e) => setNomeRelatorio(e.target.value)}
+                placeholder="Ex: Relatório Parcial da Manhã"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogSalvarAberto(false)} disabled={isSaving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSalvar} disabled={isSaving || !nomeRelatorio.trim()}>
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── 1. EDITOR (edição) ── */}
       {hasRelatorio && (
