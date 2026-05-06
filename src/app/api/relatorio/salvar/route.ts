@@ -20,6 +20,7 @@ const SalvarSchema = z.object({
   centro_custo: z.string().min(1),
   data_referencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato esperado: YYYY-MM-DD"),
   conteudo_html: z.string().min(1, "Conteúdo do relatório não pode estar vazio"),
+  nome: z.string().min(1, "Nome do relatório não pode estar vazio"),
 });
 
 // ============================================================================
@@ -47,12 +48,13 @@ export async function POST(request: NextRequest) {
           centro_custo: parsed.centro_custo,
           data_referencia: parsed.data_referencia,
           conteudo_html: parsed.conteudo_html,
+          nome: parsed.nome,
           updated_at: new Date().toISOString(),
           created_by: currentUser.re,
         },
-        { onConflict: "centro_custo,data_referencia" },
+        { onConflict: "centro_custo,data_referencia,nome" },
       )
-      .select("id, data_referencia")
+      .select("id, data_referencia, nome")
       .single();
 
     if (error) {
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
     await registrarLog(
       currentUser.re,
       "EDITAR",
-      `Relatório executivo salvo: ${parsed.centro_custo} - ${parsed.data_referencia}`,
+      `Relatório executivo salvo: ${parsed.centro_custo} - ${parsed.data_referencia} - ${parsed.nome}`,
     );
 
     return NextResponse.json({ id: data.id, data_referencia: data.data_referencia });
@@ -101,7 +103,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("relatorios_executivos")
-      .select("id, centro_custo, data_referencia, conteudo_html, created_at, updated_at")
+      .select("id, centro_custo, data_referencia, nome, conteudo_html, created_at, updated_at")
       .order("data_referencia", { ascending: false });
 
     if (centroCusto) {
