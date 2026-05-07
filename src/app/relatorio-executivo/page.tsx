@@ -72,7 +72,9 @@ export default function RelatorioExecutivoPage() {
     planejado: number;
     realizado: number;
   } | null>(null);
+  const [dataRelatorioAtual, setDataRelatorioAtual] = useState<string | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
+  const gerarRequestId = useRef(0);
 
   // Converte Markdown (da IA) em HTML para inicializar o editor
   const htmlDaIA = useMemo(() => {
@@ -109,6 +111,7 @@ export default function RelatorioExecutivoPage() {
   }, [carregarRelatoriosSalvos]);
 
   const handleGerar = useCallback(async () => {
+    const requestId = ++gerarRequestId.current;
     setIsGenerating(true);
     try {
       const [relRes, dashRes] = await Promise.all([
@@ -132,7 +135,11 @@ export default function RelatorioExecutivoPage() {
       const relData = await relRes.json();
       if (!relData.relatorio) throw new Error("Resposta vazia da IA");
 
+      // Ignora resposta se uma requisição mais recente foi disparada
+      if (requestId !== gerarRequestId.current) return;
+
       setRelatorioMarkdown(relData.relatorio);
+      setDataRelatorioAtual(relData.data_base ?? dataBase);
 
       if (dashRes.ok) {
         const dashData = await dashRes.json();
@@ -146,10 +153,15 @@ export default function RelatorioExecutivoPage() {
 
       toast.success("Relatório gerado com sucesso!");
     } catch (err: unknown) {
+      // Ignora erro de requisições stale
+      if (requestId !== gerarRequestId.current) return;
       console.error("[RelatorioExecutivo]", err);
       toast.error(err instanceof Error ? err.message : "Erro ao gerar relatório");
     } finally {
-      setIsGenerating(false);
+      // Só desativa o loading se ainda for a requisição atual
+      if (requestId === gerarRequestId.current) {
+        setIsGenerating(false);
+      }
     }
   }, [centroCusto, dataBase]);
 
@@ -169,7 +181,7 @@ export default function RelatorioExecutivoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           centro_custo: centroCusto,
-          data_referencia: dataBase,
+          data_referencia: dataRelatorioAtual ?? dataBase,
           conteudo_html: relatorioHtmlEditado,
           nome: nomeRelatorio.trim(),
         }),
@@ -190,8 +202,10 @@ export default function RelatorioExecutivoPage() {
   }, [centroCusto, dataBase, relatorioHtmlEditado, nomeRelatorio, carregarRelatoriosSalvos]);
 
   const handleCarregarSalvo = useCallback((rel: RelatorioSalvo) => {
+    setRelatorioMarkdown(""); // evita que o useEffect de htmlDaIA sobrescreva o conteúdo salvo
     setEditorInitialContent(rel.conteudo_html);
     setRelatorioHtmlEditado(rel.conteudo_html);
+    setDataRelatorioAtual(rel.data_referencia);
     setDataBase(rel.data_referencia);
     setNomeRelatorio(rel.nome || "Relatório Executivo");
     setEditorKey(`editor-saved-${rel.id}-${Date.now()}`);
@@ -263,7 +277,7 @@ export default function RelatorioExecutivoPage() {
                   {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {isSaving ? "Salvando..." : "Salvar Relatório"}
                 </Button>
-                <RelatorioExportPdf targetRef={exportRef} dataReferencia={dataBase} filename={nomeRelatorio.replace(/\s+/g, "_")} />
+                <RelatorioExportPdf targetRef={exportRef} dataReferencia={dataRelatorioAtual ?? dataBase} filename={nomeRelatorio.replace(/\s+/g, "_")} />
               </>
             )}
             {relatoriosSalvos.length > 0 && (
