@@ -389,43 +389,72 @@ export default function RelatorioExecutivoPage() {
             className="rounded-lg bg-white text-black"
             style={{ color: "#000000", backgroundColor: "#ffffff" }}
           >
-            {/* Cabeçalho */}
-            <div className="border-b border-gray-200 p-6">
-              <h2 className="text-lg font-bold text-gray-900">Relatório Executivo</h2>
-              <p className="text-sm text-gray-600">Centro de Custo: {centroCusto ?? "Todos"}</p>
-              <p className="text-sm text-gray-600">Data de referência: {fmtDateBR(dataBase)}</p>
-            </div>
-
-            {/* Gráfico */}
-            {curvaSData && curvaSData.labels.length > 0 && (
-              <div className="border-b border-gray-200 p-6">
-                <h3 className="mb-2 text-base font-semibold text-gray-800">Curva de Avanço</h3>
-                {curvaSValoresHoje && (
-                  <div className="mb-4 flex flex-wrap gap-3">
-                    <div className="rounded-md bg-gray-50 px-3 py-1.5 text-xs">
-                      <span className="text-gray-500">Planejado (dia atual):</span>{" "}
-                      <span className="font-semibold text-gray-700">{curvaSValoresHoje.planejado.toFixed(1)}%</span>
-                    </div>
-                    <div className="rounded-md bg-red-50 px-3 py-1.5 text-xs">
-                      <span className="text-gray-500">Realizado (dia atual):</span>{" "}
-                      <span className="font-semibold text-red-700">{curvaSValoresHoje.realizado.toFixed(1)}%</span>
-                    </div>
-                    <div className="rounded-md bg-gray-100 px-3 py-1.5 text-xs">
-                      <span className="text-gray-500">Desvio:</span>{" "}
-                      <span className={`font-semibold ${curvaSValoresHoje.realizado >= curvaSValoresHoje.planejado ? "text-green-700" : "text-red-700"}`}>
-                        {(curvaSValoresHoje.realizado - curvaSValoresHoje.planejado).toFixed(1)} p.p.
-                      </span>
-                    </div>
-                  </div>
-                )}
-                <RelatorioCurvaChart data={curvaSData} valoresHoje={curvaSValoresHoje ?? undefined} />
-              </div>
-            )}
-
-            {/* Conteúdo */}
+            {/* Conteúdo com gráfico embutido após o item 1 */}
             <div className="p-6 prose prose-sm max-w-none" style={{ color: "#1f2937" }}>
               {relatorioHtmlEditado ? (
-                <div dangerouslySetInnerHTML={{ __html: relatorioHtmlEditado }} />
+                (() => {
+                  const partes = relatorioHtmlEditado.split('<div data-grafico="curva"></div>');
+                  const temGrafico = curvaSData && curvaSData.labels.length > 0;
+                  if (partes.length === 2 && temGrafico) {
+                    return (
+                      <>
+                        <div dangerouslySetInnerHTML={{ __html: partes[0] }} />
+                        <div className="not-prose border-b border-gray-200 py-6">
+                          <h3 className="mb-2 text-base font-semibold text-gray-800">Curva de Avanço</h3>
+                          {curvaSValoresHoje && (
+                            <div className="mb-4 flex flex-wrap gap-3">
+                              <div className="rounded-md bg-gray-50 px-3 py-1.5 text-xs">
+                                <span className="text-gray-500">Planejado (dia atual):</span>{" "}
+                                <span className="font-semibold text-gray-700">{curvaSValoresHoje.planejado.toFixed(1)}%</span>
+                              </div>
+                              <div className="rounded-md bg-red-50 px-3 py-1.5 text-xs">
+                                <span className="text-gray-500">Realizado (dia atual):</span>{" "}
+                                <span className="font-semibold text-red-700">{curvaSValoresHoje.realizado.toFixed(1)}%</span>
+                              </div>
+                              <div className="rounded-md bg-gray-100 px-3 py-1.5 text-xs">
+                                <span className="text-gray-500">Desvio:</span>{" "}
+                                <span className={`font-semibold ${curvaSValoresHoje.realizado >= curvaSValoresHoje.planejado ? "text-green-700" : "text-red-700"}`}>
+                                  {(curvaSValoresHoje.realizado - curvaSValoresHoje.planejado).toFixed(1)} p.p.
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          <RelatorioCurvaChart data={curvaSData} valoresHoje={curvaSValoresHoje ?? undefined} />
+                        </div>
+                        <div dangerouslySetInnerHTML={{ __html: partes[1] }} />
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <div dangerouslySetInnerHTML={{ __html: relatorioHtmlEditado }} />
+                      {temGrafico && (
+                        <div className="not-prose border-b border-gray-200 py-6">
+                          <h3 className="mb-2 text-base font-semibold text-gray-800">Curva de Avanço</h3>
+                          {curvaSValoresHoje && (
+                            <div className="mb-4 flex flex-wrap gap-3">
+                              <div className="rounded-md bg-gray-50 px-3 py-1.5 text-xs">
+                                <span className="text-gray-500">Planejado (dia atual):</span>{" "}
+                                <span className="font-semibold text-gray-700">{curvaSValoresHoje.planejado.toFixed(1)}%</span>
+                              </div>
+                              <div className="rounded-md bg-red-50 px-3 py-1.5 text-xs">
+                                <span className="text-gray-500">Realizado (dia atual):</span>{" "}
+                                <span className="font-semibold text-red-700">{curvaSValoresHoje.realizado.toFixed(1)}%</span>
+                              </div>
+                              <div className="rounded-md bg-gray-100 px-3 py-1.5 text-xs">
+                                <span className="text-gray-500">Desvio:</span>{" "}
+                                <span className={`font-semibold ${curvaSValoresHoje.realizado >= curvaSValoresHoje.planejado ? "text-green-700" : "text-red-700"}`}>
+                                  {(curvaSValoresHoje.realizado - curvaSValoresHoje.planejado).toFixed(1)} p.p.
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          <RelatorioCurvaChart data={curvaSData} valoresHoje={curvaSValoresHoje ?? undefined} />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()
               ) : (
                 <p className="text-gray-400 italic">O relatório aparecerá aqui após a geração.</p>
               )}
