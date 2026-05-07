@@ -432,6 +432,8 @@ SPI: ${spi} (${positivoStr})
 
 O projeto encontra-se ${adiantadoStr} em relação ao cronograma.
 
+<div data-grafico="curva"></div>
+
 **2 - Leitura e Performance**
 
 [COMPLETAR: 4 bullets curtos sobre o desempenho observado nas etapas abaixo]
@@ -455,13 +457,10 @@ Conclusão: ${adiantadoStr} atual não garante aderência ao prazo final.
 - SPI = 1 → conforme o planejado
 - SPI < 1 → atrasado
 
-Interpretação: projeto ${adiantadoStr}${spi > 1 ? " (bem acima do planejado)" : spi < 1 ? " (abaixo do planejado)" : ""}.
-
 **4.2 - IPN (Índice de Produção Necessária) = ${ipn}% ao dia**
 
 - Média realizada: ~${mediaRealizada}%/dia
 - Período: de ${dataInicioFmt} a ${dataBaseFmt} ≈ ${diasDecorridos} dias
-- Fórmula: Média = Progresso / Dias
 
 "O projeto vem performando em média ${mediaRealizada}% ao dia, porém será necessário elevar esse ritmo para cerca de ${ipn}% ao dia para garantir a conclusão no prazo."
 
