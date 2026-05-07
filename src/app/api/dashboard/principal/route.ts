@@ -355,12 +355,10 @@ function gerarCurvaSEtapas(
 
   const MS_PER_DAY = 86_400_000;
 
-  // Limite até onde o realizado é calculado: o que for maior entre hoje e a última
-  // data com dado preenchido. Isso permite exibir progresso adiantado (ex: usuário
-  // preenche 29/04 quando hoje é 28/04) sem mostrar valores para dias sem dado.
-  const limiteRealizado = ultimaDataComDado && ultimaDataComDado > hojeStr
-    ? ultimaDataComDado
-    : hojeStr;
+  // Limite até onde o realizado é calculado: sempre respeita a data base
+  // selecionada (hojeStr). Isso garante que o gráfico nunca exiba dados além
+  // da data de referência escolhida pelo usuário.
+  const limiteRealizado = hojeStr;
 
   for (const dateStr of diasPlot) {
     labels.push(fmt(dateStr));
@@ -492,10 +490,8 @@ function gerarCurvaSEtapas(
 
   // ETAPAS: visão acumulada total do projeto (100% planejado vs realizado total)
   // O previsto é sempre 100% porque referencia o projeto como um todo.
-  // O realizado é calculado até o último dia com dado real preenchido.
-  const reTotal = ultimaDataComDado
-    ? (calcularRealizadoNaData(ultimaDataComDado, etapas, totalDias, progressoDiario) ?? 0)
-    : 0;
+  // O realizado é calculado até a data de referência selecionada.
+  const reTotal = calcularRealizadoNaData(dataReferenciaDiaria, etapas, totalDias, progressoDiario) ?? 0;
 
   return {
     labels,
