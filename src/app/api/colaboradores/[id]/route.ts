@@ -146,14 +146,24 @@ async function findById(id: string) {
 // ============================================================================
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await requireAuth("user");
 
     const { id } = await params;
-    const { data, error } = await findById(id);
+    const { searchParams } = new URL(request.url);
+    const withRelations = searchParams.get("with_relations") === "true";
+
+    const supabase = createServerClient();
+
+    // Busca colaborador principal
+    const { data, error } = await supabase
+      .from("colaboradores")
+      .select("*")
+      .eq("id", id)
+      .single();
 
     if (error || !data) {
       return NextResponse.json(
@@ -162,7 +172,34 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ data: mapRow(data) });
+    const colaborador = mapRow(data);
+
+    // Se solicitado, busca relações
+    if (withRelations) {
+      const [
+        { data: passagens },
+        { data: hospedagens },
+        { data: alimentacao },
+        { data: treinamentos },
+      ] = await Promise.all([
+        supabase.from("colaborador_passagens").select(`*, trechos:passagem_trechos(*)`).eq("colaborador_id", id).order("created_at", { ascending: false }),
+        supabase.from("colaborador_hospedagens").select("*").eq("colaborador_id", id).order("created_at", { ascending: false }),
+        supabase.from("colaborador_alimentacao").select("*").eq("colaborador_id", id).maybeSingle(),
+        supabase.from("colaborador_treinamentos").select(`*, treinamento:treinamentos(*)`).eq("colaborador_id", id).order("status", { ascending: false }),
+      ]);
+
+      return NextResponse.json({
+        data: {
+          ...colaborador,
+          passagens: passagens ?? [],
+          hospedagens: hospedagens ?? [],
+          alimentacao: alimentacao ?? null,
+          treinamentos: treinamentos ?? [],
+        },
+      });
+    }
+
+    return NextResponse.json({ data: colaborador });
   } catch (error) {
     console.error("[GET /colaboradores/[id]]", error);
 

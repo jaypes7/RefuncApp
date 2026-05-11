@@ -5,22 +5,16 @@
  *
  * Métricas de logística: ocupação de hotéis e distribuição de turnos.
  *
- * Fontes:
- *   • logistica_controle → id, cpf, nome, hotel, turno_trabalho, data_checkin
- *   • hoteis             → id, nome, vagas_totais
+ * Fontes (novo modelo relacional):
+ *   • colaborador_hospedagens → hotel_nome, data_checkin
+ *   • colaboradores           → turno_trabalho
+ *   • configuracoes_hoteis    → nome, qt_vagas
  *
  * Regras de cálculo:
- *   Ocupação Total    = COUNT(logistica_controle onde hotel preenchido)
- *                       / SUM(hoteis.vagas_totais) * 100
- *   Vagas Disponíveis = SUM(hoteis.vagas_totais)
- *                       - COUNT(logistica_controle onde hotel preenchido)
+ *   Ocupação Total    = COUNT(hospedagens onde hotel_nome preenchido)
+ *                       / SUM(hoteis.qt_vagas) * 100
+ *   Vagas Disponíveis = SUM(hoteis.qt_vagas) - COUNT(hospedagens com hotel)
  *                       (mínimo 0)
- *
- * Agrupamento por hotel:
- *   - Campo `hotel` de logistica_controle (nunca outro campo)
- *   - Registros com hotel NULL ou "" → "Sem hotel definido"
- *   - Cross com hoteis.vagas_totais pelo nome (case-insensitive)
- *   - Hotel sem cadastro em hoteis → vagasTotais = vagasPreenchidas (sem barra disponível)
  */
 
 export const dynamic = "force-dynamic";
@@ -45,40 +39,56 @@ export async function GET(request: NextRequest) {
 
     const db = createServerClient();
 
-    // Se há filtro de centro de custo, busca os CPFs vinculados primeiro
-    let cpfFilter: string[] | null = null;
+    // Se há filtro de centro de custo, busca os IDs dos colaboradores vinculados
+    let colabIds: string[] | null = null;
     if (centroCusto?.length) {
       const { data: colabRows } = await db
         .from("colaboradores")
-        .select("cpf")
+        .select("id")
         .in("centro_custo", centroCusto);
-      cpfFilter = (colabRows ?? []).map((r) => r.cpf as string).filter(Boolean);
+      colabIds = (colabRows ?? []).map((r) => r.id as string).filter(Boolean);
     }
 
-    let logisticaQuery = db.from("logistica_controle").select("hotel,turno_trabalho,cpf");
-    if (cpfFilter !== null) {
-      if (cpfFilter.length === 0) {
-        logisticaQuery = logisticaQuery.in("cpf", ["__no_match__"]);
+    // Query de hospedagens (novo modelo)
+    let hospedagemQuery = db
+      .from("colaborador_hospedagens")
+      .select("hotel_nome, colaborador_id");
+
+    if (colabIds !== null) {
+      if (colabIds.length === 0) {
+        hospedagemQuery = hospedagemQuery.in("colaborador_id", ["__no_match__"]);
       } else {
-        logisticaQuery = logisticaQuery.in("cpf", cpfFilter);
+        hospedagemQuery = hospedagemQuery.in("colaborador_id", colabIds);
+      }
+    }
+
+    // Query de turnos (da tabela colaboradores)
+    let turnoQuery = db.from("colaboradores").select("turno_trabalho, id");
+    if (colabIds !== null) {
+      if (colabIds.length === 0) {
+        turnoQuery = turnoQuery.in("id", ["__no_match__"]);
+      } else {
+        turnoQuery = turnoQuery.in("id", colabIds);
       }
     }
 
     const [
-      { data: logisticaData, error: logErr },
+      { data: hospedagemData, error: hospErr },
       { data: hoteisData,    error: hoteisErr },
+      { data: turnoData,     error: turnoErr },
     ] = await Promise.all([
-      logisticaQuery,
+      hospedagemQuery,
       db.from("configuracoes_hoteis").select("nome, qt_vagas"),
+      turnoQuery,
     ]);
 
-    if (logErr) throw new Error(logErr.message);
+    if (hospErr) throw new Error(hospErr.message);
     if (hoteisErr) console.error("[Dashboard/Logistica] hoteis:", hoteisErr.message);
+    if (turnoErr) console.error("[Dashboard/Logistica] turnos:", turnoErr.message);
 
-    const rows = (logisticaData ?? []) as Array<{ hotel: string | null; turno_trabalho: string | null }>;
+    const rows = (hospedagemData ?? []) as Array<{ hotel_nome: string | null; colaborador_id: string }>;
 
     // ── Mapa de vagas totais por hotel (case-insensitive) ─────────────────────
-    // Fonte exclusiva: tabela `hoteis`. Chave normalizada = lowercase.
     const hoteisMap = new Map<string, number>();
     for (const h of hoteisData ?? []) {
       const nome = String(h.nome ?? "").trim();
@@ -86,69 +96,42 @@ export async function GET(request: NextRequest) {
     }
 
     // ── KPIs globais ──────────────────────────────────────────────────────────
-    // countComHotel: registros com hotel preenchido (IS NOT NULL AND != "")
-    const countComHotel = rows.filter((r) => String(r.hotel ?? "").trim().length > 0).length;
-
-    // sumVagasTotais: soma apenas da tabela hoteis (não de logistica_controle)
+    const countComHotel = rows.filter((r) => String(r.hotel_nome ?? "").trim().length > 0).length;
     const sumVagasTotais = [...hoteisMap.values()].reduce((s, v) => s + v, 0);
-
-    const ocupacaoTotal   = sumVagasTotais > 0
-      ? Math.round((countComHotel / sumVagasTotais) * 100)
-      : 0;
+    const ocupacaoTotal = sumVagasTotais > 0 ? Math.round((countComHotel / sumVagasTotais) * 100) : 0;
     const totalDisponiveis = Math.max(0, sumVagasTotais - countComHotel);
 
     // ── Agrupamento por hotel ─────────────────────────────────────────────────
-    // Todos os registros, incluindo hotel vazio → "Sem hotel definido"
     const ocupacaoMap: Record<string, number> = {};
     for (const r of rows) {
-      const h   = String(r.hotel ?? "").trim();
+      const h = String(r.hotel_nome ?? "").trim();
       const key = h || "Sem hotel definido";
       ocupacaoMap[key] = (ocupacaoMap[key] || 0) + 1;
     }
 
-    // Para cada grupo de logistica_controle, cruzar com hoteis (case-insensitive)
-    // Hotel sem cadastro em hoteis → vagasTotais = vagasPreenchidas (vagasDisponiveis = 0)
     const vagasHoteis = Object.entries(ocupacaoMap)
       .map(([hotel, vagasPreenchidas]) => {
-        const cadastrado  = hoteisMap.get(hotel.toLowerCase());
+        const cadastrado = hoteisMap.get(hotel.toLowerCase());
         const vagasTotais = cadastrado !== undefined ? cadastrado : vagasPreenchidas;
-        const percentual  = vagasTotais > 0
-          ? Math.round((vagasPreenchidas / vagasTotais) * 100)
-          : 0;
+        const percentual = vagasTotais > 0 ? Math.round((vagasPreenchidas / vagasTotais) * 100) : 0;
         return { hotel, vagasTotais, vagasPreenchidas, percentual };
       })
       .sort((a, b) => b.vagasPreenchidas - a.vagasPreenchidas);
 
     // ── Distribuição por turno ────────────────────────────────────────────────
-    // Nenhum registro é descartado — todos entram em alguma fatia do gráfico.
-    //
-    // Prioridade de classificação:
-    //   1. normalizeTurno reconhece o dígito (1/2/3) → label "Xº TURNO"
-    //   2. Valor vazio/null/"N/A"/"NA"               → "Não informado (N/A)"
-    //   3. Valor existe mas sem dígito reconhecível   → exibe texto original (auditável)
-    //
-    // Nota: valores já salvos no banco como "3º TURNO", "3", "TURNO 3", etc.
-    // são normalizados para "3º TURNO" via normalizeTurno (busca por includes("3")).
+    const turnoRows = (turnoData ?? []) as Array<{ turno_trabalho: string | null }>;
     const turnoMap: Record<string, number> = {};
-    for (const r of rows) {
+    for (const r of turnoRows) {
       const rawValue = String(r.turno_trabalho ?? "").trim();
       const t = normalizeTurno(r.turno_trabalho);
-
       let turnoLabel: string;
       if (t === "N/A") {
-        // Apenas registros realmente vazios ou explicitamente "N/A"
         turnoLabel = "Não informado (N/A)";
       } else if (t) {
-        // Turno reconhecido: "1º TURNO", "2º TURNO" ou "3º TURNO"
         turnoLabel = t;
       } else {
-        // Valor não normalizado: exibe o texto original (ex: "Turno Especial")
-        // para que nada fique oculto no gráfico de pizza.
-        // rawValue vazio aqui seria caso impossível (normalizeTurno já retorna "N/A"),
-        // mas o fallback garante que "Não informado (N/A)" só aparece quando realmente vazio.
         turnoLabel = rawValue || "Não informado (N/A)";
       }
-
       turnoMap[turnoLabel] = (turnoMap[turnoLabel] || 0) + 1;
     }
     const turnoTrabalho = Object.entries(turnoMap)
@@ -157,7 +140,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       kpis: {
-        totalVagas:       sumVagasTotais,
+        totalVagas: sumVagasTotais,
         totalPreenchidas: countComHotel,
         totalDisponiveis,
         ocupacaoTotal,
