@@ -3,14 +3,14 @@
  * API: GET /api/seguranca/dashboard
  * ============================================================================
  *
- * Retorna métricas agregadas da tabela `seguranca_fits` para o
- * Dashboard de Segurança.
+ * Retorna métricas agregadas dos campos de Segurança da tabela `colaboradores`
+ * para o Dashboard de Segurança.
  *
  * Resposta:
- *   total          → contagem total de FITs
- *   distribuicaoAso        → { Apto, Inapto, Pendente }
- *   distribuicaoTreinamento → { Concluído, Em Andamento, Pendente }
- *   distribuicaoStatusPortal → { "Aprovado", "Pendente", "Aprovado - DEMITIDO" }
+ *   total                    → contagem total de colaboradores
+ *   distribuicaoStatusPortal → distribuição do campo `portal`
+ *   distribuicaoRpv          → distribuição do campo `rpv`
+ *   distribuicaoTreinamento  → distribuição do campo `treinamento`
  */
 
 export const dynamic = "force-dynamic";
@@ -24,10 +24,10 @@ import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 interface DistRow { label: string; value: number; }
 
 interface SegurancaDashboard {
-  total:                    number;
-  distribuicaoRpv:          DistRow[];
-  distribuicaoTreinamento:  DistRow[];
+  total: number;
   distribuicaoStatusPortal: DistRow[];
+  distribuicaoRpv: DistRow[];
+  distribuicaoTreinamento: DistRow[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -61,39 +61,30 @@ export async function GET(request: NextRequest) {
 
     const db = createServerClient();
 
-    // Se há filtro de centro de custo, busca os CPFs vinculados primeiro
-    let cpfFilter: string[] | null = null;
+    let query = db
+      .from("colaboradores")
+      .select("portal, rpv, treinamento");
+
     if (centroCusto?.length) {
-      const { data: colabRows } = await db
-        .from("colaboradores")
-        .select("cpf")
-        .in("centro_custo", centroCusto);
-      cpfFilter = (colabRows ?? []).map((r) => r.cpf as string).filter(Boolean);
+      query = query.in("centro_custo", centroCusto);
     }
 
-    let fitsQuery = db
-      .from("seguranca_fits")
-      .select("rpv,treinamento,status_portal,cpf", { count: "exact" });
-    if (cpfFilter !== null) {
-      if (cpfFilter.length === 0) {
-        fitsQuery = fitsQuery.in("cpf", ["__no_match__"]);
-      } else {
-        fitsQuery = fitsQuery.in("cpf", cpfFilter);
-      }
-    }
-
-    const { data, error, count } = await fitsQuery;
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
 
     const rows = (data ?? []) as Record<string, unknown>[];
-    const total = count ?? rows.length;
+    const total = rows.length;
+
+    const distribuicaoStatusPortal = contagem(rows, "portal", "Pendente");
+    const distribuicaoRpv = contagem(rows, "rpv", "Pendente");
+    const distribuicaoTreinamento = contagem(rows, "treinamento", "Pendente");
 
     const response: SegurancaDashboard = {
       total,
-      distribuicaoRpv:          contagem(rows, "rpv"),
-      distribuicaoTreinamento:  contagem(rows, "treinamento"),
-      distribuicaoStatusPortal: contagem(rows, "status_portal"),
+      distribuicaoStatusPortal,
+      distribuicaoRpv,
+      distribuicaoTreinamento,
     };
 
     return NextResponse.json(response);

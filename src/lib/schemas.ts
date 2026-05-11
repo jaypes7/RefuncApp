@@ -879,4 +879,111 @@ export const ChecklistSubetapaSchema = z.object({
 export type ChecklistEtapa = z.infer<typeof ChecklistEtapaSchema>;
 export type ChecklistSubetapa = z.infer<typeof ChecklistSubetapaSchema>;
 
+// ============================================================================
+// SCHEMAS DE PASSAGENS E TRECHOS (Logística)
+// ============================================================================
+
+export const PassagemTrechoSchema = z.object({
+  id: z.string().uuid().optional(),
+  passagem_id: z.string().uuid().optional(),
+  ordem: z.coerce.number().min(1).default(1),
+  cidade_embarque: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  data_embarque: DateSchema,
+  horario_embarque: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  cidade_desembarque: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  data_desembarque: DateSchema,
+  horario_desembarque: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  valor_com_taxas: z.preprocess(emptyStringToUndefined, z.coerce.number().optional().nullable()),
+});
+
+export const ColaboradorPassagemSchema = z.object({
+  id: z.string().uuid().optional(),
+  colaborador_id: z.string().uuid().optional(),
+  motivo: z.preprocess(emptyStringToUndefined, z.enum(['Afastamento','Apoio técnico','Desmobilização','Férias','Folga Campo','Mobilização','Parada','Retorno','Treinamento','Visita Técnica']).optional()),
+  tipo_passagem: z.preprocess(emptyStringToUndefined, z.enum(['Aéreo','Terrestre','Veículo Próprio']).optional()),
+  observacoes: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  trechos: z.array(PassagemTrechoSchema).optional().default([]),
+});
+
+export const ColaboradorPassagemCreateSchema = ColaboradorPassagemSchema.omit({ id: true, colaborador_id: true });
+export const ColaboradorPassagemUpdateSchema = ColaboradorPassagemCreateSchema.partial();
+
+// ============================================================================
+// SCHEMAS DE HOSPEDAGEM (Logística)
+// ============================================================================
+
+export const ColaboradorHospedagemSchema = z.object({
+  id: z.string().uuid().optional(),
+  colaborador_id: z.string().uuid().optional(),
+  hotel_nome: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  hotel_endereco: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  hotel_telefone: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  tipo_apto: z.preprocess(emptyStringToUndefined, z.enum(['Single','Duplo','Triplo']).optional()),
+  valor_diaria: z.preprocess(emptyStringToUndefined, z.coerce.number().optional().nullable()),
+  qtd_leitos_bloqueados: z.coerce.number().min(0).optional().default(0),
+  data_bloqueio: DateSchema,
+  qtd_leitos_disponiveis: z.coerce.number().min(0).optional().default(0),
+  data_checkin: DateSchema,
+  horario_checkin: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  observacoes: z.preprocess(emptyStringToUndefined, z.string().optional()),
+});
+
+export const ColaboradorHospedagemCreateSchema = ColaboradorHospedagemSchema.omit({ id: true, colaborador_id: true });
+export const ColaboradorHospedagemUpdateSchema = ColaboradorHospedagemCreateSchema.partial();
+
+// ============================================================================
+// SCHEMAS DE ALIMENTAÇÃO (Logística)
+// ============================================================================
+
+export const ColaboradorAlimentacaoSchema = z.object({
+  id: z.string().uuid().optional(),
+  colaborador_id: z.string().uuid().optional(),
+  credito_vr_almoco: z.boolean().default(false),
+  credito_vr_janta: z.boolean().default(false),
+  observacoes: z.preprocess(emptyStringToUndefined, z.string().optional()),
+});
+
+export const ColaboradorAlimentacaoUpdateSchema = ColaboradorAlimentacaoSchema.omit({ id: true, colaborador_id: true }).partial();
+
+// ============================================================================
+// SCHEMAS DE TREINAMENTOS (Segurança)
+// ============================================================================
+
+export const TreinamentoSchema = z.object({
+  id: z.string().uuid().optional(),
+  nome: z.string().min(1, "Nome é obrigatório"),
+  descricao: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  obrigatorio: z.boolean().default(true),
+  prazo_validade_meses: z.coerce.number().min(1).optional().default(12),
+});
+
+export const ColaboradorTreinamentoSchema = z.object({
+  id: z.string().uuid().optional(),
+  colaborador_id: z.string().uuid().optional(),
+  treinamento_id: z.string().uuid(),
+  data_realizacao: DateSchema,
+  data_validade: DateSchema,
+  status: z.preprocess(emptyStringToUndefined, z.enum(['OK','A Vencer','Vencido','Pendente']).optional()),
+  observacoes: z.preprocess(emptyStringToUndefined, z.string().optional()),
+});
+
+export const ColaboradorTreinamentoUpdateSchema = z.object({
+  data_realizacao: z.union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
+    z.null(),
+  ]).optional(),
+  data_validade: z.union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar no formato YYYY-MM-DD"),
+    z.null(),
+  ]).optional(),
+  observacoes: z.preprocess(emptyStringToUndefined, z.string().optional()),
+});
+
+export type PassagemTrecho = z.infer<typeof PassagemTrechoSchema>;
+export type ColaboradorPassagem = z.infer<typeof ColaboradorPassagemSchema>;
+export type ColaboradorHospedagem = z.infer<typeof ColaboradorHospedagemSchema>;
+export type ColaboradorAlimentacao = z.infer<typeof ColaboradorAlimentacaoSchema>;
+export type Treinamento = z.infer<typeof TreinamentoSchema>;
+export type ColaboradorTreinamento = z.infer<typeof ColaboradorTreinamentoSchema>;
+
 export type ColaboradorRestrito = z.infer<typeof ColaboradorRestritoSchema>;

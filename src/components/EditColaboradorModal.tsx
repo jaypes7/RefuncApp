@@ -652,17 +652,17 @@ export function EditColaboradorModal({
                 <div className="space-y-2">
                   <label className="text-sm font-medium">VR</label>
                   <Select
-                    value={vrValue || undefined}
+                    value={vrValue === "Ativo" ? "Sim" : vrValue === "Pendente" ? "Não" : undefined}
                     onValueChange={(v) =>
-                      setValue("VR", v as EditFormData["VR"])
+                      setValue("VR", (v === "Sim" ? "Ativo" : "Pendente") as EditFormData["VR"])
                     }
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Ativo">Ativo</SelectItem>
-                      <SelectItem value="Pendente">Pendente</SelectItem>
+                      <SelectItem value="Sim">Sim</SelectItem>
+                      <SelectItem value="Não">Não</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

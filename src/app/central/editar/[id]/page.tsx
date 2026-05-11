@@ -34,13 +34,14 @@ import {
   User,
   Truck,
   Stethoscope,
-  Package,
+  ClipboardList,
   UserCircle,
   MapPin,
   Activity,
   CalendarCheck,
   Shield,
   GraduationCap,
+  Briefcase,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,10 @@ import { colaboradoresApi, type Colaborador } from "@/lib/axios";
 import { maskCPF, formatTelefone } from "@/lib/utils";
 import { IMaskInput } from "react-imask";
 import { CargoCombobox } from "@/components/CargoCombobox";
+import { PassagemForm } from "@/components/PassagemForm";
+import { HospedagemForm } from "@/components/HospedagemForm";
+import { AlimentacaoForm } from "@/components/AlimentacaoForm";
+import { TreinamentosTable } from "@/components/TreinamentosTable";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
@@ -465,16 +470,23 @@ export default function EditarColaboradorPage() {
 
       {/* ══ CARD glass-card (idêntico ao /configuracoes) ═════════════════ */}
       <Card className="glass-card">
-        <Tabs defaultValue="pessoal" className="w-full">
+        <Tabs defaultValue="rh" className="w-full">
           {/* TabsList idêntico ao padrão */}
           <CardHeader className="pb-0">
             <TabsList className="w-full flex justify-start gap-2 bg-transparent border-b border-border/50 pb-2 rounded-none h-auto">
               <TabsTrigger
-                value="pessoal"
+                value="rh"
                 className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
               >
-                <User className="w-4 h-4 mr-2" />
-                Dados Pessoais
+                <Briefcase className="w-4 h-4 mr-2" />
+                RH
+              </TabsTrigger>
+              <TabsTrigger
+                value="seguranca"
+                className="data-[state=active]:bg-[#337246]/10 data-[state=active]:text-[#337246]"
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Segurança
               </TabsTrigger>
               <TabsTrigger
                 value="logistica"
@@ -484,18 +496,11 @@ export default function EditarColaboradorPage() {
                 Logística
               </TabsTrigger>
               <TabsTrigger
-                value="saude"
-                className="data-[state=active]:bg-[#337246]/10 data-[state=active]:text-[#337246]"
+                value="outros"
+                className="data-[state=active]:bg-slate-500/10 data-[state=active]:text-slate-400"
               >
-                <Stethoscope className="w-4 h-4 mr-2" />
-                Saúde &amp; Treinamentos
-              </TabsTrigger>
-              <TabsTrigger
-                value="suprimentos"
-                className="data-[state=active]:bg-[#19365b]/10 data-[state=active]:text-[#19365b]"
-              >
-                <Package className="w-4 h-4 mr-2" />
-                Suprimentos
+                <ClipboardList className="w-4 h-4 mr-2" />
+                Outros
               </TabsTrigger>
             </TabsList>
           </CardHeader>
@@ -504,7 +509,7 @@ export default function EditarColaboradorPage() {
             {/* ════════════════════════════════════════════════════════════
                 ABA 1 — DADOS PESSOAIS & CONTRATO
             ════════════════════════════════════════════════════════════ */}
-            <TabsContent value="pessoal" className="w-full mt-10 space-y-8">
+            <TabsContent value="rh" className="w-full mt-10 space-y-8">
               <SectionTitle
                 icon={<UserCircle className="w-5 h-5 text-primary" />}
                 title="Identificação"
@@ -602,9 +607,9 @@ export default function EditarColaboradorPage() {
               </div>
 
               <SectionTitle
-                icon={<Activity className="w-5 h-5 text-primary" />}
-                title="Status & Indicadores"
-                description="Situação operacional e vínculos do colaborador"
+                icon={<CalendarCheck className="w-5 h-5 text-primary" />}
+                title="Contrato & Admissão"
+                description="Dados contratuais e datas de vínculo"
               />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <S
@@ -613,43 +618,17 @@ export default function EditarColaboradorPage() {
                   onChange={s("STATUS")}
                   options={O_STATUS}
                 />
-                <F
-                  label="INDICAÇÃO"
-                  value={form.IND}
-                  onChange={t("IND")}
-                  placeholder="Responsável pela indicação"
-                />
-                <F
-                  label="REQ"
-                  value={form.REQ}
-                  onChange={t("REQ")}
-                  placeholder="Nº da Requisição"
-                />
-                <S
-                  label="Vinculado"
-                  value={form.VINCULADO}
-                  onChange={s("VINCULADO")}
-                  options={O_SIM_NAO}
-                />
-                <F
-                  label="OP"
-                  value={form.OP}
-                  onChange={t("OP")}
-                  placeholder="Ordem de produção"
-                />
-              </div>
-
-              <SectionTitle
-                icon={<CalendarCheck className="w-5 h-5 text-primary" />}
-                title="Contrato & Datas"
-                description="Datas de admissão, término e encerramento contratual"
-              />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <S
                   label="Tipo de Contrato"
                   value={form.TIPO_CONTRATO}
                   onChange={s("TIPO_CONTRATO")}
                   options={O_TIPO_CONTRATO}
+                />
+                <S
+                  label="Contrato"
+                  value={form.CONTRATO}
+                  onChange={s("CONTRATO")}
+                  options={O_CONTRATO}
                 />
                 <F
                   label="Data de Admissão"
@@ -676,16 +655,66 @@ export default function EditarColaboradorPage() {
                   type="date"
                 />
                 <S
-                  label="Contrato"
-                  value={form.CONTRATO}
-                  onChange={s("CONTRATO")}
-                  options={O_CONTRATO}
+                  label="Enviado RH"
+                  value={form.ENVIADO_RH}
+                  onChange={s("ENVIADO_RH")}
+                  options={O_SIM_NAO_PENDENTE}
+                />
+                <S
+                  label="Carta Oferta"
+                  value={form.CARTA_OFERTA}
+                  onChange={s("CARTA_OFERTA")}
+                  options={O_SIM_NAO_PENDENTE}
+                />
+                <S
+                  label="Pré-Admissão"
+                  value={form.PRE_ADMISSAO}
+                  onChange={s("PRE_ADMISSAO")}
+                  options={O_PRE_ADMISSAO}
+                />
+                <S
+                  label="Vinculado"
+                  value={form.VINCULADO}
+                  onChange={s("VINCULADO")}
+                  options={O_SIM_NAO}
+                />
+              </div>
+
+              <SectionTitle
+                icon={<Activity className="w-5 h-5 text-primary" />}
+                title="Benefícios & Documentação"
+                description="Benefícios e status da documentação do colaborador"
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <S
+                  label="Documentação"
+                  value={form.DOCS}
+                  onChange={s("DOCS")}
+                  options={O_DOCS}
+                />
+                <S
+                  label="Crachá"
+                  value={form.CRACHA}
+                  onChange={s("CRACHA")}
+                  options={O_CRACHA}
+                />
+                <S
+                  label="Ponto"
+                  value={form.PONTO}
+                  onChange={s("PONTO")}
+                  options={O_PONTO}
                 />
                 <S
                   label="VR (Vale Refeição)"
-                  value={form.VR}
-                  onChange={s("VR")}
-                  options={["Ativo", "Pendente"]}
+                  value={form.VR === "Ativo" ? "Sim" : form.VR === "Pendente" ? "Não" : undefined}
+                  onChange={(v) => set("VR", v === "Sim" ? "Ativo" : "Pendente")}
+                  options={["Sim", "Não"]}
+                />
+                <F
+                  label="INDICAÇÃO"
+                  value={form.IND}
+                  onChange={t("IND")}
+                  placeholder="Responsável pela indicação"
                 />
               </div>
 
@@ -706,81 +735,15 @@ export default function EditarColaboradorPage() {
                 ABA 2 — LOGÍSTICA
             ════════════════════════════════════════════════════════════ */}
             <TabsContent value="logistica" className="w-full mt-10 space-y-8">
-              <SectionTitle
-                icon={<Truck className="w-5 h-5 text-amber-400" />}
-                title="Mobilização & Envios"
-                description="Controle de mobilização e documentação enviada ao colaborador"
-              />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <S
-                  label="MOB"
-                  value={form.MOB}
-                  onChange={s("MOB")}
-                  options={O_SIM_NAO}
-                />
-                <S
-                  label="Enviado RH"
-                  value={form.ENVIADO_RH}
-                  onChange={s("ENVIADO_RH")}
-                  options={O_SIM_NAO_PENDENTE}
-                />
-                <S
-                  label="Carta Oferta"
-                  value={form.CARTA_OFERTA}
-                  onChange={s("CARTA_OFERTA")}
-                  options={O_CARTA}
-                />
-                <S
-                  label="Colaborador Pendente"
-                  value={form.COLAB_PEND}
-                  onChange={s("COLAB_PEND")}
-                  options={O_SIM_NAO}
-                />
-              </div>
-
-              <SectionTitle
-                icon={<Shield className="w-5 h-5 text-amber-400" />}
-                title="Credenciais & Acesso"
-                description="Status de liberação de acesso físico e digital"
-              />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <S
-                  label="Portal"
-                  value={form.PORTAL}
-                  onChange={s("PORTAL")}
-                  options={O_PORTAL}
-                />
-                <S
-                  label="Crachá"
-                  value={form.CRACHA}
-                  onChange={s("CRACHA")}
-                  options={O_CRACHA}
-                />
-                <S
-                  label="Ponto"
-                  value={form.PONTO}
-                  onChange={s("PONTO")}
-                  options={O_PONTO}
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleSave}
-                  disabled={saving || saved}
-                  className="gap-2"
-                  style={{ backgroundColor: "#ff460a", borderColor: "#ff460a" }}
-                >
-                  <Save className="w-4 h-4" />
-                  Salvar Alterações
-                </Button>
-              </div>
+              <PassagemForm colaboradorId={id} />
+              <HospedagemForm colaboradorId={id} />
+              <AlimentacaoForm colaboradorId={id} />
             </TabsContent>
 
             {/* ════════════════════════════════════════════════════════════
                 ABA 3 — SAÚDE & TREINAMENTOS
             ════════════════════════════════════════════════════════════ */}
-            <TabsContent value="saude" className="w-full mt-10 space-y-8">
+            <TabsContent value="seguranca" className="w-full mt-10 space-y-8">
               <SectionTitle
                 icon={<Stethoscope className="w-5 h-5 text-[#337246]" />}
                 title="Exames & Documentação Médica"
@@ -800,12 +763,6 @@ export default function EditarColaboradorPage() {
                   placeholder="Nome da clínica responsável"
                 />
                 <S
-                  label="Documentação (DOCs)"
-                  value={form.DOCS}
-                  onChange={s("DOCS")}
-                  options={O_DOCS}
-                />
-                <S
                   label="ASO"
                   value={form.ASO}
                   onChange={s("ASO")}
@@ -817,37 +774,55 @@ export default function EditarColaboradorPage() {
                   onChange={s("RPV")}
                   options={O_SIM_NAO}
                 />
-                <S
-                  label="Pré-Admissão"
-                  value={form.PRE_ADMISSAO}
-                  onChange={s("PRE_ADMISSAO")}
-                  options={O_PRE_ADMISSAO}
-                />
               </div>
 
               <SectionTitle
                 icon={<GraduationCap className="w-5 h-5 text-[#337246]" />}
                 title="Treinamentos Normativos"
-                description="Status e localização dos treinamentos obrigatórios"
+                description="Controle dos treinamentos obrigatórios com datas de realização e validade"
+              />
+              <TreinamentosTable colaboradorId={id} />
+            </TabsContent>
+
+            {/* ════════════════════════════════════════════════════════════
+                ABA 4 — OUTROS
+            ════════════════════════════════════════════════════════════ */}
+            <TabsContent value="outros" className="w-full mt-10 space-y-8">
+              <SectionTitle
+                icon={<ClipboardList className="w-5 h-5 text-slate-500" />}
+                title="Controle Administrativo"
+                description="Campos operacionais diversos"
               />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <S
-                  label="Status do Treinamento"
-                  value={form.TREINAMENTO}
-                  onChange={s("TREINAMENTO")}
-                  options={O_TREINAMENTO}
-                />
-                <S
-                  label="Realizar Treinamento"
-                  value={form.REALIZAR_TREINAMENTO}
-                  onChange={s("REALIZAR_TREINAMENTO")}
+                  label="MOB"
+                  value={form.MOB}
+                  onChange={s("MOB")}
                   options={O_SIM_NAO_PENDENTE}
                 />
                 <F
-                  label="Local do Treinamento"
-                  value={form.LOCAL_TREINAMENTO}
-                  onChange={t("LOCAL_TREINAMENTO")}
-                  placeholder="Ex: Sede Yara / MSV / Online"
+                  label="OP (Ordem de Produção)"
+                  value={form.OP}
+                  onChange={t("OP")}
+                  placeholder="Nº da OP"
+                />
+                <F
+                  label="REQ (Requisição)"
+                  value={form.REQ}
+                  onChange={t("REQ")}
+                  placeholder="Nº da Requisição"
+                />
+                <S
+                  label="Colaborador Pendente"
+                  value={form.COLAB_PEND}
+                  onChange={s("COLAB_PEND")}
+                  options={O_SIM_NAO}
+                />
+                <S
+                  label="Portal"
+                  value={form.PORTAL}
+                  onChange={s("PORTAL")}
+                  options={O_PORTAL}
                 />
               </div>
 
@@ -861,49 +836,6 @@ export default function EditarColaboradorPage() {
                   <Save className="w-4 h-4" />
                   Salvar Alterações
                 </Button>
-              </div>
-            </TabsContent>
-
-            {/* ════════════════════════════════════════════════════════════
-                ABA 4 — SUPRIMENTOS
-            ════════════════════════════════════════════════════════════ */}
-            <TabsContent value="suprimentos" className="w-full mt-10 space-y-8">
-              <SectionTitle
-                icon={<Package className="w-5 h-5 text-[#19365b]" />}
-                title="Suprimentos"
-                description="EPIs, uniforme e equipamentos do colaborador"
-              />
-              <div className="flex flex-col items-center justify-center gap-5 py-16 text-center rounded-xl border border-dashed border-border/60">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#19365b]/10 ring-1 ring-[#19365b]/20">
-                  <Package className="h-8 w-8 text-[#19365b]" />
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">
-                    Em Desenvolvimento
-                  </p>
-                  <p className="mt-1.5 text-sm text-muted-foreground max-w-md">
-                    Os campos de <strong>EPIs</strong>,{" "}
-                    <strong>Uniforme</strong> e <strong>Equipamentos</strong>{" "}
-                    serão integrados quando as colunas correspondentes forem
-                    adicionadas ao modelo de dados.
-                  </p>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2 mt-1">
-                  {[
-                    "EPIs",
-                    "Uniforme",
-                    "Notebook",
-                    "Ferramentas",
-                    "Crachá de Acesso",
-                  ].map((item) => (
-                    <span
-                      key={item}
-                      className="rounded-full border border-[#19365b]/20 bg-[#19365b]/5 px-3 py-1 text-xs text-[#19365b]"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
               </div>
             </TabsContent>
           </CardContent>
