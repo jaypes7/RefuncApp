@@ -109,27 +109,9 @@ const PIE_COLORS = MANSERV_PIE_COLORS;
 function isEtapaAtrasada(etapa: DashboardPrincipalData["etapas"][number]): boolean {
   const hojeRealStr = new Date().toISOString().split("T")[0];
 
-  if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
-    // Etapa nunca teve progresso preenchido = não iniciada, não está atrasada
-    if (!etapa.temRegistros) return false;
-
-    let lastBeforeToday = -1;
-    for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
-      if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
-      else break;
-    }
-
-    if (lastBeforeToday !== -1) {
-      const previsto = etapa.evolucaoDiaria[lastBeforeToday].previsto;
-      const realizado = etapa.evolucaoDiaria[lastBeforeToday].realizado;
-      return realizado < previsto;
-    }
-    return false;
-  }
-
-  // Sem evolucaoDiaria: atrasada se dataFim já passou, não está concluída
-  // e já teve algum progresso (não iniciada = 0% não conta)
-  if ((etapa.dataFim && hojeRealStr >= etapa.dataFim) && !etapa.concluida && etapa.percentualConcluido > 0 && etapa.percentualConcluido < 100) {
+  // Etapa está atrasada se hoje é maior que o dia final da etapa
+  // e o percentual acumulado realizado ainda não atingiu 100%
+  if (etapa.dataFim && hojeRealStr > etapa.dataFim && etapa.percentualConcluido < 100) {
     return true;
   }
 
@@ -858,14 +840,14 @@ export default function DashboardPage() {
                             {pendenciasManuais.map((p) => (
                               <div
                                 key={p.id}
-                                className="flex items-center justify-between gap-2 rounded-md border border-white/5 bg-white/5 px-2 py-1.5"
+                                className="flex items-start justify-between gap-2 rounded-md border border-white/5 bg-white/5 px-2 py-1.5"
                               >
-                                <span className="text-xs truncate">{p.texto}</span>
+                                <span className="text-xs break-words leading-relaxed">{p.texto}</span>
                                 <CanAccess role="user">
                                   <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="h-5 w-5 text-muted-foreground hover:text-destructive shrink-0"
+                                    className="h-5 w-5 text-muted-foreground hover:text-destructive shrink-0 mt-0.5"
                                     onClick={() => deletarPendencia.mutate(p.id)}
                                     disabled={deletarPendencia.isPending}
                                   >
