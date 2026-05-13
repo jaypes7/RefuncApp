@@ -109,10 +109,24 @@ const PIE_COLORS = MANSERV_PIE_COLORS;
 function isEtapaAtrasada(etapa: DashboardPrincipalData["etapas"][number]): boolean {
   const hojeRealStr = new Date().toISOString().split("T")[0];
 
-  // Etapa está atrasada se hoje é maior que o dia final da etapa
-  // e o percentual acumulado realizado ainda não atingiu 100%
+  // Caso 1: etapa passou do prazo final e não foi concluída
   if (etapa.dataFim && hojeRealStr > etapa.dataFim && etapa.percentualConcluido < 100) {
     return true;
+  }
+
+  // Caso 2: dentro do prazo, mas evolução diária está abaixo do previsto
+  if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
+    let lastBeforeToday = -1;
+    for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
+      if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
+      else break;
+    }
+
+    if (lastBeforeToday !== -1) {
+      const previsto = etapa.evolucaoDiaria[lastBeforeToday].previsto;
+      const realizado = etapa.evolucaoDiaria[lastBeforeToday].realizado;
+      return realizado < previsto;
+    }
   }
 
   return false;
