@@ -199,7 +199,14 @@ export default function RelatorioExecutivoPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [centroCusto, dataBase, relatorioHtmlEditado, nomeRelatorio, carregarRelatoriosSalvos]);
+  }, [
+    centroCusto,
+    dataBase,
+    dataRelatorioAtual,
+    relatorioHtmlEditado,
+    nomeRelatorio,
+    carregarRelatoriosSalvos,
+  ]);
 
   const handleCarregarSalvo = useCallback((rel: RelatorioSalvo) => {
     setRelatorioMarkdown(""); // evita que o useEffect de htmlDaIA sobrescreva o conteúdo salvo
@@ -404,7 +411,10 @@ export default function RelatorioExecutivoPage() {
             style={{ color: "#000000", backgroundColor: "#ffffff" }}
           >
             {/* Conteúdo com gráfico embutido após o item 1 */}
-            <div className="p-6 prose prose-sm max-w-none" style={{ color: "#1f2937" }}>
+            <div
+              className="p-6 prose prose-sm max-w-none [&_h1]:whitespace-pre-wrap [&_h2]:whitespace-pre-wrap [&_h3]:whitespace-pre-wrap [&_p]:whitespace-pre-wrap"
+              style={{ color: "#1f2937" }}
+            >
               {relatorioHtmlEditado ? (
                 (() => {
                   const partes = relatorioHtmlEditado.split('<div data-grafico="curva"></div>');
