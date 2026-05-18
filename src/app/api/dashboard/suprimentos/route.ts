@@ -62,14 +62,23 @@ export async function GET(request: NextRequest) {
     const [
       { data: ordensData, error: ordensErr },
       { data: configRows, error: configError },
-      { data: ocsData },
-      { data: itensData },
-    ] = await Promise.all([
-      ordensQuery,
-      configQuery,
-      db.from("suprimentos_ordens_compra").select("requisicao_id, valor"),
-      db.from("suprimentos_requisicao_itens").select("requisicao_id, categoria, tipo"),
-    ]);
+    ] = await Promise.all([ordensQuery, configQuery]);
+
+    // Queries opcionais — tabelas do módulo de requisições (podem não existir ainda)
+    type OcRow   = { requisicao_id: string | null; valor: number | null };
+    type ItemRow = { requisicao_id: string | null; categoria: string | null; tipo: string | null };
+    let ocsData:   OcRow[]   = [];
+    let itensData: ItemRow[] = [];
+    try {
+      const [ocsRes, itensRes] = await Promise.all([
+        db.from("suprimentos_ordens_compra").select("requisicao_id, valor"),
+        db.from("suprimentos_requisicao_itens").select("requisicao_id, categoria, tipo"),
+      ]);
+      if (ocsRes.data   && !ocsRes.error)   ocsData   = ocsRes.data   as OcRow[];
+      if (itensRes.data && !itensRes.error) itensData = itensRes.data as ItemRow[];
+    } catch {
+      console.warn("[Dashboard/Suprimentos] tabelas de requisições não disponíveis");
+    }
 
     if (ordensErr) throw new Error(ordensErr.message);
 
@@ -101,17 +110,14 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.total - a.total);
 
     // ── Categoria e tipo via join OC + itens ──────────────────────────────────
-    type OcRow   = { requisicao_id: string | null; valor: number | null };
-    type ItemRow = { requisicao_id: string | null; categoria: string | null; tipo: string | null };
-
     const ocsPorReq: Record<string, number> = {};
-    for (const oc of ((ocsData ?? []) as OcRow[])) {
+    for (const oc of ocsData) {
       if (oc.requisicao_id)
         ocsPorReq[oc.requisicao_id] = (ocsPorReq[oc.requisicao_id] ?? 0) + Number(oc.valor ?? 0);
     }
 
     const itensPorReq: Record<string, { categoria: string; tipo: string }[]> = {};
-    for (const item of ((itensData ?? []) as ItemRow[])) {
+    for (const item of itensData) {
       if (!item.requisicao_id) continue;
       (itensPorReq[item.requisicao_id] ??= []).push({
         categoria: item.categoria ?? "Sem categoria",
