@@ -385,8 +385,8 @@ function AbaOC({ req }: { req: Requisicao }) {
   const ocs = req.ocs ?? [];
 
   return (
-    <div className="space-y-4">
-      <Card className="border border-border/60">
+    <div className="space-y-4 w-full">
+      <Card className="border border-border/60 w-full">
         <CardHeader className="flex flex-row items-center justify-between py-4">
           <CardTitle className="text-base">
             {ocs.length > 0 ? `${ocs.length} OC(s) registrada(s)` : "Ordens de Compra"}
@@ -528,8 +528,8 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
   const recebimentos = req.recebimentos ?? [];
 
   return (
-    <div className="space-y-4">
-      <Card className="border border-border/60">
+    <div className="space-y-4 w-full">
+      <Card className="border border-border/60 w-full">
         <CardHeader className="flex flex-row items-center justify-between py-4">
           <CardTitle className="text-base">
             {recebimentos.length > 0 ? `${recebimentos.length} recebimento(s) registrado(s)` : "Histórico de Recebimentos"}
@@ -743,10 +743,10 @@ function RequisicaoDetalhe({ id }: { id: string }) {
         {req.status === "rascunho" ? (
           <AbaRevisao req={req} onSaved={() => {}} />
         ) : (
-          <Card className="glass-card">
-            <Tabs defaultValue="resumo">
-              <CardHeader className="pb-0">
-                <TabsList className="w-full flex justify-start gap-2 bg-transparent border-b border-border/50 pb-2 rounded-none h-auto">
+          <div className="rounded-md border bg-card text-card-foreground shadow-sm w-full">
+            <Tabs defaultValue="resumo" className="w-full flex flex-col">
+              <div className="px-6 pt-4 border-b border-border/50">
+                <TabsList className="flex justify-start gap-1 bg-transparent rounded-none h-auto pb-2 w-auto">
                   <TabsTrigger
                     value="resumo"
                     className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
@@ -776,23 +776,21 @@ function RequisicaoDetalhe({ id }: { id: string }) {
                     Recebimento
                   </TabsTrigger>
                 </TabsList>
-              </CardHeader>
-              <CardContent className="p-6">
-                <TabsContent value="resumo" className="mt-6">
-                  <AbaResumo req={req} />
-                </TabsContent>
-                <TabsContent value="itens" className="mt-6">
-                  <AbaItens req={req} />
-                </TabsContent>
-                <TabsContent value="oc" className="mt-6">
-                  <AbaOC req={req} />
-                </TabsContent>
-                <TabsContent value="recebimento" className="mt-6">
-                  <AbaRecebimento req={req} />
-                </TabsContent>
-              </CardContent>
+              </div>
+              <TabsContent value="resumo" className="p-6 w-full">
+                <AbaResumo req={req} />
+              </TabsContent>
+              <TabsContent value="itens" className="w-full">
+                <AbaItens req={req} />
+              </TabsContent>
+              <TabsContent value="oc" className="p-6 w-full">
+                <AbaOC req={req} />
+              </TabsContent>
+              <TabsContent value="recebimento" className="p-6 w-full">
+                <AbaRecebimento req={req} />
+              </TabsContent>
             </Tabs>
-          </Card>
+          </div>
         )}
       </div>
     </div>
