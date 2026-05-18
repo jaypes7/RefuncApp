@@ -125,8 +125,8 @@ function computeKpis(req: Requisicao) {
 const ocSchema = z.object({
   numero_oc:        z.string().min(1, "Obrigatório"),
   fornecedor:       z.string().min(1, "Obrigatório"),
-  valor:            z.coerce.number().optional(),
-  valor_previsto:   z.coerce.number().optional(),
+  valor:            z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().optional()),
+  valor_previsto:   z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().optional()),
   previsao_entrega: z.string().optional(),
 });
 type OCForm = z.infer<typeof ocSchema>;
