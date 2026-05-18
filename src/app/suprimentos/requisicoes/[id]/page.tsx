@@ -277,17 +277,15 @@ function AbaResumo({ req }: { req: Requisicao }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
       {cards.map(({ label, value, icon: Icon, color, bg }) => (
-        <Card key={label}>
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-3">
+        <Card key={label} className="border border-border/60">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-medium text-muted-foreground">{label}</p>
               <div className={`p-2 rounded-lg ${bg}`}>
                 <Icon className={`h-5 w-5 ${color}`} />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-2xl font-bold">{value}</p>
-              </div>
             </div>
+            <p className={`text-3xl font-bold ${color}`}>{value}</p>
           </CardContent>
         </Card>
       ))}
@@ -384,13 +382,29 @@ function AbaOC({ req }: { req: Requisicao }) {
     onError: () => toast.error("Erro ao registrar OC"),
   });
 
+  const ocs = req.ocs ?? [];
+
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="border border-border/60">
+        <CardHeader className="flex flex-row items-center justify-between py-4">
+          <CardTitle className="text-base">
+            {ocs.length > 0 ? `${ocs.length} OC(s) registrada(s)` : "Ordens de Compra"}
+          </CardTitle>
+          {!showForm && (
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowForm(true)}>
+              <ShoppingCart className="h-4 w-4" />
+              Registrar OC
+            </Button>
+          )}
+        </CardHeader>
         <CardContent className="p-0">
-          {(req.ocs ?? []).length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">Nenhuma OC registrada</p>
-          ) : (
+          {ocs.length === 0 && !showForm ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+              <ShoppingCart className="h-12 w-12 opacity-20" />
+              <p className="text-sm">Nenhuma OC registrada para esta requisição</p>
+            </div>
+          ) : ocs.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -402,7 +416,7 @@ function AbaOC({ req }: { req: Requisicao }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(req.ocs ?? []).map((oc) => (
+                {ocs.map((oc) => (
                   <TableRow key={oc.id}>
                     <TableCell className="font-medium">{oc.numero_oc}</TableCell>
                     <TableCell>{oc.fornecedor}</TableCell>
@@ -413,22 +427,17 @@ function AbaOC({ req }: { req: Requisicao }) {
                 ))}
               </TableBody>
             </Table>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
-      {!showForm ? (
-        <Button variant="outline" className="gap-2" onClick={() => setShowForm(true)}>
-          <ShoppingCart className="h-4 w-4" />
-          Registrar OC
-        </Button>
-      ) : (
-        <Card>
-          <CardHeader>
+      {showForm && (
+        <Card className="border border-border/60">
+          <CardHeader className="flex flex-row items-center justify-between py-4">
             <CardTitle className="text-base">Nova Ordem de Compra</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="space-y-4 pt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium leading-none">Número OC *</label>
                 <Input placeholder="Ex: OC9363801" {...form.register("numero_oc")} />
@@ -444,6 +453,10 @@ function AbaOC({ req }: { req: Requisicao }) {
                 )}
               </div>
               <div className="space-y-1.5">
+                <label className="text-sm font-medium leading-none">Previsão de Entrega</label>
+                <Input type="date" {...form.register("previsao_entrega")} />
+              </div>
+              <div className="space-y-1.5">
                 <label className="text-sm font-medium leading-none">Valor Previsto (R$)</label>
                 <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor_previsto", { valueAsNumber: true })} />
               </div>
@@ -451,12 +464,8 @@ function AbaOC({ req }: { req: Requisicao }) {
                 <label className="text-sm font-medium leading-none">Valor Real (R$)</label>
                 <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor", { valueAsNumber: true })} />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium leading-none">Previsão de Entrega</label>
-                <Input type="date" {...form.register("previsao_entrega")} />
-              </div>
             </div>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={() => { setShowForm(false); form.reset(); }}>
                 Cancelar
               </Button>
@@ -516,13 +525,26 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
     onError: () => toast.error("Erro ao registrar recebimento"),
   });
 
+  const recebimentos = req.recebimentos ?? [];
+
   return (
     <div className="space-y-4">
-      {/* Histórico */}
-      <Card>
+      <Card className="border border-border/60">
+        <CardHeader className="flex flex-row items-center justify-between py-4">
+          <CardTitle className="text-base">
+            {recebimentos.length > 0 ? `${recebimentos.length} recebimento(s) registrado(s)` : "Histórico de Recebimentos"}
+          </CardTitle>
+          <Button className="gap-2" size="sm" onClick={() => setDialogOpen(true)}>
+            <Truck className="h-4 w-4" />
+            Registrar Recebimento
+          </Button>
+        </CardHeader>
         <CardContent className="p-0">
-          {(req.recebimentos ?? []).length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">Nenhum recebimento registrado</p>
+          {recebimentos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+              <Truck className="h-12 w-12 opacity-20" />
+              <p className="text-sm">Nenhum recebimento registrado para esta requisição</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -533,7 +555,7 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(req.recebimentos ?? []).map((receb) => (
+                {recebimentos.map((receb) => (
                   <TableRow key={receb.id}>
                     <TableCell>{formatDate(receb.data_recebimento)}</TableCell>
                     <TableCell>
@@ -549,11 +571,6 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
           )}
         </CardContent>
       </Card>
-
-      <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-        <Truck className="h-4 w-4" />
-        Registrar Recebimento
-      </Button>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="w-[700px] sm:max-w-[700px] max-w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
@@ -678,7 +695,7 @@ function RequisicaoDetalhe({ id }: { id: string }) {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background p-6">
-        <div className="max-w-5xl mx-auto space-y-4">
+        <div className="max-w-7xl mx-auto space-y-4">
           <Skeleton className="h-10 w-48" />
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-64 w-full" />
@@ -699,7 +716,7 @@ function RequisicaoDetalhe({ id }: { id: string }) {
 
   return (
     <div className="min-h-screen bg-background p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-start gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.push("/suprimentos/requisicoes")}>
