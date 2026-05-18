@@ -943,3 +943,111 @@ export const treinamentosApi = {
   atualizar: (colaboradorId: string, treinamentoId: string, body: { data_realizacao?: string | null; data_validade?: string | null; observacoes?: string | null }) =>
     api.put<{ data: ColaboradorTreinamento }>(`/colaboradores/${colaboradorId}/treinamentos/${treinamentoId}`, body),
 };
+
+// ============================================================================
+// FUNÇÕES DE API - REQUISIÇÕES SUPRIMENTOS
+// ============================================================================
+
+export interface RequisicaoItem {
+  id: string;
+  requisicao_id: string;
+  nome_item: string;
+  categoria: string;
+  unidade: string;
+  quantidade: number;
+  quantidade_estoque: number;
+  criticidade: "baixa" | "media" | "alta" | "critica";
+  tipo: "item" | "servico";
+  created_at: string;
+}
+
+export interface OrdemCompra {
+  id: string;
+  requisicao_id: string;
+  numero_oc: string;
+  fornecedor: string;
+  valor: number | null;
+  valor_previsto: number | null;
+  previsao_entrega: string | null;
+  created_at: string;
+}
+
+export interface RecebimentoItem {
+  id: string;
+  recebimento_id: string;
+  item_id: string;
+  quantidade_recebida: number;
+}
+
+export interface Recebimento {
+  id: string;
+  requisicao_id: string;
+  tipo: "total" | "parcial";
+  data_recebimento: string;
+  observacao: string | null;
+  created_at: string;
+  suprimentos_recebimento_itens: RecebimentoItem[];
+}
+
+export interface Requisicao {
+  id: string;
+  titulo: string;
+  coordenador: string;
+  data_abertura: string;
+  status: "rascunho" | "aberta" | "em_andamento" | "concluida" | "cancelada";
+  created_at: string;
+  updated_at: string;
+  itens?: RequisicaoItem[];
+  ocs?: OrdemCompra[];
+  recebimentos?: Recebimento[];
+}
+
+export interface ListarRequisicoeParams {
+  page?: number;
+  limit?: number;
+  status?: string;
+  search?: string;
+}
+
+export const requisicoesSuprimentosApi = {
+  listar: (params?: ListarRequisicoeParams) =>
+    api.get<PaginatedResponse<Requisicao>>("/suprimentos/requisicoes", { params }),
+
+  buscar: (id: string) =>
+    api.get<Requisicao>(`/suprimentos/requisicoes/${id}`),
+
+  criar: (body: {
+    titulo: string;
+    coordenador: string;
+    data_abertura: string;
+    status?: string;
+    itens: Array<{
+      nome_item: string;
+      categoria: string;
+      unidade: string;
+      quantidade: number;
+      criticidade: string;
+      tipo: string;
+    }>;
+  }) => api.post<Requisicao>("/suprimentos/requisicoes", body),
+
+  atualizar: (id: string, body: {
+    status?: string;
+    itens?: Array<{ id: string; quantidade?: number; quantidade_estoque?: number; criticidade?: string }>;
+  }) => api.patch(`/suprimentos/requisicoes/${id}`, body),
+
+  registrarOC: (id: string, body: {
+    numero_oc: string;
+    fornecedor: string;
+    valor?: number | null;
+    valor_previsto?: number | null;
+    previsao_entrega?: string | null;
+  }) => api.post<OrdemCompra>(`/suprimentos/requisicoes/${id}/oc`, body),
+
+  registrarRecebimento: (id: string, body: {
+    tipo: "total" | "parcial";
+    data_recebimento: string;
+    observacao?: string;
+    itens?: Array<{ item_id: string; quantidade_recebida: number }>;
+  }) => api.post<Recebimento>(`/suprimentos/requisicoes/${id}/recebimento`, body),
+};
