@@ -600,36 +600,48 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
                     <TableRow>
                       <TableHead>Item</TableHead>
                       <TableHead>Und</TableHead>
-                      <TableHead>A Comprar</TableHead>
+                      <TableHead>Falta Receber</TableHead>
                       <TableHead className="min-w-[100px]">Recebido Agora</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(req.itens ?? []).map((item) => {
-                      const aComprar = Math.max(0, Number(item.quantidade) - Number(item.quantidade_estoque));
-                      return (
-                        <TableRow key={item.id}>
-                          <TableCell className="text-sm">{item.nome_item}</TableCell>
-                          <TableCell className="text-sm">{item.unidade}</TableCell>
-                          <TableCell className="text-sm">{aComprar}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={partialQtds[item.id] ?? 0}
-                              onChange={(e) =>
-                                setPartialQtds((prev) => ({
-                                  ...prev,
-                                  [item.id]: parseFloat(e.target.value) || 0,
-                                }))
-                              }
-                              className="w-24"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {(() => {
+                      const jaRecebidoPorItem = new Map<string, number>();
+                      for (const receb of req.recebimentos ?? []) {
+                        for (const ri of receb.suprimentos_recebimento_itens ?? []) {
+                          jaRecebidoPorItem.set(ri.item_id, (jaRecebidoPorItem.get(ri.item_id) ?? 0) + Number(ri.quantidade_recebida));
+                        }
+                      }
+                      return (req.itens ?? []).map((item) => {
+                        const aComprar = Math.max(0, Number(item.quantidade) - Number(item.quantidade_estoque));
+                        const jaRecebido = jaRecebidoPorItem.get(item.id) ?? 0;
+                        const restante = Math.max(0, aComprar - jaRecebido);
+                        if (restante === 0) return null;
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell className="text-sm">{item.nome_item}</TableCell>
+                            <TableCell className="text-sm">{item.unidade}</TableCell>
+                            <TableCell className="text-sm font-medium">{restante}</TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={restante}
+                                step="0.01"
+                                value={partialQtds[item.id] ?? 0}
+                                onChange={(e) =>
+                                  setPartialQtds((prev) => ({
+                                    ...prev,
+                                    [item.id]: Math.min(restante, parseFloat(e.target.value) || 0),
+                                  }))
+                                }
+                                className="w-24"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      });
+                    })()}
                   </TableBody>
                 </Table>
               </div>
