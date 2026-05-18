@@ -25,7 +25,14 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart";
-import { PieChart, Pie, Cell } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Cell,
+} from "recharts";
 import {
   Package,
   DollarSign,
@@ -34,10 +41,11 @@ import {
   AlertCircle,
   RefreshCw,
   ArrowLeft,
+  CreditCard,
 } from "lucide-react";
 import { dashboardSuprimentosApi } from "@/lib/axios";
 import { useFilter } from "@/contexts/FilterContext";
-import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
+import { CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { toast } from "sonner";
@@ -53,10 +61,22 @@ const STATUS_COLORS: Record<string, string> = {
   "Em Aprovação": "#E5CF61",
 };
 
-const PIE_FALLBACK_COLORS = ["#ff460a", "#19365b", "#416e7d", "#9c3022", "#ffa78b", "#9e708b", "#e3d9a3", "#232323", "#ffd7cc", "#e2e2e2"];
+const TIPO_COLORS: Record<string, string> = {
+  item:    "#337246",
+  servico: "#ff460a",
+};
 
-const chartConfigStatus = {
-  total: { label: "Ordens", color: "#ff460a" },
+const TIPO_LABELS: Record<string, string> = {
+  item:    "Itens",
+  servico: "Serviços",
+};
+
+const chartConfigCategoria = {
+  valor: { label: "Valor (R$)", color: "#19365b" },
+};
+
+const chartConfigSGP = {
+  valor: { label: "Valor (R$)", color: "#337246" },
 };
 
 // ============================================================================
@@ -82,6 +102,12 @@ const brlFormatter = new Intl.NumberFormat("pt-BR", {
 });
 
 function formatBRL(value: number): string {
+  return brlFormatter.format(value);
+}
+
+function formatBRLShort(value: number): string {
+  if (value >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000)     return `R$ ${(value / 1_000).toFixed(0)}k`;
   return brlFormatter.format(value);
 }
 
@@ -145,7 +171,6 @@ export default function DashboardSuprimentosPage() {
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
-  // Redireciona guests para o Dashboard Geral (única página permitida)
   useEffect(() => {
     if (!authLoading && user?.perfil === "guest") {
       router.replace("/dashboard");
@@ -154,14 +179,12 @@ export default function DashboardSuprimentosPage() {
 
   const { centroCusto } = useFilter();
 
-  // ── Query do dashboard de suprimentos (KPIs + gráficos) ───────────────────
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard-suprimentos", centroCusto],
     queryFn:  async () => (await dashboardSuprimentosApi.get(centroCusto)).data,
     staleTime: 120_000,
   });
 
-  // ── Query dedicada das ordens (inclui id para Switch) ─────────────────────
   const {
     data: ordensData,
     refetch: refetchOrdens,
@@ -181,42 +204,27 @@ export default function DashboardSuprimentosPage() {
 
   const sup = data?.suprimentos;
 
-  // ── KPIs (do dashboard) ───────────────────────────────────────────────────
   const kpis = useMemo(() => {
     if (!sup) return null;
     return {
       totalInvestido:     sup.totalInvestido,
       totalOrdens:        sup.totalOrdens,
       entregues:          sup.entregues,
-      percentualEntregue: sup.percentualEntregue,
+      totalAPagar:        sup.totalAPagar,
     };
   }, [sup]);
 
-  // ── Pie de Status (do dashboard) ──────────────────────────────────────────
-  const dadosStatus = useMemo(
-    () =>
-      (sup?.distribuicaoStatus ?? []).map((d, i) => ({
-        name:  d.status,
-        value: d.total,
-        fill:  STATUS_COLORS[d.status] ?? PIE_FALLBACK_COLORS[i % PIE_FALLBACK_COLORS.length],
-      })),
-    [sup],
-  );
+  const porCategoria = useMemo(() => sup?.porCategoria ?? [], [sup]);
+  const sgpPorTipo   = useMemo(() => sup?.sgpPorTipo   ?? [], [sup]);
 
-  // ── Toggle entregue_obra ───────────────────────────────────────────────────
+  // ── Toggle entregue_obra ──────────────────────────────────────────────────
   const handleToggleEntregue = useCallback(
     async (id: string, novoValor: boolean) => {
-      // Optimistic update
       queryClient.setQueryData<{ data: OrdemRow[] }>(
         ["suprimentos-ordens"],
         (old) =>
           old
-            ? {
-                ...old,
-                data: old.data.map((o) =>
-                  o.id === id ? { ...o, entregue_obra: novoValor } : o,
-                ),
-              }
+            ? { ...old, data: old.data.map((o) => o.id === id ? { ...o, entregue_obra: novoValor } : o) }
             : old,
       );
 
@@ -228,17 +236,11 @@ export default function DashboardSuprimentosPage() {
         });
         if (!res.ok) throw new Error("Falha ao atualizar");
       } catch {
-        // Reverte em caso de erro
         queryClient.setQueryData<{ data: OrdemRow[] }>(
           ["suprimentos-ordens"],
           (old) =>
             old
-              ? {
-                  ...old,
-                  data: old.data.map((o) =>
-                    o.id === id ? { ...o, entregue_obra: !novoValor } : o,
-                  ),
-                }
+              ? { ...old, data: old.data.map((o) => o.id === id ? { ...o, entregue_obra: !novoValor } : o) }
               : old,
         );
         toast.error("Erro ao atualizar entrega");
@@ -370,15 +372,15 @@ export default function DashboardSuprimentosPage() {
             <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  % Entregue
+                  Total a Pagar
                 </CardTitle>
-                <Package className="h-4 w-4 text-[#19365b]" />
+                <CreditCard className="h-4 w-4 text-[#DA291B]" />
               </CardHeader>
               <CardContent>
-                <div className="big-number text-[40px] text-[#19365b]">
-                  {kpis ? `${kpis.percentualEntregue}%` : "—"}
+                <div className="big-number text-[40px] text-[#DA291B]">
+                  {kpis ? formatBRL(kpis.totalAPagar) : "—"}
                 </div>
-                <p className="text-xs text-muted-foreground">Das ordens entregues</p>
+                <p className="text-xs text-muted-foreground">Ordens não entregues</p>
               </CardContent>
             </Card>
           </div>
@@ -434,81 +436,130 @@ export default function DashboardSuprimentosPage() {
           {/* Gráficos */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
-            {/* Pie — Distribuição por Status */}
+            {/* BarChart — Valor por Categoria */}
             <Card className="glass-card">
               <CardHeader>
-                <CardTitle>Distribuição por Status</CardTitle>
+                <CardTitle>Valor por Categoria</CardTitle>
               </CardHeader>
               <CardContent>
-                {dadosStatus.length === 0 ? (
+                {porCategoria.length === 0 ? (
                   <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
-                    Sem dados de status disponíveis
+                    Sem dados de categoria disponíveis
                   </div>
                 ) : (
-                  <ChartContainer config={chartConfigStatus} className="h-[300px] 2xl:h-[420px] w-full">
-                    <PieChart>
-                      <Pie
-                        data={dadosStatus}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius="80%"
-                        innerRadius="30%"
-                        paddingAngle={3}
-                        dataKey="value"
-                        nameKey="name"
-                        label={({ name, percent }) =>
-                          percent > 0.05 ? `${name} (${(percent * 100).toFixed(0)}%)` : ""
+                  <ChartContainer config={chartConfigCategoria} className="h-[300px] 2xl:h-[420px] w-full">
+                    <BarChart
+                      data={porCategoria}
+                      margin={{ top: 16, right: 20, left: 10, bottom: 60 }}
+                    >
+                      <CartesianGrid vertical={false} stroke={CHART_GRID_COLOR} />
+                      <XAxis
+                        dataKey="categoria"
+                        tick={{ ...CHART_AXIS_TICK }}
+                        angle={-40}
+                        textAnchor="end"
+                        interval={0}
+                        height={60}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        tickFormatter={formatBRLShort}
+                        tick={{ ...CHART_AXIS_TICK }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={70}
+                      />
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value) => formatBRL(Number(value))}
+                          />
                         }
-                        labelLine={false}
-                      >
-                        {dadosStatus.map((entry, i) => (
-                          <Cell key={`status-${i}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+                      />
                       <ChartLegend content={<ChartLegendContent />} />
-                    </PieChart>
+                      <Bar dataKey="valor" name="valor" fill="#19365b" radius={[6, 6, 0, 0]} />
+                    </BarChart>
                   </ChartContainer>
                 )}
               </CardContent>
             </Card>
 
-            {/* Resumo por status */}
+            {/* SGP — Itens vs Serviços */}
             <Card className="glass-card">
               <CardHeader>
-                <CardTitle>Resumo por Status</CardTitle>
+                <CardTitle>SGP — Gestão de Pagamentos</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {dadosStatus.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Sem dados disponíveis</p>
+              <CardContent>
+                {sgpPorTipo.length === 0 ? (
+                  <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+                    Sem dados de itens/serviços disponíveis
+                  </div>
                 ) : (
-                  dadosStatus.map((d) => {
-                    const pct =
-                      (kpis?.totalOrdens ?? 0) > 0
-                        ? Math.round((d.value / kpis!.totalOrdens) * 100)
-                        : 0;
-                    return (
-                      <div
-                        key={d.name}
-                        className="flex items-center justify-between rounded-lg border border-[#e2e2e2]/10 bg-[#e2e2e2]/10 px-4 py-3"
+                  <>
+                    <ChartContainer config={chartConfigSGP} className="h-[220px] 2xl:h-[300px] w-full">
+                      <BarChart
+                        data={sgpPorTipo.map((d) => ({ ...d, label: TIPO_LABELS[d.tipo] ?? d.tipo }))}
+                        margin={{ top: 16, right: 20, left: 10, bottom: 10 }}
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: d.fill }} />
-                          <span className="text-sm 2xl:text-base font-medium">{d.name}</span>
+                        <CartesianGrid vertical={false} stroke={CHART_GRID_COLOR} />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ ...CHART_AXIS_TICK }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          tickFormatter={formatBRLShort}
+                          tick={{ ...CHART_AXIS_TICK }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={70}
+                        />
+                        <ChartTooltip
+                          content={
+                            <ChartTooltipContent
+                              formatter={(value) => formatBRL(Number(value))}
+                            />
+                          }
+                        />
+                        <Bar dataKey="valor" name="valor" radius={[6, 6, 0, 0]}>
+                          {sgpPorTipo.map((entry, i) => (
+                            <Cell key={`sgp-${i}`} fill={TIPO_COLORS[entry.tipo] ?? "#416e7d"} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ChartContainer>
+
+                    {/* Resumo abaixo do gráfico */}
+                    <div className="mt-4 space-y-2">
+                      {sgpPorTipo.map((d) => (
+                        <div
+                          key={d.tipo}
+                          className="flex items-center justify-between rounded-lg border border-[#e2e2e2]/10 bg-[#e2e2e2]/10 px-4 py-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="h-3 w-3 rounded-full"
+                              style={{ backgroundColor: TIPO_COLORS[d.tipo] ?? "#416e7d" }}
+                            />
+                            <span className="text-sm 2xl:text-base font-medium">
+                              {TIPO_LABELS[d.tipo] ?? d.tipo}
+                            </span>
+                          </div>
+                          <span className="text-sm 2xl:text-base font-bold">
+                            {formatBRL(d.valor)}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm 2xl:text-base text-muted-foreground">{pct}%</span>
-                          <span className="text-sm 2xl:text-base font-bold">{d.value}</span>
-                        </div>
-                      </div>
-                    );
-                  })
+                      ))}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Tabela de Ordens — com Switch "Entregue na obra" */}
+          {/* Tabela de Ordens */}
           <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

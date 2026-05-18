@@ -375,7 +375,11 @@ export type DashboardLogisticaData = {
 
 /** Shape retornada por GET /api/dashboard/suprimentos */
 export type DashboardSuprimentosData = {
-  suprimentos: Omit<DashboardData["agregacoes"]["suprimentos"], "ordens">;
+  suprimentos: Omit<DashboardData["agregacoes"]["suprimentos"], "ordens"> & {
+    totalAPagar:  number;
+    porCategoria: Array<{ categoria: string; valor: number }>;
+    sgpPorTipo:   Array<{ tipo: string; valor: number }>;
+  };
 };
 
 // ============================================================================
