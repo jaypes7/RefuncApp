@@ -37,7 +37,7 @@ const itemSchema = z.object({
   nome_item:   z.string().min(1, "Nome obrigatório"),
   categoria:   z.string().min(1, "Categoria obrigatória"),
   unidade:     z.string().min(1, "Unidade obrigatória"),
-  quantidade:  z.coerce.number().min(0.01, "Quantidade deve ser maior que 0"),
+  quantidade:  z.number().min(0.01, "Quantidade deve ser maior que 0"),
   criticidade: z.enum(["baixa", "media", "alta", "critica"]),
   tipo:        z.enum(["item", "servico"]),
 });
@@ -246,7 +246,7 @@ function NovaRequisicaoForm() {
                           type="number"
                           min="0"
                           step="0.01"
-                          {...form.register(`itens.${index}.quantidade`)}
+                          {...form.register(`itens.${index}.quantidade`, { valueAsNumber: true })}
                           className={form.formState.errors.itens?.[index]?.quantidade ? "border-destructive" : ""}
                         />
                       </TableCell>
