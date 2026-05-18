@@ -125,8 +125,8 @@ function computeKpis(req: Requisicao) {
 const ocSchema = z.object({
   numero_oc:        z.string().min(1, "Obrigatório"),
   fornecedor:       z.string().min(1, "Obrigatório"),
-  valor:            z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().optional()),
-  valor_previsto:   z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), z.number().optional()),
+  valor:            z.number().optional(),
+  valor_previsto:   z.number().optional(),
   previsao_entrega: z.string().optional(),
 });
 type OCForm = z.infer<typeof ocSchema>;
@@ -445,11 +445,11 @@ function AbaOC({ req }: { req: Requisicao }) {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium leading-none">Valor Previsto (R$)</label>
-                <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor_previsto")} />
+                <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor_previsto", { valueAsNumber: true })} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium leading-none">Valor Real (R$)</label>
-                <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor")} />
+                <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor", { valueAsNumber: true })} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium leading-none">Previsão de Entrega</label>
