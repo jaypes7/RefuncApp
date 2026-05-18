@@ -166,22 +166,19 @@ export async function GET(request: NextRequest) {
     const page   = Math.max(1, Number(searchParams.get("page")  ?? 1));
     const limit  = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? 50)));
     const search = searchParams.get("search")?.trim() ?? "";
-    const status = searchParams.get("status")?.trim() ?? "";
-    const centroCusto = searchParams.get("centro_custo")?.trim() ?? "";
 
     const db = createServerClient();
-    let query = db
-      .from("suprimentos_ordens")
-      .select("*", { count: "exact" });
 
-    if (centroCusto) {
-      query = query.eq("centro_custo", centroCusto);
-    }
+    // suprimentos_ordens_compra com join na requisição para obter status e título
+    let query = db
+      .from("suprimentos_ordens_compra")
+      .select(
+        "id, numero_oc, fornecedor, valor, valor_previsto, previsao_entrega, requisicao_id, suprimentos_requisicoes(titulo, status)",
+        { count: "exact" },
+      );
+
     if (search) {
-      query = query.or(`ordem_compra.ilike.%${search}%,descricao.ilike.%${search}%`);
-    }
-    if (status) {
-      query = query.eq("status", status);
+      query = query.or(`numero_oc.ilike.%${search}%,fornecedor.ilike.%${search}%`);
     }
 
     const from = (page - 1) * limit;
@@ -190,12 +187,17 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query;
     if (error) throw new Error(error.message);
 
-    const normalized = (data ?? []).map((row) => ({
-      ...row,
-      entregue_obra:
-        row.entregue_obra === true ||
-        row.entregue_obra === "Sim" ||
-        String(row.entregue_obra).toLowerCase() === "true",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const normalized = (data ?? []).map((row: any) => ({
+      id:               row.id,
+      numero_oc:        row.numero_oc        ?? null,
+      fornecedor:       row.fornecedor       ?? null,
+      valor:            row.valor            ?? null,
+      valor_previsto:   row.valor_previsto   ?? null,
+      previsao_entrega: row.previsao_entrega ?? null,
+      requisicao_id:    row.requisicao_id    ?? null,
+      status_req:       row.suprimentos_requisicoes?.status ?? null,
+      titulo_req:       row.suprimentos_requisicoes?.titulo ?? null,
     }));
 
     return NextResponse.json({
