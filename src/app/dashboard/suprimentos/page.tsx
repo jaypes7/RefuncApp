@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useCallback, useEffect } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -8,7 +8,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -34,7 +33,6 @@ import {
   Cell,
 } from "recharts";
 import {
-  Package,
   DollarSign,
   CheckCircle2,
   ClipboardList,
@@ -42,23 +40,31 @@ import {
   RefreshCw,
   ArrowLeft,
   CreditCard,
+  Package,
 } from "lucide-react";
 import { dashboardSuprimentosApi } from "@/lib/axios";
 import { useFilter } from "@/contexts/FilterContext";
 import { CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
-import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
-import { toast } from "sonner";
-import { CanAccess } from "@/components/CanAccess";
 
 // ============================================================================
 // PALETA & CONFIG
 // ============================================================================
 
-const STATUS_COLORS: Record<string, string> = {
-  Aprovada:       "#337246",
-  Cancelada:      "#DA291B",
-  "Em Aprovação": "#E5CF61",
+const STATUS_REQ_COLORS: Record<string, string> = {
+  rascunho:      "#737373",
+  aberta:        "#19365b",
+  em_andamento:  "#E5CF61",
+  concluida:     "#337246",
+  cancelada:     "#DA291B",
+};
+
+const STATUS_REQ_LABELS: Record<string, string> = {
+  rascunho:     "Rascunho",
+  aberta:       "Aberta",
+  em_andamento: "Em andamento",
+  concluida:    "Concluída",
+  cancelada:    "Cancelada",
 };
 
 const TIPO_COLORS: Record<string, string> = {
@@ -84,13 +90,15 @@ const chartConfigSGP = {
 // ============================================================================
 
 interface OrdemRow {
-  id:                  string;
-  ordem_compra:        string | null;
-  descricao:           string | null;
-  total_req_previstas: number;
-  valores:             number;
-  status:              string | null;
-  entregue_obra:       boolean;
+  id:               string;
+  numero_oc:        string | null;
+  fornecedor:       string | null;
+  valor:            number | null;
+  valor_previsto:   number | null;
+  previsao_entrega: string | null;
+  requisicao_id:    string | null;
+  status_req:       string | null;
+  titulo_req:       string | null;
 }
 
 // ============================================================================
@@ -111,16 +119,22 @@ function formatBRLShort(value: number): string {
   return brlFormatter.format(value);
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const color   = STATUS_COLORS[status];
-  const variant = status === "Aprovada" ? "default" : status === "Cancelada" ? "destructive" : "secondary";
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function StatusReqBadge({ status }: { status: string }) {
+  const color = STATUS_REQ_COLORS[status];
+  const label = STATUS_REQ_LABELS[status] ?? status;
   return (
     <Badge
-      variant={variant}
+      variant="secondary"
       style={color ? { backgroundColor: color + "22", color, borderColor: color + "44" } : undefined}
-      className="border font-medium"
+      className="border font-medium capitalize"
     >
-      {status || "—"}
+      {label}
     </Badge>
   );
 }
@@ -185,15 +199,10 @@ export default function DashboardSuprimentosPage() {
     staleTime: 120_000,
   });
 
-  const {
-    data: ordensData,
-    refetch: refetchOrdens,
-  } = useQuery<{ data: OrdemRow[] }>({
-    queryKey: ["suprimentos-ordens", centroCusto],
+  const { data: ordensData } = useQuery<{ data: OrdemRow[] }>({
+    queryKey: ["suprimentos-ordens"],
     queryFn:  async () => {
-      const params = new URLSearchParams({ limit: "200" });
-      if (centroCusto) params.set("centro_custo", centroCusto);
-      const res = await fetch(`/api/suprimentos/ordens?${params.toString()}`);
+      const res = await fetch("/api/suprimentos/ordens?limit=200");
       if (!res.ok) throw new Error("Erro ao buscar ordens");
       return res.json();
     },
@@ -201,53 +210,20 @@ export default function DashboardSuprimentosPage() {
   });
 
   const ordens = useMemo(() => ordensData?.data ?? [], [ordensData]);
-
-  const sup = data?.suprimentos;
+  const sup     = data?.suprimentos;
 
   const kpis = useMemo(() => {
     if (!sup) return null;
     return {
-      totalInvestido:     sup.totalInvestido,
-      totalOrdens:        sup.totalOrdens,
-      entregues:          sup.entregues,
-      totalAPagar:        sup.totalAPagar,
+      totalInvestido: sup.totalInvestido,
+      totalOrdens:    sup.totalOrdens,
+      entregues:      sup.entregues,
+      totalAPagar:    sup.totalAPagar,
     };
   }, [sup]);
 
   const porCategoria = useMemo(() => sup?.porCategoria ?? [], [sup]);
   const sgpPorTipo   = useMemo(() => sup?.sgpPorTipo   ?? [], [sup]);
-
-  // ── Toggle entregue_obra ──────────────────────────────────────────────────
-  const handleToggleEntregue = useCallback(
-    async (id: string, novoValor: boolean) => {
-      queryClient.setQueryData<{ data: OrdemRow[] }>(
-        ["suprimentos-ordens"],
-        (old) =>
-          old
-            ? { ...old, data: old.data.map((o) => o.id === id ? { ...o, entregue_obra: novoValor } : o) }
-            : old,
-      );
-
-      try {
-        const res = await fetch(`/api/suprimentos/ordens/${id}`, {
-          method:  "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ entregue_obra: novoValor }),
-        });
-        if (!res.ok) throw new Error("Falha ao atualizar");
-      } catch {
-        queryClient.setQueryData<{ data: OrdemRow[] }>(
-          ["suprimentos-ordens"],
-          (old) =>
-            old
-              ? { ...old, data: old.data.map((o) => o.id === id ? { ...o, entregue_obra: !novoValor } : o) }
-              : old,
-        );
-        toast.error("Erro ao atualizar entrega");
-      }
-    },
-    [queryClient],
-  );
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -298,28 +274,13 @@ export default function DashboardSuprimentosPage() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div>
-                <h1 className="page-title">
-                  Gestão a Vista - Suprimentos
-                </h1>
+                <h1 className="page-title">Gestão a Vista — Suprimentos</h1>
                 <p className="text-muted-foreground 2xl:text-lg">
                   Acompanhamento de ordens de compra e entregas
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <ExportPdfButton targetRef={contentRef} filename="dashboard-suprimentos" />
-              <SheetUpload
-                endpoint="/api/suprimentos/ordens"
-                label="Fazer upload de ordens"
-                headerDetectionKeys={["Descrição", "Ordem de Compra", "Valor OC", "Item"]}
-                onSuccess={() => {
-                  queryClient.invalidateQueries({ queryKey: ["dashboard-suprimentos"], type: "all" });
-                  refetchOrdens();
-                }}
-                variant="outline"
-                size="sm"
-              />
-            </div>
+            <ExportPdfButton targetRef={contentRef} filename="dashboard-suprimentos" />
           </div>
 
           <div ref={contentRef} className="space-y-8">
@@ -337,7 +298,7 @@ export default function DashboardSuprimentosPage() {
                 <div className="big-number text-[40px] text-[#337246]">
                   {kpis ? formatBRL(kpis.totalInvestido) : "—"}
                 </div>
-                <p className="text-xs text-muted-foreground">Soma de todos os valores</p>
+                <p className="text-xs text-muted-foreground">Soma de todas as OCs</p>
               </CardContent>
             </Card>
 
@@ -350,7 +311,7 @@ export default function DashboardSuprimentosPage() {
               </CardHeader>
               <CardContent>
                 <div className="big-number text-[40px]">{kpis?.totalOrdens ?? "—"}</div>
-                <p className="text-xs text-muted-foreground">Total de requisições</p>
+                <p className="text-xs text-muted-foreground">Total de OCs cadastradas</p>
               </CardContent>
             </Card>
 
@@ -365,7 +326,7 @@ export default function DashboardSuprimentosPage() {
                 <div className="big-number text-[40px] text-[#337246]">
                   {kpis?.entregues ?? "—"}
                 </div>
-                <p className="text-xs text-muted-foreground">Entregues na obra</p>
+                <p className="text-xs text-muted-foreground">OCs com recebimento total</p>
               </CardContent>
             </Card>
 
@@ -380,7 +341,7 @@ export default function DashboardSuprimentosPage() {
                 <div className="big-number text-[40px] text-[#DA291B]">
                   {kpis ? formatBRL(kpis.totalAPagar) : "—"}
                 </div>
-                <p className="text-xs text-muted-foreground">Ordens não entregues</p>
+                <p className="text-xs text-muted-foreground">OCs ainda não entregues</p>
               </CardContent>
             </Card>
           </div>
@@ -396,15 +357,11 @@ export default function DashboardSuprimentosPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wider">Orçado</p>
-                    <p className="big-number text-[40px]">
-                      {formatBRL(sup.orcado)}
-                    </p>
+                    <p className="big-number text-[40px]">{formatBRL(sup.orcado)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wider">Investido</p>
-                    <p className="big-number text-[40px] text-[#337246]">
-                      {formatBRL(sup.totalInvestido)}
-                    </p>
+                    <p className="big-number text-[40px] text-[#337246]">{formatBRL(sup.totalInvestido)}</p>
                   </div>
                 </div>
                 {(() => {
@@ -436,7 +393,7 @@ export default function DashboardSuprimentosPage() {
           {/* Gráficos */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
-            {/* BarChart — Valor por Categoria */}
+            {/* Valor por Categoria */}
             <Card className="glass-card">
               <CardHeader>
                 <CardTitle>Valor por Categoria</CardTitle>
@@ -448,10 +405,7 @@ export default function DashboardSuprimentosPage() {
                   </div>
                 ) : (
                   <ChartContainer config={chartConfigCategoria} className="h-[300px] 2xl:h-[420px] w-full">
-                    <BarChart
-                      data={porCategoria}
-                      margin={{ top: 16, right: 20, left: 10, bottom: 60 }}
-                    >
+                    <BarChart data={porCategoria} margin={{ top: 16, right: 20, left: 10, bottom: 60 }}>
                       <CartesianGrid vertical={false} stroke={CHART_GRID_COLOR} />
                       <XAxis
                         dataKey="categoria"
@@ -471,11 +425,7 @@ export default function DashboardSuprimentosPage() {
                         width={70}
                       />
                       <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(value) => formatBRL(Number(value))}
-                          />
-                        }
+                        content={<ChartTooltipContent formatter={(v) => formatBRL(Number(v))} />}
                       />
                       <ChartLegend content={<ChartLegendContent />} />
                       <Bar dataKey="valor" name="valor" fill="#19365b" radius={[6, 6, 0, 0]} />
@@ -485,10 +435,13 @@ export default function DashboardSuprimentosPage() {
               </CardContent>
             </Card>
 
-            {/* SGP — Itens vs Serviços */}
+            {/* SGP — Gestão de Pagamentos */}
             <Card className="glass-card">
               <CardHeader>
-                <CardTitle>SGP — Gestão de Pagamentos</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  SGP — Gestão de Pagamentos
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {sgpPorTipo.length === 0 ? (
@@ -517,11 +470,7 @@ export default function DashboardSuprimentosPage() {
                           width={70}
                         />
                         <ChartTooltip
-                          content={
-                            <ChartTooltipContent
-                              formatter={(value) => formatBRL(Number(value))}
-                            />
-                          }
+                          content={<ChartTooltipContent formatter={(v) => formatBRL(Number(v))} />}
                         />
                         <Bar dataKey="valor" name="valor" radius={[6, 6, 0, 0]}>
                           {sgpPorTipo.map((entry, i) => (
@@ -531,7 +480,6 @@ export default function DashboardSuprimentosPage() {
                       </BarChart>
                     </ChartContainer>
 
-                    {/* Resumo abaixo do gráfico */}
                     <div className="mt-4 space-y-2">
                       {sgpPorTipo.map((d) => (
                         <div
@@ -539,17 +487,12 @@ export default function DashboardSuprimentosPage() {
                           className="flex items-center justify-between rounded-lg border border-[#e2e2e2]/10 bg-[#e2e2e2]/10 px-4 py-3"
                         >
                           <div className="flex items-center gap-3">
-                            <span
-                              className="h-3 w-3 rounded-full"
-                              style={{ backgroundColor: TIPO_COLORS[d.tipo] ?? "#416e7d" }}
-                            />
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: TIPO_COLORS[d.tipo] ?? "#416e7d" }} />
                             <span className="text-sm 2xl:text-base font-medium">
                               {TIPO_LABELS[d.tipo] ?? d.tipo}
                             </span>
                           </div>
-                          <span className="text-sm 2xl:text-base font-bold">
-                            {formatBRL(d.valor)}
-                          </span>
+                          <span className="text-sm 2xl:text-base font-bold">{formatBRL(d.valor)}</span>
                         </div>
                       ))}
                     </div>
@@ -559,7 +502,7 @@ export default function DashboardSuprimentosPage() {
             </Card>
           </div>
 
-          {/* Tabela de Ordens */}
+          {/* Tabela de Ordens de Compra */}
           <Card className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -582,61 +525,43 @@ export default function DashboardSuprimentosPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="border-[#e2e2e2]/20 hover:bg-[#e2e2e2]/10">
-                        <TableHead className="text-muted-foreground 2xl:text-sm">Ordem de Compra</TableHead>
-                        <TableHead className="text-muted-foreground 2xl:text-sm">Descrição</TableHead>
-                        <TableHead className="text-right text-muted-foreground 2xl:text-sm">Req. Previstas</TableHead>
+                        <TableHead className="text-muted-foreground 2xl:text-sm">Nº OC</TableHead>
+                        <TableHead className="text-muted-foreground 2xl:text-sm">Fornecedor</TableHead>
                         <TableHead className="text-right text-muted-foreground 2xl:text-sm">Valor (R$)</TableHead>
-                        <TableHead className="text-muted-foreground 2xl:text-sm">Status</TableHead>
-                        <TableHead className="text-muted-foreground 2xl:text-sm">
-                          Entregue na Obra
-                        </TableHead>
+                        <TableHead className="text-right text-muted-foreground 2xl:text-sm">Valor Previsto</TableHead>
+                        <TableHead className="text-muted-foreground 2xl:text-sm">Prev. Entrega</TableHead>
+                        <TableHead className="text-muted-foreground 2xl:text-sm">Status Requisição</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {ordens.map((o) => (
-                        <TableRow
-                          key={o.id}
-                          className="border-[#e2e2e2]/10 hover:bg-[#e2e2e2]/10"
-                        >
+                        <TableRow key={o.id} className="border-[#e2e2e2]/10 hover:bg-[#e2e2e2]/10">
                           <TableCell
                             className="font-mono text-sm 2xl:text-base font-medium max-w-[160px] truncate"
-                            title={o.ordem_compra ?? "—"}
+                            title={o.numero_oc ?? "—"}
                           >
-                            {o.ordem_compra || "—"}
+                            {o.numero_oc || "—"}
                           </TableCell>
                           <TableCell
                             className="text-sm 2xl:text-base max-w-[200px] truncate text-muted-foreground"
-                            title={o.descricao ?? "—"}
+                            title={o.fornecedor ?? "—"}
                           >
-                            {o.descricao || "—"}
+                            {o.fornecedor || "—"}
                           </TableCell>
                           <TableCell className="text-right text-sm 2xl:text-base">
-                            {o.total_req_previstas > 0 ? o.total_req_previstas : "—"}
+                            {o.valor != null ? formatBRL(o.valor) : "—"}
                           </TableCell>
-                          <TableCell className="text-right text-sm 2xl:text-base">
-                            {o.valores > 0 ? formatBRL(o.valores) : "—"}
+                          <TableCell className="text-right text-sm 2xl:text-base text-muted-foreground">
+                            {o.valor_previsto != null ? formatBRL(o.valor_previsto) : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm 2xl:text-base">
+                            {formatDate(o.previsao_entrega)}
                           </TableCell>
                           <TableCell>
-                            {o.status ? <StatusBadge status={o.status} /> : <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <CanAccess role="user">
-                                <Switch
-                                  checked={o.entregue_obra}
-                                  onCheckedChange={(checked) => handleToggleEntregue(o.id, checked)}
-                                  aria-label={`Marcar ordem ${o.ordem_compra ?? o.id} como entregue`}
-                                  size="sm"
-                                />
-                              </CanAccess>
-                              <span
-                                className={`text-xs font-medium ${
-                                  o.entregue_obra ? "text-[#337246]" : "text-muted-foreground"
-                                }`}
-                              >
-                                {o.entregue_obra ? "Sim" : "Não"}
-                              </span>
-                            </div>
+                            {o.status_req
+                              ? <StatusReqBadge status={o.status_req} />
+                              : <span className="text-muted-foreground">—</span>
+                            }
                           </TableCell>
                         </TableRow>
                       ))}

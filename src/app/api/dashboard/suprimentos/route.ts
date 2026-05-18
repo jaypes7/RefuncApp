@@ -3,13 +3,12 @@
  * API: GET /api/dashboard/suprimentos
  * ============================================================================
  *
- * Métricas de suprimentos: ordens de compra, valores e entregas.
- *
- * Fontes:
- *   • suprimentos_ordens           → valores, entregue_obra, status
- *   • configuracoes                → orcado_suprimentos
- *   • suprimentos_ordens_compra    → requisicao_id, valor
+ * Fontes reais (schema Supabase):
+ *   • suprimentos_ordens_compra    → valor, valor_previsto, requisicao_id
+ *   • suprimentos_recebimentos     → requisicao_id, tipo ('total'|'parcial')
+ *   • suprimentos_requisicoes      → id, status
  *   • suprimentos_requisicao_itens → requisicao_id, categoria, tipo
+ *   • configuracoes                → orcado_suprimentos
  */
 
 export const dynamic = "force-dynamic";
@@ -20,20 +19,6 @@ import { createServerClient } from "@/lib/supabase";
 import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 
 // ============================================================================
-// HELPERS
-// ============================================================================
-
-function cleanNumeric(val: unknown): number {
-  if (typeof val === "number") return isNaN(val) ? 0 : val;
-  if (typeof val === "string") {
-    const cleaned = val.replace(/[R$\s.]/g, "").replace(",", ".");
-    const parsed = parseFloat(cleaned);
-    return isNaN(parsed) ? 0 : parsed;
-  }
-  return 0;
-}
-
-// ============================================================================
 // GET /api/dashboard/suprimentos
 // ============================================================================
 
@@ -42,67 +27,66 @@ export async function GET(request: NextRequest) {
     const currentUser = await requireAuth("user");
 
     const { searchParams } = new URL(request.url);
-    const ccParam = searchParams.get("centro_custo") || undefined;
+    const ccParam     = searchParams.get("centro_custo") || undefined;
     const centroCusto = resolveCentroCusto(currentUser, ccParam);
 
     const db = createServerClient();
 
-    let ordensQuery = db
-      .from("suprimentos_ordens")
-      .select(
-        "id,ordem_compra,descricao,fornecedor,status,status_ordem,valor_oc,valores,entregue_obra,total_req_previstas",
-      );
-    if (centroCusto?.length) {
-      ordensQuery = ordensQuery.in("centro_custo", centroCusto);
-    }
-
+    // Config filtrada por centro_custo
     let configQuery = db.from("configuracoes").select("orcado_suprimentos");
-    if (centroCusto?.length) configQuery = configQuery.in("centro_custo", centroCusto) as typeof configQuery;
+    if (centroCusto?.length) {
+      configQuery = configQuery.in("centro_custo", centroCusto) as typeof configQuery;
+    }
 
     const [
-      { data: ordensData, error: ordensErr },
-      { data: configRows, error: configError },
-    ] = await Promise.all([ordensQuery, configQuery]);
+      { data: ocsData,   error: ocsErr   },
+      { data: recebData },
+      { data: reqData   },
+      { data: itensData },
+      { data: configRows },
+    ] = await Promise.all([
+      db.from("suprimentos_ordens_compra").select("id, requisicao_id, valor, valor_previsto"),
+      db.from("suprimentos_recebimentos").select("requisicao_id, tipo"),
+      db.from("suprimentos_requisicoes").select("id, status"),
+      db.from("suprimentos_requisicao_itens").select("requisicao_id, categoria, tipo"),
+      configQuery,
+    ]);
 
-    // Queries opcionais — tabelas do módulo de requisições (podem não existir ainda)
-    type OcRow   = { requisicao_id: string | null; valor: number | null };
-    type ItemRow = { requisicao_id: string | null; categoria: string | null; tipo: string | null };
-    let ocsData:   OcRow[]   = [];
-    let itensData: ItemRow[] = [];
-    try {
-      const [ocsRes, itensRes] = await Promise.all([
-        db.from("suprimentos_ordens_compra").select("requisicao_id, valor"),
-        db.from("suprimentos_requisicao_itens").select("requisicao_id, categoria, tipo"),
-      ]);
-      if (ocsRes.data   && !ocsRes.error)   ocsData   = ocsRes.data   as OcRow[];
-      if (itensRes.data && !itensRes.error) itensData = itensRes.data as ItemRow[];
-    } catch {
-      console.warn("[Dashboard/Suprimentos] tabelas de requisições não disponíveis");
-    }
+    if (ocsErr) throw new Error(ocsErr.message);
 
-    if (ordensErr) throw new Error(ordensErr.message);
-
-    if (configError) {
-      console.error("[Dashboard/Suprimentos] config:", configError.message);
-    }
-
+    // ── Orçado ────────────────────────────────────────────────────────────────
     const orcado = ((configRows ?? []) as Array<{ orcado_suprimentos?: number }>).reduce(
       (s, c) => s + Number(c.orcado_suprimentos ?? 0),
       0,
     );
 
-    const rows = (ordensData ?? []) as Array<Record<string, unknown>>;
+    type OcRow   = { id: string; requisicao_id: string; valor: number | null; valor_previsto: number | null };
+    type RecRow  = { requisicao_id: string; tipo: string };
+    type ReqRow  = { id: string; status: string };
+    type ItemRow = { requisicao_id: string; categoria: string; tipo: string };
 
-    // ── Totalizadores ─────────────────────────────────────────────────────────
-    const totalInvestido = rows.reduce((s, r) => s + cleanNumeric(r["valores"]), 0);
-    const totalAPagar    = rows
-      .filter((r) => r["entregue_obra"] !== true && r["entregue_obra"] !== "Sim")
-      .reduce((s, r) => s + cleanNumeric(r["valores"]), 0);
-    const entregues      = rows.filter((r) => r["entregue_obra"] === true || r["entregue_obra"] === "Sim").length;
+    const ocs         = (ocsData   ?? []) as OcRow[];
+    const recebimentos = (recebData ?? []) as RecRow[];
+    const requisicoes  = (reqData   ?? []) as ReqRow[];
+    const itens        = (itensData ?? []) as ItemRow[];
 
+    // ── KPIs ──────────────────────────────────────────────────────────────────
+    const totalInvestido = ocs.reduce((s, oc) => s + Number(oc.valor ?? 0), 0);
+    const totalOrdens    = ocs.length;
+
+    // Requisições com recebimento tipo 'total' = entregues
+    const reqsEntregues = new Set(
+      recebimentos.filter((r) => r.tipo === "total").map((r) => r.requisicao_id),
+    );
+    const entregues  = ocs.filter((oc) => reqsEntregues.has(oc.requisicao_id)).length;
+    const totalAPagar = ocs
+      .filter((oc) => !reqsEntregues.has(oc.requisicao_id))
+      .reduce((s, oc) => s + Number(oc.valor ?? 0), 0);
+
+    // ── Distribuição por status (das requisições) ──────────────────────────────
     const statusMap: Record<string, number> = {};
-    for (const r of rows) {
-      const st = String(r["status"] ?? "").trim();
+    for (const req of requisicoes) {
+      const st = req.status ?? "";
       if (st) statusMap[st] = (statusMap[st] || 0) + 1;
     }
     const distribuicaoStatus = Object.entries(statusMap)
@@ -111,13 +95,12 @@ export async function GET(request: NextRequest) {
 
     // ── Categoria e tipo via join OC + itens ──────────────────────────────────
     const ocsPorReq: Record<string, number> = {};
-    for (const oc of ocsData) {
-      if (oc.requisicao_id)
-        ocsPorReq[oc.requisicao_id] = (ocsPorReq[oc.requisicao_id] ?? 0) + Number(oc.valor ?? 0);
+    for (const oc of ocs) {
+      ocsPorReq[oc.requisicao_id] = (ocsPorReq[oc.requisicao_id] ?? 0) + Number(oc.valor ?? 0);
     }
 
     const itensPorReq: Record<string, { categoria: string; tipo: string }[]> = {};
-    for (const item of itensData) {
+    for (const item of itens) {
       if (!item.requisicao_id) continue;
       (itensPorReq[item.requisicao_id] ??= []).push({
         categoria: item.categoria ?? "Sem categoria",
@@ -129,10 +112,10 @@ export async function GET(request: NextRequest) {
     const tipoMap:      Record<string, number> = {};
 
     for (const [reqId, ocValor] of Object.entries(ocsPorReq)) {
-      const itens = itensPorReq[reqId] ?? [];
-      if (!itens.length) continue;
-      const share = ocValor / itens.length;
-      for (const item of itens) {
+      const itensList = itensPorReq[reqId] ?? [];
+      if (!itensList.length) continue;
+      const share = ocValor / itensList.length;
+      for (const item of itensList) {
         categoriaMap[item.categoria] = (categoriaMap[item.categoria] ?? 0) + share;
         tipoMap[item.tipo]           = (tipoMap[item.tipo]           ?? 0) + share;
       }
@@ -147,10 +130,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       suprimentos: {
-        totalInvestido: Math.round(totalInvestido * 100) / 100,
-        totalOrdens: rows.length,
+        totalInvestido:     Math.round(totalInvestido  * 100) / 100,
+        totalOrdens,
         entregues,
-        percentualEntregue: rows.length > 0 ? Math.round((entregues / rows.length) * 100) : 0,
+        percentualEntregue: totalOrdens > 0 ? Math.round((entregues / totalOrdens) * 100) : 0,
         orcado,
         distribuicaoStatus,
         totalAPagar:  Math.round(totalAPagar * 100) / 100,
