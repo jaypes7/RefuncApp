@@ -6,10 +6,10 @@
  * Métricas de suprimentos: ordens de compra, valores e entregas.
  *
  * Fontes:
- *   • suprimentos_ordens → id, ordem_compra, descricao, fornecedor, status,
- *                          status_ordem, valor_oc, valores, entregue_obra,
- *                          total_req_previstas
- *   • configuracoes      → orcado_suprimentos
+ *   • suprimentos_ordens           → valores, entregue_obra, status
+ *   • configuracoes                → orcado_suprimentos
+ *   • suprimentos_ordens_compra    → requisicao_id, valor
+ *   • suprimentos_requisicao_itens → requisicao_id, categoria, tipo
  */
 
 export const dynamic = "force-dynamic";
@@ -62,7 +62,14 @@ export async function GET(request: NextRequest) {
     const [
       { data: ordensData, error: ordensErr },
       { data: configRows, error: configError },
-    ] = await Promise.all([ordensQuery, configQuery]);
+      { data: ocsData },
+      { data: itensData },
+    ] = await Promise.all([
+      ordensQuery,
+      configQuery,
+      db.from("suprimentos_ordens_compra").select("requisicao_id, valor"),
+      db.from("suprimentos_requisicao_itens").select("requisicao_id, categoria, tipo"),
+    ]);
 
     if (ordensErr) throw new Error(ordensErr.message);
 
@@ -79,6 +86,9 @@ export async function GET(request: NextRequest) {
 
     // ── Totalizadores ─────────────────────────────────────────────────────────
     const totalInvestido = rows.reduce((s, r) => s + cleanNumeric(r["valores"]), 0);
+    const totalAPagar    = rows
+      .filter((r) => r["entregue_obra"] !== true && r["entregue_obra"] !== "Sim")
+      .reduce((s, r) => s + cleanNumeric(r["valores"]), 0);
     const entregues      = rows.filter((r) => r["entregue_obra"] === true || r["entregue_obra"] === "Sim").length;
 
     const statusMap: Record<string, number> = {};
@@ -90,6 +100,45 @@ export async function GET(request: NextRequest) {
       .map(([status, total]) => ({ status, total }))
       .sort((a, b) => b.total - a.total);
 
+    // ── Categoria e tipo via join OC + itens ──────────────────────────────────
+    type OcRow   = { requisicao_id: string | null; valor: number | null };
+    type ItemRow = { requisicao_id: string | null; categoria: string | null; tipo: string | null };
+
+    const ocsPorReq: Record<string, number> = {};
+    for (const oc of ((ocsData ?? []) as OcRow[])) {
+      if (oc.requisicao_id)
+        ocsPorReq[oc.requisicao_id] = (ocsPorReq[oc.requisicao_id] ?? 0) + Number(oc.valor ?? 0);
+    }
+
+    const itensPorReq: Record<string, { categoria: string; tipo: string }[]> = {};
+    for (const item of ((itensData ?? []) as ItemRow[])) {
+      if (!item.requisicao_id) continue;
+      (itensPorReq[item.requisicao_id] ??= []).push({
+        categoria: item.categoria ?? "Sem categoria",
+        tipo:      item.tipo      ?? "item",
+      });
+    }
+
+    const categoriaMap: Record<string, number> = {};
+    const tipoMap:      Record<string, number> = {};
+
+    for (const [reqId, ocValor] of Object.entries(ocsPorReq)) {
+      const itens = itensPorReq[reqId] ?? [];
+      if (!itens.length) continue;
+      const share = ocValor / itens.length;
+      for (const item of itens) {
+        categoriaMap[item.categoria] = (categoriaMap[item.categoria] ?? 0) + share;
+        tipoMap[item.tipo]           = (tipoMap[item.tipo]           ?? 0) + share;
+      }
+    }
+
+    const porCategoria = Object.entries(categoriaMap)
+      .map(([categoria, valor]) => ({ categoria, valor: Math.round(valor * 100) / 100 }))
+      .sort((a, b) => b.valor - a.valor);
+
+    const sgpPorTipo = Object.entries(tipoMap)
+      .map(([tipo, valor]) => ({ tipo, valor: Math.round(valor * 100) / 100 }));
+
     return NextResponse.json({
       suprimentos: {
         totalInvestido: Math.round(totalInvestido * 100) / 100,
@@ -98,6 +147,9 @@ export async function GET(request: NextRequest) {
         percentualEntregue: rows.length > 0 ? Math.round((entregues / rows.length) * 100) : 0,
         orcado,
         distribuicaoStatus,
+        totalAPagar:  Math.round(totalAPagar * 100) / 100,
+        porCategoria,
+        sgpPorTipo,
       },
     });
   } catch (error) {
