@@ -320,6 +320,9 @@ function gerarCurvaSEtapas(
   if (!dataInicio || totalDias === 0 || etapas.length === 0) {
     return { labels: [], planejado: [], realizado: [], detalhes: [], valoresHoje: null };
   }
+  if (etapas.some((e) => !e.dataInicio || !e.dataFim)) {
+    return { labels: [], planejado: [], realizado: [], detalhes: [], valoresHoje: null };
+  }
 
   const fmt = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00Z");
