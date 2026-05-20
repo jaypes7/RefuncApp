@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { calculateWorkingDays, getNationalHolidays } from "@/lib/date-utils";
+import { getNationalHolidays } from "@/lib/date-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -269,27 +269,6 @@ export default function ConfiguracoesPage() {
     });
   };
 
-  // Mutation para salvar feriados
-  const feriadosMutation = useMutation({
-    mutationFn: async (lista: string[]) => {
-      const res = await fetch("/api/config/feriados", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feriados: lista, centro_custo: centroCusto }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? "Falha ao salvar feriados");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "feriados"], type: "all" });
-      toast.success("Feriados salvos com sucesso!");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
   // Handler para toggle de feriado (protege feriados nacionais)
   const toggleFeriado = (date: string) => {
     if (feriadosNacionais.includes(date)) {
@@ -303,27 +282,6 @@ export default function ConfiguracoesPage() {
       return newFeriados;
     });
   };
-
-  // Mutation para salvar dias trabalhados
-  const diasTrabalhadosMutation = useMutation({
-    mutationFn: async (dias: string[]) => {
-      const res = await fetch("/api/config/dias-trabalhados", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dias_trabalhados: dias, centro_custo: centroCusto }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? "Falha ao salvar dias trabalhados");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "dias-trabalhados"], type: "all" });
-      toast.success("Dias trabalhados salvos com sucesso!");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
 
   // Handler para toggle de dia
   const toggleDiaTrabalhado = (date: string) => {
@@ -617,13 +575,41 @@ export default function ConfiguracoesPage() {
       if (data.orcado_suprimentos) {
         payload.orcado_suprimentos = Number(data.orcado_suprimentos);
       }
+      payload.feriados_projeto = feriados;
 
       const res = await fetch("/api/config/projeto-dados", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Falha ao salvar projeto");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar projeto");
+      }
+
+      const feriadosRes = await fetch("/api/config/feriados", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feriados, centro_custo: data.centro_custo }),
+      });
+      if (!feriadosRes.ok) {
+        const body = await feriadosRes.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar feriados");
+      }
+
+      const diasRes = await fetch("/api/config/dias-trabalhados", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dias_trabalhados: diasTrabalhados,
+          centro_custo: data.centro_custo,
+        }),
+      });
+      if (!diasRes.ok) {
+        const body = await diasRes.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar dias trabalhados");
+      }
+
       return res.json();
     },
     onSuccess: (_, variables) => {
@@ -635,13 +621,19 @@ export default function ConfiguracoesPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["config", "feriados"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["config", "dias-trabalhados"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["projetos"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["config", "acessos"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      queryClient.setQueryData(["config", "feriados", novoCC], feriados);
+      queryClient.setQueryData(["config", "dias-trabalhados", novoCC], diasTrabalhados);
+      setFeriadosDraft(null);
+      setDiasTrabalhadosDraft(null);
       toast.success("Configurações do projeto salvas!");
     },
-    onError: () => toast.error("Erro ao salvar configurações do projeto"),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const clinicaMutation = useMutation({
@@ -1344,28 +1336,6 @@ export default function ConfiguracoesPage() {
                           }
                         }}
                       />
-
-                      {/* Botões salvar */}
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          onClick={() => feriadosMutation.mutate(feriados)}
-                          disabled={feriadosMutation.isPending}
-                          className="gap-2"
-                          variant="outline"
-                        >
-                          <Save className="w-4 h-4" />
-                          Salvar Feriados
-                        </Button>
-                        <Button
-                          onClick={() => diasTrabalhadosMutation.mutate(diasTrabalhados)}
-                          disabled={diasTrabalhadosMutation.isPending}
-                          className="gap-2"
-                          variant="outline"
-                        >
-                          <Save className="w-4 h-4" />
-                          Salvar Dias Trabalhados
-                        </Button>
-                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-4 text-sm text-yellow-400">
