@@ -40,15 +40,40 @@ export async function POST(request: NextRequest) {
       feriados_projeto,
     } = ConfigProjetoSchema.parse(body);
 
+    const targetCentroCusto = centroCusto ?? "09.06.0001.171";
+    const shouldUpdateFeriados = Object.prototype.hasOwnProperty.call(
+      body,
+      "feriados_projeto",
+    );
+    let feriadosProjetoAtualizados =
+      feriados_projeto?.map((d) =>
+        d instanceof Date ? d.toISOString().split("T")[0] : String(d),
+      ) ?? null;
+
+    if (!shouldUpdateFeriados) {
+      const { data: configAtual, error: configAtualError } = await supabase
+        .from("configuracoes")
+        .select("feriados_projeto")
+        .eq("centro_custo", centroCustoOriginal ?? targetCentroCusto)
+        .maybeSingle();
+
+      if (configAtualError) {
+        throw new Error(
+          `Erro ao buscar feriados atuais: ${configAtualError.message}`,
+        );
+      }
+
+      feriadosProjetoAtualizados =
+        (configAtual?.feriados_projeto as string[] | null) ?? null;
+    }
+
     const dataInicioFmt = fmt(dataInicio);
     const dataFimFmt = fmt(dataFim);
     const diasTotais = calculateWorkingDays(
       dataInicioFmt,
       dataFimFmt,
-      feriados_projeto,
+      feriadosProjetoAtualizados ?? undefined,
     );
-
-    const targetCentroCusto = centroCusto ?? "09.06.0001.171";
 
     const payload = {
       centro_custo: targetCentroCusto,
@@ -61,10 +86,8 @@ export async function POST(request: NextRequest) {
       colaboradores_previstos: colaboradores_previstos ?? null,
       orcado_suprimentos: orcado_suprimentos ?? null,
       feriados_projeto:
-        feriados_projeto && feriados_projeto.length > 0
-          ? feriados_projeto.map((d) =>
-              d instanceof Date ? d.toISOString().split("T")[0] : String(d),
-            )
+        feriadosProjetoAtualizados && feriadosProjetoAtualizados.length > 0
+          ? feriadosProjetoAtualizados
           : null,
     };
 
