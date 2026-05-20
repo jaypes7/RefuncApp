@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const projectStartDate = configData?.data_inicio_projeto;
     const projectEndDate = configData?.data_fim_projeto;
 
-    type RawEtapa = { id: number; dataInicio?: string; dataFim?: string; responsavel?: string };
+    type RawEtapa = { id: number; dataInicio?: string; dataFim?: string; responsavel?: string; grupoId?: number | null };
 
     // Validar que as datas das etapas estão dentro do intervalo do projeto
     if (projectStartDate && projectEndDate) {
@@ -147,6 +147,7 @@ export async function POST(request: NextRequest) {
           data_inicio: rawEtapa?.dataInicio || null,
           data_fim: rawEtapa?.dataFim || null,
           responsavel: rawEtapa?.responsavel || null,
+          grupo_id: rawEtapa?.grupoId ?? null,
           centro_custo: centroCusto,
         };
       });
