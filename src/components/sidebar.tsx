@@ -25,6 +25,7 @@ import {
   ShieldAlert,
   ListChecks,
   FileText,
+  ClipboardList,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
@@ -436,6 +437,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
 
           
+          {/* Requisições Suprimentos — visível para user/admin */}
+          <CanAccess role="user">
+            <Link href="/suprimentos/requisicoes">
+              <span
+                className={navItem(pathname.startsWith("/suprimentos/requisicoes"))}
+                title={collapsed ? "Requisições Suprimentos" : undefined}
+              >
+                <ClipboardList className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Req. Suprimentos</span>}
+              </span>
+            </Link>
+          </CanAccess>
+
           {/* Relatório Executivo — visível para user/admin */}
           <CanAccess role="user">
             <Link href="/relatorio-executivo">
