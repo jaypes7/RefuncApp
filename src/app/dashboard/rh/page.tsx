@@ -187,16 +187,7 @@ export default function DashboardRhPage() {
   const [filterCargo, setFilterCargo] = useState("all");
   const [mostrarMapa, setMostrarMapa] = useState(true);
 
-  const { centroCusto } = useFilter();
-
-  // Reseta filtros ao trocar de projeto (sem effect para evitar cascata)
-  const [prevCcRh, setPrevCcRh] = useState(centroCusto);
-  if (prevCcRh !== centroCusto) {
-    setPrevCcRh(centroCusto);
-    setFilterNome("");
-    setFilterDias("all");
-    setFilterCargo("all");
-  }
+  const { centroCusto, isReady: filterReady } = useFilter();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard-rh", centroCusto],
@@ -205,7 +196,7 @@ export default function DashboardRhPage() {
       return res.data;
     },
     staleTime: 60_000,
-    // habilitado sempre (inclui modo "Todos")
+    enabled: filterReady,
   });
 
   // ── KPIs RH ───────────────────────────────────────────────────────────────

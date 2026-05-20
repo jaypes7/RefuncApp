@@ -124,7 +124,7 @@ export default function DashboardSegurancaPage() {
     }
   }, [authLoading, user, router]);
 
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
 
   const { data, isLoading, isError, error, refetch } = useQuery<SegurancaDashboardData>({
     queryKey: ["seguranca-dashboard", centroCusto],
@@ -138,7 +138,7 @@ export default function DashboardSegurancaPage() {
       return res.json();
     },
     staleTime: 30_000,
-    // habilitado sempre (inclui modo "Todos")
+    enabled: filterReady,
   });
 
   // ── KPIs derivados ────────────────────────────────────────────────────────

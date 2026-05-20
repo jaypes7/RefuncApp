@@ -165,7 +165,7 @@ export default function CentralPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const { centroCusto: globalCentroCusto } = useFilter();
+  const { centroCusto: globalCentroCusto, isReady: filterReady } = useFilter();
   const [localCentroCusto, setLocalCentroCusto] = useState<string | null>(null);
 
   // CC efetivo: se a sidebar tem um CC específico, usa-o; senão, usa o filtro local da central
@@ -204,6 +204,7 @@ export default function CentralPage() {
       if (!response.ok) return [];
       return response.json() as Promise<string[]>;
     },
+    enabled: filterReady,
   });
   const centrosDisponiveis: string[] = centrosDisponiveisData ?? [];
 
@@ -372,6 +373,7 @@ export default function CentralPage() {
       const response = await colaboradoresApi.listar(params);
       return response.data;
     },
+    enabled: filterReady,
   });
 
   // Mutação para remover colaborador
@@ -497,7 +499,7 @@ export default function CentralPage() {
           </div>
         </div>
 
-        {isLoading ? (
+        {!filterReady || isLoading ? (
           <TableSkeleton />
         ) : (
           <>

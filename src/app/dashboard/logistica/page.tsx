@@ -166,7 +166,7 @@ export default function DashboardLogisticaPage() {
     }
   }, [authLoading, user, router]);
 
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard-logistica", centroCusto],
@@ -175,7 +175,7 @@ export default function DashboardLogisticaPage() {
       return res.data;
     },
     staleTime: 120_000,
-    // habilitado sempre (inclui modo "Todos")
+    enabled: filterReady,
   });
 
   const hoteis = useMemo(

@@ -152,13 +152,14 @@ export default function DashboardSuprimentosPage() {
     }
   }, [authLoading, user, router]);
 
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
 
   // ── Query do dashboard de suprimentos (KPIs + gráficos) ───────────────────
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard-suprimentos", centroCusto],
     queryFn:  async () => (await dashboardSuprimentosApi.get(centroCusto)).data,
     staleTime: 120_000,
+    enabled: filterReady,
   });
 
   // ── Query dedicada das ordens (inclui id para Switch) ─────────────────────
@@ -175,6 +176,7 @@ export default function DashboardSuprimentosPage() {
       return res.json();
     },
     staleTime: 30_000,
+    enabled: filterReady,
   });
 
   const ordens = useMemo(() => ordensData?.data ?? [], [ordensData]);

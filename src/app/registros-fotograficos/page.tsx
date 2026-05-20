@@ -184,7 +184,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 // ============================================================================
 
 export default function RegistrosFotograficosPage() {
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -193,7 +193,7 @@ export default function RegistrosFotograficosPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["registros-fotograficos", centroCusto],
     queryFn: () => registrosFotograficosApi.listar(centroCusto).then((r) => r.data.data),
-    enabled: !!centroCusto,
+    enabled: filterReady && !!centroCusto,
   });
 
   const deleteMutation = useMutation({
@@ -221,7 +221,9 @@ export default function RegistrosFotograficosPage() {
               Registros Fotográficos
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {centroCusto
+              {!filterReady
+                ? "Carregando projeto..."
+                : centroCusto
                 ? `Visualizando fotos do centro de custo: ${centroCusto}`
                 : "Selecione um centro de custo na sidebar para visualizar os registros."}
             </p>
@@ -240,7 +242,17 @@ export default function RegistrosFotograficosPage() {
         </div>
 
         {/* Conteúdo */}
-        {!centroCusto ? (
+        {!filterReady ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center border rounded-xl bg-card">
+            <Loader2 className="h-10 w-10 text-muted-foreground mb-4 animate-spin" />
+            <h3 className="text-lg font-semibold mb-1">
+              Carregando projeto
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              Aguarde enquanto o centro de custo ativo e carregado.
+            </p>
+          </div>
+        ) : !centroCusto ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border rounded-xl bg-card">
             <ImageIcon className="h-10 w-10 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-1">

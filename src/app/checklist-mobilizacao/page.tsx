@@ -46,7 +46,7 @@ type EditingRow = {
 export default function ChecklistMobilizacaoPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
   const router = useRouter();
 
   // Proteção: apenas admins podem acessar o checklist
@@ -78,6 +78,7 @@ export default function ChecklistMobilizacaoPage() {
       const res = await checklistMobilizacaoApi.listar(centroCusto);
       return res.data;
     },
+    enabled: filterReady && !!centroCusto,
   });
 
   const etapasRaw = data?.etapas ?? [];
@@ -428,7 +429,19 @@ export default function ChecklistMobilizacaoPage() {
             </div>
           </div>
 
-          {isLoading ? (
+          {!filterReady ? (
+            <Card className="glass-card">
+              <CardContent className="py-20 text-center text-sm text-muted-foreground">
+                Carregando projeto...
+              </CardContent>
+            </Card>
+          ) : !centroCusto ? (
+            <Card className="glass-card">
+              <CardContent className="py-20 text-center text-sm text-muted-foreground">
+                Selecione um centro de custo para visualizar o checklist.
+              </CardContent>
+            </Card>
+          ) : isLoading ? (
             <Card className="glass-card">
               <CardContent className="py-20 text-center text-sm text-muted-foreground">
                 Carregando checklist...
