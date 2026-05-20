@@ -15,6 +15,7 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useFilter } from "@/contexts/FilterContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RelatorioEditor } from "@/components/relatorio-editor";
 import { RelatorioExportPdf } from "@/components/relatorio-export-pdf";
 import { RelatorioCurvaChart, type CurvaSData } from "@/components/relatorio-curva-chart";
@@ -54,7 +55,7 @@ type RelatorioSalvo = {
 };
 
 export default function RelatorioExecutivoPage() {
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
   const [relatorioMarkdown, setRelatorioMarkdown] = useState<string>("");
   const [relatorioHtmlEditado, setRelatorioHtmlEditado] = useState<string>("");
   const [editorInitialContent, setEditorInitialContent] = useState<string>("");
@@ -93,7 +94,7 @@ export default function RelatorioExecutivoPage() {
 
   // Carrega relatórios salvos quando o centro de custo muda
   const carregarRelatoriosSalvos = useCallback(async () => {
-    if (!centroCusto) return;
+    if (!filterReady || !centroCusto) return;
     try {
       const res = await fetch(
         `/api/relatorio/salvar?centro_custo=${encodeURIComponent(centroCusto)}`
@@ -104,13 +105,21 @@ export default function RelatorioExecutivoPage() {
     } catch {
       // silencioso
     }
-  }, [centroCusto]);
+  }, [centroCusto, filterReady]);
 
   useEffect(() => {
     carregarRelatoriosSalvos();
   }, [carregarRelatoriosSalvos]);
 
   const handleGerar = useCallback(async () => {
+    if (!filterReady) {
+      toast.info("Aguarde o projeto carregar.");
+      return;
+    }
+    if (!centroCusto) {
+      toast.error("Selecione um centro de custo para gerar o relatorio.");
+      return;
+    }
     const requestId = ++gerarRequestId.current;
     setIsGenerating(true);
     try {
@@ -163,7 +172,7 @@ export default function RelatorioExecutivoPage() {
         setIsGenerating(false);
       }
     }
-  }, [centroCusto, dataBase]);
+  }, [centroCusto, dataBase, filterReady]);
 
   const handleSalvar = useCallback(async () => {
     if (!relatorioHtmlEditado || !centroCusto) {
@@ -242,6 +251,7 @@ export default function RelatorioExecutivoPage() {
   const hasRelatorio = relatorioHtmlEditado !== "";
 
   return (
+    <ProtectedRoute>
     <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -266,7 +276,7 @@ export default function RelatorioExecutivoPage() {
                 className="border-none bg-transparent text-sm outline-none"
               />
             </div>
-            <Button onClick={handleGerar} disabled={isGenerating} className="gap-2">
+            <Button onClick={handleGerar} disabled={isGenerating || !filterReady || !centroCusto} className="gap-2">
               {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
               {isGenerating ? "Gerando..." : "Gerar Relatório"}
             </Button>
@@ -502,5 +512,6 @@ export default function RelatorioExecutivoPage() {
         </CardContent>
       </Card>
     </div>
+    </ProtectedRoute>
   );
 }

@@ -192,7 +192,7 @@ function DashboardSkeleton() {
 export default function DashboardPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const evolucaoTimelineRef = useRef<HTMLDivElement>(null);
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
 
   // Busca dados da API
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -203,6 +203,7 @@ export default function DashboardPage() {
     },
     retry: 2,
     staleTime: 0,
+    enabled: filterReady,
   });
 
   // Busca configurações do projeto para o card de cabeçalho
@@ -213,6 +214,7 @@ export default function DashboardPage() {
       return response.data.data;
     },
     staleTime: 60000,
+    enabled: filterReady,
   });
 
   const dashboardData: DashboardPrincipalData | undefined = data;
@@ -246,7 +248,7 @@ export default function DashboardPage() {
       }
       return { data: all, pagination: first.data.pagination };
     },
-    enabled: !!centroCusto,
+    enabled: filterReady,
     staleTime: 0,
   });
 
@@ -266,15 +268,6 @@ export default function DashboardPage() {
       return next;
     });
   };
-
-  // Reseta estados ao trocar de projeto (sem effect para evitar cascata)
-  const [prevCcDash, setPrevCcDash] = useState(centroCusto);
-  if (prevCcDash !== centroCusto) {
-    setPrevCcDash(centroCusto);
-    setSelectedCurvaDayIdx(-1);
-    setSelectedDayPerEtapa({});
-    setExpandedGroups(new Set());
-  }
 
   const terminoAgrupado = useMemo(() => {
     const lista = dashboardData?.agregacoes?.terminoDetalhado ?? [];
@@ -318,6 +311,7 @@ export default function DashboardPage() {
     queryKey: ["ocorrencias", centroCusto],
     queryFn: async () => (await ocorrenciasApi.listar(centroCusto)).data.data,
     staleTime: 30_000,
+    enabled: filterReady,
   });
   const ocorrencias: Ocorrencia[] = ocorrenciasData ?? [];
 
@@ -369,6 +363,7 @@ export default function DashboardPage() {
     queryKey: ["comentarios-cliente", centroCusto],
     queryFn: async () => (await comentariosClienteApi.listar(centroCusto)).data.data,
     staleTime: 30_000,
+    enabled: filterReady,
   });
   const comentarios: ComentarioCliente[] = comentariosData ?? [];
 
@@ -417,6 +412,7 @@ export default function DashboardPage() {
     queryKey: ["pendencias-manuais", centroCusto],
     queryFn: async () => (await pendenciasApi.listar(centroCusto)).data.data,
     staleTime: 30_000,
+    enabled: filterReady,
   });
   const pendenciasManuais = useMemo<PendenciaManual[]>(() => pendenciasData ?? [], [pendenciasData]);
 

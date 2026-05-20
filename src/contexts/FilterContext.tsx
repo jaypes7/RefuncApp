@@ -7,33 +7,40 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 interface FilterContextType {
-  /** Centro de custo ativo (null = sem filtro / todos) */
+  /** Centro de custo ativo (null = todos, somente depois de isReady). */
   centroCusto: string | null;
-  /** Atualiza o filtro ativo (salvo em localStorage) */
+  /** Atualiza o filtro ativo (salvo em localStorage). */
   setCentroCusto: (v: string | null) => void;
-  /** Lista de centros de custo disponíveis no sistema (projetos cadastrados) */
+  /** Lista de centros de custo disponiveis no sistema. */
   centrosDisponiveis: string[];
-  /** true quando o filtro é fixo e não pode ser alterado (guest/user vinculados) */
+  /** true quando auth, hidratacao e projetos ja foram resolvidos. */
+  isReady: boolean;
+  /** true enquanto o filtro ainda esta sendo resolvido. */
+  isResolving: boolean;
+  /** true quando o filtro e fixo e nao pode ser alterado. */
   isLocked: boolean;
 }
 
 const STORAGE_KEY = "refunc_centro_custo_filter";
 
-// ── Context ──────────────────────────────────────────────────────────────────
-
 const FilterContext = createContext<FilterContextType | null>(null);
-
-// ── Provider ─────────────────────────────────────────────────────────────────
 
 export function FilterProvider({ children }: { children: React.ReactNode }) {
   const { user, isLoading: authLoading } = useAuth();
+  const hasHydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const [savedCc, setSavedCc] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : localStorage.getItem(STORAGE_KEY),
+  );
 
   const isGuest =
     !authLoading && user?.perfil === "guest" && !!user?.centro_custo;
@@ -41,18 +48,6 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     !authLoading && user?.perfil === "user" && !!user?.centro_custo;
   const isAdmin = !authLoading && user?.perfil === "admin";
 
-  const [savedCc, setSavedCc] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : localStorage.getItem(STORAGE_KEY),
-  );
-
-  const [hasHydrated, setHasHydrated] = useState(false);
-
-  // Hidratação sem effect: só executa no cliente
-  if (!hasHydrated && typeof window !== "undefined") {
-    setHasHydrated(true);
-  }
-
-  // Lista de centros de custo permitidos para o usuário atual (memoizada)
   const userCentros = useMemo(() => {
     const cc = user?.centro_custo;
     if (Array.isArray(cc)) return cc;
@@ -60,9 +55,10 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     return [];
   }, [user?.centro_custo]);
 
-  // Busca os projetos cadastrados via React Query (reativo a invalidações)
-  // A queryKey inclui user?.re para garantir refetch quando o usuário loga/troca
-  const { data: centrosDisponiveis = [] } = useQuery<string[]>({
+  const {
+    data: centrosDisponiveis = [],
+    isFetched: centrosFetched,
+  } = useQuery<string[]>({
     queryKey: ["projetos", "centros", user?.re],
     queryFn: async () => {
       const res = await fetch("/api/projetos");
@@ -78,7 +74,6 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     enabled: hasHydrated && !authLoading && !!user,
   });
 
-  // Escuta mudanças no localStorage vindas de outras abas
   useEffect(() => {
     const handler = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) setSavedCc(e.newValue);
@@ -87,10 +82,12 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("storage", handler);
   }, []);
 
-  // Calcula o centro de custo efetivo com base nos dados externos
+  const centrosQueryEnabled = hasHydrated && !authLoading && !!user;
+  const centrosResolved = !centrosQueryEnabled || centrosFetched;
+  const isReady = hasHydrated && !authLoading && !!user && centrosResolved;
+
   const resolvedCc = useMemo(() => {
-    if (!hasHydrated || centrosDisponiveis.length === 0 || !user)
-      return undefined;
+    if (!isReady || !user) return undefined;
     const saved = savedCc;
 
     if (isAdmin) {
@@ -101,15 +98,15 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
       const permitidos = userCentros.filter((c) =>
         centrosDisponiveis.includes(c),
       );
-      if (permitidos.length === 0) return undefined;
+      if (permitidos.length === 0) return null;
       return saved && permitidos.includes(saved) ? saved : permitidos[0];
     }
 
     return saved && centrosDisponiveis.includes(saved)
       ? saved
-      : centrosDisponiveis[0];
+      : centrosDisponiveis[0] ?? null;
   }, [
-    hasHydrated,
+    isReady,
     centrosDisponiveis,
     isAdmin,
     isGuest,
@@ -121,10 +118,11 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
 
   const setCentroCusto = useCallback(
     (v: string | null) => {
-      // Guest / user vinculado: só permite trocar entre projetos autorizados
       if (isGuest || isLinkedUser) {
         if (v && !userCentros.includes(v)) return;
+        if (!v) return;
       }
+
       if (v) {
         localStorage.setItem(STORAGE_KEY, v);
       } else {
@@ -135,7 +133,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     [isGuest, isLinkedUser, userCentros],
   );
 
-  const centroCusto = resolvedCc ?? null;
+  const centroCusto = isReady ? resolvedCc ?? null : null;
 
   return (
     <FilterContext.Provider
@@ -143,15 +141,15 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
         centroCusto,
         setCentroCusto,
         centrosDisponiveis,
-        isLocked: false,
+        isReady,
+        isResolving: !isReady,
+        isLocked: isGuest || isLinkedUser,
       }}
     >
       {children}
     </FilterContext.Provider>
   );
 }
-
-// ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useFilter(): FilterContextType {
   const context = useContext(FilterContext);

@@ -140,7 +140,7 @@ export default function OnboardingPage() {
   const [cpfError, setCpfError] = useState<string | null>(null);
   const cpfBeingChecked = useRef<string | null>(null);
   const router = useRouter();
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
   const [treinamentosSelecionados, setTreinamentosSelecionados] = useState<TreinamentoSelecionado[]>([]);
 
   // Busca clínicas da API
@@ -150,6 +150,7 @@ export default function OnboardingPage() {
       const response = await clinicasApi.listar();
       return response.data;
     },
+    enabled: filterReady,
   });
 
   const clinicas = clinicasData?.data || [];
@@ -164,6 +165,7 @@ export default function OnboardingPage() {
       return json.data ?? [];
     },
     select: (data) => data.map((p) => p.centro_custo).filter(Boolean),
+    enabled: filterReady,
   });
 
   const projetos = projetosData ?? [];
@@ -405,6 +407,12 @@ export default function OnboardingPage() {
   const funcaoCltValue = watch("funcaoClt");
   const centroCustoValue = watch("centroCusto");
   const cpfValue = watch("cpf");
+
+  useEffect(() => {
+    if (filterReady && centroCusto && !centroCustoValue) {
+      setValue("centroCusto", centroCusto, { shouldValidate: true });
+    }
+  }, [centroCusto, centroCustoValue, filterReady, setValue]);
 
   // Verificar CPF duplicado em tempo real
   useEffect(() => {

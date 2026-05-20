@@ -123,7 +123,7 @@ function calcularDiasUteisEtapa(
 
 export default function CronogramaPage() {
   const { user, isLoading: authLoading } = useAuth();
-  const { centroCusto } = useFilter();
+  const { centroCusto, isReady: filterReady } = useFilter();
   const queryClient = useQueryClient();
 
   // projetoQueryData é usado diretamente — não mantemos estado espelho
@@ -160,7 +160,7 @@ export default function CronogramaPage() {
       const json = await res.json();
       return json.data as ApiConfigResponse;
     },
-    enabled: !!centroCusto,
+    enabled: filterReady && !!centroCusto,
   });
 
   // Buscar dias trabalhados do calendário
@@ -175,7 +175,7 @@ export default function CronogramaPage() {
       const json = await res.json();
       return json.dias_trabalhados as string[];
     },
-    enabled: !!centroCusto,
+    enabled: filterReady && !!centroCusto,
   });
 
   // Buscar progresso diário das etapas
@@ -190,7 +190,7 @@ export default function CronogramaPage() {
       const json = await res.json();
       return json.data as ProgressoDiarioEntry[];
     },
-    enabled: !!centroCusto,
+    enabled: filterReady && !!centroCusto,
   });
 
   // Mutation para salvar progresso de um dia específico
@@ -236,6 +236,7 @@ export default function CronogramaPage() {
         })
       : [];
     const totalDias = novasEtapas.reduce((s, e) => s + e.dias, 0);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCronograma({ etapas: novasEtapas, dias_totais: totalDias });
   }, [projetoQueryData, diasTrabalhadosData]);
 
@@ -247,6 +248,7 @@ export default function CronogramaPage() {
       if (!mapa[entry.etapa_id]) mapa[entry.etapa_id] = {};
       mapa[entry.etapa_id][entry.data] = entry.percentual;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProgressoDiario(mapa);
   }, [progressoDiarioData]);
 
@@ -621,6 +623,30 @@ export default function CronogramaPage() {
           <h2 className="text-xl font-semibold text-foreground">Acesso Negado</h2>
           <p className="max-w-sm text-sm text-muted-foreground">
             Apenas administradores podem visualizar esta página.
+          </p>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (!filterReady) {
+    return (
+      <ProtectedRoute>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
+          <CalendarClock className="h-8 w-8 text-muted-foreground animate-pulse" />
+          <p className="text-sm text-muted-foreground">Carregando projeto...</p>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (!centroCusto) {
+    return (
+      <ProtectedRoute>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
+          <CalendarClock className="h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Selecione um centro de custo para editar o cronograma.
           </p>
         </div>
       </ProtectedRoute>

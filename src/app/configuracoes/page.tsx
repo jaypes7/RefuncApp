@@ -1,7 +1,7 @@
 // src/app/configuracoes/page.tsx
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { calculateWorkingDays, getNationalHolidays } from "@/lib/date-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -110,6 +110,33 @@ type ApiConfigResponse = {
   FERIADOS_PROJETO: string[];
 };
 
+const EMPTY_PROJETO: ConfigProjeto = {
+  gerente_operacoes: "",
+  gerente_contrato: "",
+  nome_cliente: "",
+  centro_custo: "",
+  data_inicio: "",
+  data_fim: "",
+  colaboradores_previstos: "",
+  orcado_suprimentos: "",
+};
+
+function mapProjetoData(data: ApiConfigResponse | undefined): ConfigProjeto {
+  if (!data) return EMPTY_PROJETO;
+  return {
+    gerente_operacoes: data.GERENTE_OPERACOES || "",
+    gerente_contrato: data.GERENTE_CONTRATO || "",
+    nome_cliente: data.NOME_CLIENTE || "",
+    centro_custo: data.CENTRO_CUSTO || "",
+    data_inicio: data.DATA_INICIO_PROJETO || "",
+    data_fim: data.DATA_FIM_PROJETO || "",
+    colaboradores_previstos:
+      data.COLABORADORES_PREVISTOS > 0 ? String(data.COLABORADORES_PREVISTOS) : "",
+    orcado_suprimentos:
+      data.ORCADO_SUPRIMENTOS > 0 ? String(data.ORCADO_SUPRIMENTOS) : "",
+  };
+}
+
 
 
 const ROLES = [
@@ -141,7 +168,7 @@ export default function ConfiguracoesPage() {
   const { user, isLoading: authLoading } = useAuth();
 
   const queryClient = useQueryClient();
-  const { centroCusto, setCentroCusto } = useFilter();
+  const { centroCusto, setCentroCusto, isReady: filterReady } = useFilter();
   const [activeTab, setActiveTab] = useState("projeto");
 
   // Projetos (CRUD)
@@ -162,21 +189,20 @@ export default function ConfiguracoesPage() {
   const [novoGrupoCargoIds, setNovoGrupoCargoIds] = useState<string[]>([]);
   const [grupoPopoverOpen, setGrupoPopoverOpen] = useState(false);
 
-  // Projeto
-  const [projeto, setProjeto] = useState<ConfigProjeto>({
-    gerente_operacoes: "",
-    gerente_contrato: "",
-    nome_cliente: "",
-    centro_custo: "",
-    data_inicio: "",
-    data_fim: "",
-    colaboradores_previstos: "",
-    orcado_suprimentos: "",
-  });
+  const [projetoDraft, setProjetoDraft] = useState<{
+    key: string;
+    value: ConfigProjeto;
+  } | null>(null);
 
   // ── Dias trabalhados (calendário) ──────────────────────────────────────────
-  const [diasTrabalhados, setDiasTrabalhados] = useState<string[]>([]);
-  const [feriados, setFeriados] = useState<string[]>([]);
+  const [diasTrabalhadosDraft, setDiasTrabalhadosDraft] = useState<{
+    key: string | null;
+    value: string[];
+  } | null>(null);
+  const [feriadosDraft, setFeriadosDraft] = useState<{
+    key: string | null;
+    value: string[];
+  } | null>(null);
   const [calendarioAno, setCalendarioAno] = useState(new Date().getFullYear());
   const [calendarioMes, setCalendarioMes] = useState(new Date().getMonth());
   const [calendarioModo, setCalendarioModo] = useState<"working" | "holiday">("working");
@@ -193,17 +219,24 @@ export default function ConfiguracoesPage() {
       const json = await res.json();
       return json.dias_trabalhados as string[];
     },
-    enabled: !!centroCusto,
+    enabled: filterReady && !!centroCusto,
   });
 
-  // Sincroniza dias trabalhados do servidor (sem effect para evitar cascata)
-  const [prevDiasTrabalhadosData, setPrevDiasTrabalhadosData] = useState(diasTrabalhadosData);
-  if (prevDiasTrabalhadosData !== diasTrabalhadosData) {
-    setPrevDiasTrabalhadosData(diasTrabalhadosData);
-    if (diasTrabalhadosData) {
-      setDiasTrabalhados(diasTrabalhadosData);
-    }
-  }
+  const diasTrabalhados =
+    diasTrabalhadosDraft?.key === centroCusto
+      ? diasTrabalhadosDraft.value
+      : diasTrabalhadosData ?? [];
+  const setDiasTrabalhados = (
+    updater: string[] | ((prev: string[]) => string[]),
+  ) => {
+    setDiasTrabalhadosDraft({
+      key: centroCusto,
+      value:
+        typeof updater === "function"
+          ? (updater as (prev: string[]) => string[])(diasTrabalhados)
+          : updater,
+    });
+  };
 
   // Query para buscar feriados
   const { data: feriadosData } = useQuery({
@@ -217,17 +250,20 @@ export default function ConfiguracoesPage() {
       const json = await res.json();
       return json.feriados as string[];
     },
-    enabled: !!centroCusto,
+    enabled: filterReady && !!centroCusto,
   });
 
-  // Sincroniza feriados do servidor (sem effect para evitar cascata)
-  const [prevFeriadosData, setPrevFeriadosData] = useState(feriadosData);
-  if (prevFeriadosData !== feriadosData) {
-    setPrevFeriadosData(feriadosData);
-    if (feriadosData) {
-      setFeriados(feriadosData);
-    }
-  }
+  const feriados =
+    feriadosDraft?.key === centroCusto ? feriadosDraft.value : feriadosData ?? [];
+  const setFeriados = (updater: string[] | ((prev: string[]) => string[])) => {
+    setFeriadosDraft({
+      key: centroCusto,
+      value:
+        typeof updater === "function"
+          ? (updater as (prev: string[]) => string[])(feriados)
+          : updater,
+    });
+  };
 
   // Mutation para salvar feriados
   const feriadosMutation = useMutation({
@@ -296,6 +332,51 @@ export default function ConfiguracoesPage() {
   };
 
   // ── Feriados nacionais computados automaticamente ───────────────────────────
+  const { data: projetosData } = useQuery<ProjetoResumo[]>({
+    queryKey: ["projetos"],
+    queryFn: async () => {
+      const res = await fetch("/api/projetos");
+      if (!res.ok) throw new Error("Falha ao carregar projetos");
+      const json = await res.json();
+      return json.data as ProjetoResumo[];
+    },
+    enabled: filterReady,
+  });
+
+  const projetoQueryCc = centroCusto || projetosData?.[0]?.centro_custo || "";
+
+  const { data: projetoData } = useQuery<ApiConfigResponse>({
+    queryKey: ["config", "projeto", projetoQueryCc],
+    queryFn: async () => {
+      const params = projetoQueryCc
+        ? `?centro_custo=${encodeURIComponent(projetoQueryCc)}`
+        : "";
+      const res = await fetch(`/api/config${params}`);
+      if (!res.ok) throw new Error("Falha ao carregar configuraÃ§Ãµes");
+      const json = await res.json();
+      return json.data as ApiConfigResponse;
+    },
+    enabled: filterReady && !!projetoQueryCc,
+  });
+
+  const projetoFromServer = useMemo(
+    () => mapProjetoData(projetoData),
+    [projetoData],
+  );
+  const projeto =
+    projetoDraft?.key === projetoQueryCc ? projetoDraft.value : projetoFromServer;
+  const setProjeto = (
+    updater: ConfigProjeto | ((prev: ConfigProjeto) => ConfigProjeto),
+  ) => {
+    setProjetoDraft({
+      key: projetoQueryCc,
+      value:
+        typeof updater === "function"
+          ? (updater as (prev: ConfigProjeto) => ConfigProjeto)(projeto)
+          : updater,
+    });
+  };
+
   const feriadosNacionais = (() => {
     if (!projeto.data_inicio || !projeto.data_fim) return [];
     const start = new Date(projeto.data_inicio);
@@ -355,34 +436,6 @@ export default function ConfiguracoesPage() {
 
   // --- Data Fetching ---
 
-  const { data: projetosData } = useQuery<ProjetoResumo[]>({
-    queryKey: ["projetos"],
-    queryFn: async () => {
-      const res = await fetch("/api/projetos");
-      if (!res.ok) throw new Error("Falha ao carregar projetos");
-      const json = await res.json();
-      return json.data as ProjetoResumo[];
-    },
-  });
-
-  // Fallback para o primeiro projeto quando admin está em "Todos" (null)
-  const projetoQueryCc = centroCusto || projetosData?.[0]?.centro_custo || "";
-
-  // Tipado com ApiConfigResponse para refletir as chaves uppercase da API
-  const { data: projetoData } = useQuery<ApiConfigResponse>({
-    queryKey: ["config", "projeto", projetoQueryCc],
-    queryFn: async () => {
-      const params = projetoQueryCc
-        ? `?centro_custo=${encodeURIComponent(projetoQueryCc)}`
-        : "";
-      const res = await fetch(`/api/config${params}`);
-      if (!res.ok) throw new Error("Falha ao carregar configurações");
-      const json = await res.json();
-      return json.data as ApiConfigResponse;
-    },
-    enabled: !!projetoQueryCc,
-  });
-
   const { data: clinicasData } = useQuery<ConfigClinica[]>({
     queryKey: ["config", "clinicas"],
     queryFn: async () => {
@@ -390,6 +443,7 @@ export default function ConfiguracoesPage() {
       if (!res.ok) throw new Error("Falha ao carregar clínicas");
       return res.json();
     },
+    enabled: filterReady,
   });
 
   const { data: hoteisData } = useQuery<ConfigHotel[]>({
@@ -399,6 +453,7 @@ export default function ConfiguracoesPage() {
       if (!res.ok) throw new Error("Falha ao carregar hotéis");
       return res.json();
     },
+    enabled: filterReady,
   });
 
   const { data: acessosData } = useQuery<ConfigAcesso[]>({
@@ -408,6 +463,7 @@ export default function ConfiguracoesPage() {
       if (!res.ok) throw new Error("Falha ao carregar acessos");
       return res.json();
     },
+    enabled: filterReady,
   });
 
   const { data: cargosData } = useQuery<ConfigCargo[]>({
@@ -417,6 +473,7 @@ export default function ConfiguracoesPage() {
       if (!res.ok) throw new Error("Falha ao carregar cargos");
       return res.json();
     },
+    enabled: filterReady,
   });
 
   const { data: logsResponse } = useQuery<{ data: LogEntry[] }>({
@@ -426,6 +483,7 @@ export default function ConfiguracoesPage() {
       if (!res.ok) throw new Error("Falha ao carregar logs");
       return res.json();
     },
+    enabled: filterReady,
   });
 
   const criarProjetoMutation = useMutation({
@@ -487,30 +545,6 @@ export default function ConfiguracoesPage() {
     }
     return Array.from(set).sort();
   }, [cargosData]);
-
-  // ── Sync projeto form state from server data (sem effect para evitar cascata)
-  const [prevProjetoData, setPrevProjetoData] = useState(projetoData);
-  if (prevProjetoData !== projetoData) {
-    setPrevProjetoData(projetoData);
-    if (projetoData) {
-      setProjeto({
-        gerente_operacoes: projetoData.GERENTE_OPERACOES || "",
-        gerente_contrato: projetoData.GERENTE_CONTRATO || "",
-        nome_cliente: projetoData.NOME_CLIENTE || "",
-        centro_custo: projetoData.CENTRO_CUSTO || "",
-        data_inicio: projetoData.DATA_INICIO_PROJETO || "",
-        data_fim: projetoData.DATA_FIM_PROJETO || "",
-        colaboradores_previstos:
-          projetoData.COLABORADORES_PREVISTOS > 0
-            ? String(projetoData.COLABORADORES_PREVISTOS)
-            : "",
-        orcado_suprimentos:
-          projetoData.ORCADO_SUPRIMENTOS > 0
-            ? String(projetoData.ORCADO_SUPRIMENTOS)
-            : "",
-      });
-    }
-  }
 
   // --- Mutations ---
   const projetoMutation = useMutation({
@@ -897,6 +931,17 @@ export default function ConfiguracoesPage() {
           <p className="max-w-sm text-sm text-muted-foreground">
             Apenas administradores podem visualizar esta página.
           </p>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (!filterReady) {
+    return (
+      <ProtectedRoute>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
+          <Settings className="h-8 w-8 text-muted-foreground animate-pulse" />
+          <p className="text-sm text-muted-foreground">Carregando projeto...</p>
         </div>
       </ProtectedRoute>
     );
