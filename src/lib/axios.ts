@@ -471,6 +471,13 @@ export interface EtapaConfig {
   duracaoDias: number;
   /** Persiste no banco — marcada pelo usuário na aba Cronograma */
   concluida?: boolean;
+  grupoId?: number | null;
+}
+
+export interface GrupoEtapa {
+  id: number;
+  nome: string;
+  ordem: number;
 }
 
 export interface ConfigData {
@@ -480,6 +487,7 @@ export interface ConfigData {
   ETAPA_ATUAL: number;
   META_ADMISSOES: number;
   ETAPAS_PROJETO: EtapaConfig[];
+  GRUPOS_ETAPAS: GrupoEtapa[];
   GERENTE_OPERACOES: string | null;
   GERENTE_CONTRATO: string | null;
   NOME_CLIENTE: string | null;

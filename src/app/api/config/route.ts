@@ -23,6 +23,12 @@ import { calculateWorkingDays } from "@/lib/date-utils";
 // TIPOS
 // ============================================================================
 
+interface GrupoEtapa {
+  id: number;
+  nome: string;
+  ordem: number;
+}
+
 interface ConfigResponse {
   DIAS_TOTAIS_PROJETO: number;
   DATA_INICIO_PROJETO: string | null;
@@ -30,6 +36,7 @@ interface ConfigResponse {
   ETAPA_ATUAL: number;
   META_ADMISSOES: number;
   ETAPAS_PROJETO: EtapaConfig[];
+  GRUPOS_ETAPAS: GrupoEtapa[];
   GERENTE_OPERACOES: string | null;
   GERENTE_CONTRATO: string | null;
   NOME_CLIENTE: string | null;
@@ -62,10 +69,15 @@ export async function GET(request: NextRequest) {
       ? supabase.from("etapas").select("*").eq("centro_custo", centroCustoParam).order("ordem", { ascending: true })
       : supabase.from("etapas").select("*").order("ordem", { ascending: true });
 
+    const gruposQuery = centroCustoParam
+      ? supabase.from("etapas_grupos").select("id, nome, ordem").eq("centro_custo", centroCustoParam).order("ordem", { ascending: true })
+      : supabase.from("etapas_grupos").select("id, nome, ordem").order("ordem", { ascending: true });
+
     const [
       { data: configRow, error: configError },
       { data: etapasRows, error: etapasError },
-    ] = await Promise.all([configQuery, etapasQuery]);
+      { data: gruposRows },
+    ] = await Promise.all([configQuery, etapasQuery, gruposQuery]);
 
     // PGRST116 = row not found — aceita, usa defaults
     if (configError && configError.code !== "PGRST116") {
@@ -84,6 +96,13 @@ export async function GET(request: NextRequest) {
       dataInicio: e.data_inicio ?? undefined,
       dataFim: e.data_fim ?? undefined,
       responsavel: e.responsavel ?? undefined,
+      grupoId: e.grupo_id ?? null,
+    }));
+
+    const grupos: GrupoEtapa[] = (gruposRows ?? []).map((g) => ({
+      id: g.id,
+      nome: g.nome,
+      ordem: g.ordem,
     }));
 
     const config: ConfigResponse = {
@@ -93,6 +112,7 @@ export async function GET(request: NextRequest) {
       ETAPA_ATUAL: configRow?.etapa_atual ?? 1,
       META_ADMISSOES: configRow?.meta_admissoes ?? 0,
       ETAPAS_PROJETO: etapas,
+      GRUPOS_ETAPAS: grupos,
       GERENTE_OPERACOES: configRow?.gerente_operacoes ?? null,
       GERENTE_CONTRATO: configRow?.gerente_contrato ?? null,
       NOME_CLIENTE: configRow?.nome_cliente ?? null,

@@ -404,6 +404,14 @@ export const EtapaConfigSchema = z.object({
   dataFim: DateSchema,
   /** Responsável pela etapa */
   responsavel: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  /** Grupo/fase ao qual a etapa pertence (nullable) */
+  grupoId: z.number().int().nullable().optional(),
+});
+
+export const EtapaGrupoSchema = z.object({
+  id: z.number().int(),
+  nome: z.string().min(1),
+  ordem: z.number().int(),
 });
 
 export const ConfigUpdateSchema = z.object({
