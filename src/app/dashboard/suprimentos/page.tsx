@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useRef, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -34,13 +34,16 @@ import {
 } from "recharts";
 import {
   DollarSign,
-  CheckCircle2,
-  ClipboardList,
   AlertCircle,
   RefreshCw,
   ArrowLeft,
   CreditCard,
   Package,
+  ClipboardList,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  FileText,
 } from "lucide-react";
 import { dashboardSuprimentosApi } from "@/lib/axios";
 import { useFilter } from "@/contexts/FilterContext";
@@ -99,6 +102,28 @@ interface OrdemRow {
   requisicao_id:    string | null;
   status_req:       string | null;
   titulo_req:       string | null;
+}
+
+interface ItemPendente {
+  requisicao_id: string;
+  numero_oc: string;
+  item_id: string;
+  nome_item: string;
+  quantidade: number;
+  quantidade_recebida: number;
+  faltam: number;
+}
+
+interface OcAtrasada {
+  numero_oc: string;
+  fornecedor: string;
+  previsao_entrega: string;
+  itens_pendentes: Array<{
+    nome_item: string;
+    quantidade: number;
+    recebido: number;
+    faltam: number;
+  }>;
 }
 
 // ============================================================================
@@ -183,7 +208,9 @@ export default function DashboardSuprimentosPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const router      = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const queryClient = useQueryClient();
+
+  const [showAlertDetails, setShowAlertDetails] = useState(false);
+  const [showRelatorio, setShowRelatorio] = useState(false);
 
   useEffect(() => {
     if (!authLoading && user?.perfil === "guest") {
@@ -216,14 +243,14 @@ export default function DashboardSuprimentosPage() {
     if (!sup) return null;
     return {
       totalInvestido: sup.totalInvestido,
-      totalOrdens:    sup.totalOrdens,
-      entregues:      sup.entregues,
       totalAPagar:    sup.totalAPagar,
     };
   }, [sup]);
 
-  const porCategoria = useMemo(() => sup?.porCategoria ?? [], [sup]);
-  const sgpPorTipo   = useMemo(() => sup?.sgpPorTipo   ?? [], [sup]);
+  const porCategoria   = useMemo(() => sup?.porCategoria   ?? [], [sup]);
+  const sgpPorTipo     = useMemo(() => sup?.sgpPorTipo     ?? [], [sup]);
+  const itensPendentes = useMemo(() => (sup?.itensPendentes ?? []) as ItemPendente[], [sup]);
+  const ocAtrasadas    = useMemo(() => (sup?.ocAtrasadas    ?? []) as OcAtrasada[], [sup]);
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -287,10 +314,11 @@ export default function DashboardSuprimentosPage() {
 
           {/* KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Total Investido */}
             <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Total Investido
+                  Total Realizado
                 </CardTitle>
                 <DollarSign className="h-4 w-4 text-[#337246]" />
               </CardHeader>
@@ -302,34 +330,42 @@ export default function DashboardSuprimentosPage() {
               </CardContent>
             </Card>
 
+            {/* Relatório */}
             <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Ordens de Compra
+                  Relatório
                 </CardTitle>
-                <ClipboardList className="h-4 w-4 text-primary" />
+                <FileText className="h-4 w-4 text-primary" />
               </CardHeader>
-              <CardContent>
-                <div className="big-number text-[40px]">{kpis?.totalOrdens ?? "—"}</div>
-                <p className="text-xs text-muted-foreground">Total de OCs cadastradas</p>
-              </CardContent>
-            </Card>
-
-            <Card className="glass-card">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Entregas Realizadas
-                </CardTitle>
-                <CheckCircle2 className="h-4 w-4 text-[#337246]" />
-              </CardHeader>
-              <CardContent>
-                <div className="big-number text-[40px] text-[#337246]">
-                  {kpis?.entregues ?? "—"}
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">OCs Abertas</span>
+                  <span className="text-lg font-bold">{sup?.ocAbertas ?? 0}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">OCs com recebimento total</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Recebimentos</span>
+                  <span className="text-lg font-bold">{sup?.qtRecebimentos ?? 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Itens Pendentes</span>
+                  <span className="text-lg font-bold text-amber-500">{itensPendentes.length}</span>
+                </div>
+                {itensPendentes.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-1 gap-1 text-xs"
+                    onClick={() => setShowRelatorio(!showRelatorio)}
+                  >
+                    {showRelatorio ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {showRelatorio ? "Ocultar detalhes" : "Ver itens pendentes"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
+            {/* Total a Pagar */}
             <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
@@ -344,44 +380,204 @@ export default function DashboardSuprimentosPage() {
                 <p className="text-xs text-muted-foreground">OCs ainda não entregues</p>
               </CardContent>
             </Card>
+
+            {/* Alerta de Atrasos */}
+            <Card className={`glass-card ${ocAtrasadas.length > 0 ? "border-amber-500/40" : ""}`}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
+                  Entregas Atrasadas
+                </CardTitle>
+                <AlertTriangle className={`h-4 w-4 ${ocAtrasadas.length > 0 ? "text-amber-500" : "text-muted-foreground"}`} />
+              </CardHeader>
+              <CardContent>
+                <div className={`big-number text-[40px] ${ocAtrasadas.length > 0 ? "text-amber-500" : ""}`}>
+                  {ocAtrasadas.length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {ocAtrasadas.length === 0
+                    ? "Nenhuma entrega atrasada"
+                    : `${ocAtrasadas.length === 1 ? "1 OC" : `${ocAtrasadas.length} OCs`} com atraso`}
+                </p>
+                {ocAtrasadas.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-2 gap-1 text-xs border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+                    onClick={() => setShowAlertDetails(!showAlertDetails)}
+                  >
+                    {showAlertDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {showAlertDetails ? "Ocultar detalhes" : "Ver detalhes"}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
+          {/* Detalhes de Itens Pendentes (Relatório expandido) */}
+          {showRelatorio && itensPendentes.length > 0 && (
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  Itens Pendentes — Recebimentos Parciais
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-[#e2e2e2]/20 hover:bg-[#e2e2e2]/10">
+                        <TableHead className="text-muted-foreground 2xl:text-sm">Nº OC</TableHead>
+                        <TableHead className="text-muted-foreground 2xl:text-sm">Item</TableHead>
+                        <TableHead className="text-right text-muted-foreground 2xl:text-sm">Qt Solicitada</TableHead>
+                        <TableHead className="text-right text-muted-foreground 2xl:text-sm">Qt Recebida</TableHead>
+                        <TableHead className="text-right text-muted-foreground 2xl:text-sm">Faltam</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {itensPendentes.map((item) => (
+                        <TableRow key={item.item_id} className="border-[#e2e2e2]/10 hover:bg-[#e2e2e2]/10">
+                          <TableCell className="font-mono text-sm 2xl:text-base font-medium">
+                            {item.numero_oc}
+                          </TableCell>
+                          <TableCell className="text-sm 2xl:text-base">
+                            {item.nome_item}
+                          </TableCell>
+                          <TableCell className="text-right text-sm 2xl:text-base">
+                            {item.quantidade}
+                          </TableCell>
+                          <TableCell className="text-right text-sm 2xl:text-base text-muted-foreground">
+                            {item.quantidade_recebida}
+                          </TableCell>
+                          <TableCell className="text-right text-sm 2xl:text-base font-bold text-amber-500">
+                            {item.faltam}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Detalhes de OCs Atrasadas */}
+          {showAlertDetails && ocAtrasadas.length > 0 && (
+            <Card className="glass-card border-amber-500/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-500">
+                  <AlertTriangle className="h-5 w-5" />
+                  OCs com Entrega Atrasada
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {ocAtrasadas.map((oc, idx) => (
+                  <div key={idx} className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-sm font-bold">{oc.numero_oc}</span>
+                        <span className="text-sm text-muted-foreground">{oc.fornecedor}</span>
+                      </div>
+                      <Badge variant="secondary" className="border border-amber-500/40 bg-amber-500/10 text-amber-500">
+                        Previsto: {formatDate(oc.previsao_entrega)}
+                      </Badge>
+                    </div>
+                    {oc.itens_pendentes.length > 0 && (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="border-amber-500/10">
+                              <TableHead className="text-xs text-muted-foreground">Item</TableHead>
+                              <TableHead className="text-right text-xs text-muted-foreground">Qt Total</TableHead>
+                              <TableHead className="text-right text-xs text-muted-foreground">Recebido</TableHead>
+                              <TableHead className="text-right text-xs text-muted-foreground">Faltam</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {oc.itens_pendentes.map((item, iIdx) => (
+                              <TableRow key={iIdx} className="border-amber-500/10">
+                                <TableCell className="text-sm">{item.nome_item}</TableCell>
+                                <TableCell className="text-right text-sm">{item.quantidade}</TableCell>
+                                <TableCell className="text-right text-sm text-muted-foreground">{item.recebido}</TableCell>
+                                <TableCell className="text-right text-sm font-bold text-amber-500">{item.faltam}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                    {oc.itens_pendentes.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Todos os itens desta OC ainda não foram recebidos.
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Orçado vs Investido */}
-          {sup && sup.orcado > 0 && (
+          {sup && (sup.orcado > 0 || sup.investido > 0) && (
             <Card className="glass-card">
               <CardHeader className="flex flex-row items-center gap-2 pb-3">
                 <DollarSign className="h-4 w-4 text-primary" />
-                <CardTitle>Orçado vs Investido</CardTitle>
+                <CardTitle>Previsto X Realizado</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Orçado</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Previsto (OCs Abertas)</p>
                     <p className="big-number text-[40px]">{formatBRL(sup.orcado)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Soma dos valores previstos das OCs não recebidas
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Investido</p>
-                    <p className="big-number text-[40px] text-[#337246]">{formatBRL(sup.totalInvestido)}</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Realizado (OCs Recebidas)</p>
+                    <p className="big-number text-[40px] text-[#337246]">{formatBRL(sup.investido)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Soma dos valores reais das OCs com recebimento total
+                    </p>
                   </div>
                 </div>
-                {(() => {
-                  const pct        = Math.min(100, Math.round((sup.totalInvestido / sup.orcado) * 100));
-                  const overBudget = sup.totalInvestido > sup.orcado;
+                {sup.orcado > 0 && (() => {
+                  const diff = sup.investido - sup.orcado;
+                  const totalRef = sup.orcado + sup.investido;
+                  const pctInvestido = totalRef > 0 ? Math.round((sup.investido / totalRef) * 100) : 0;
                   return (
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{pct}% do orçamento utilizado</span>
-                        <span className={overBudget ? "text-red-400 font-medium" : "text-[#337246]"}>
-                          {overBudget
-                            ? `+${formatBRL(sup.totalInvestido - sup.orcado)} acima`
-                            : `${formatBRL(sup.orcado - sup.totalInvestido)} disponível`}
+                        <span>Proporção: {pctInvestido}% já recebido</span>
+                        <span className={diff > 0 ? "text-red-400 font-medium" : "text-[#337246]"}>
+                          {diff > 0
+                            ? `Investido ficou +${formatBRL(diff)} acima do previsto`
+                            : diff < 0
+                              ? `Investido ficou ${formatBRL(Math.abs(diff))} abaixo do previsto`
+                              : "Valores alinhados"}
                         </span>
                       </div>
-                      <div className="h-3 w-full rounded-full bg-[#e2e2e2]/20 overflow-hidden">
+                      <div className="h-3 w-full rounded-full bg-[#e2e2e2]/20 overflow-hidden flex">
                         <div
-                          className={`h-full rounded-full transition-all ${overBudget ? "bg-red-400" : "bg-[#337246]"}`}
-                          style={{ width: `${pct}%` }}
+                          className="h-full rounded-l-full bg-[#19365b] transition-all"
+                          style={{ width: `${100 - pctInvestido}%` }}
+                          title={`Orçado: ${formatBRL(sup.orcado)}`}
                         />
+                        <div
+                          className="h-full rounded-r-full bg-[#337246] transition-all"
+                          style={{ width: `${pctInvestido}%` }}
+                          title={`Investido: ${formatBRL(sup.investido)}`}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <span className="inline-block h-2 w-2 rounded-full bg-[#19365b]" />
+                          Orçado (Abertas)
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="inline-block h-2 w-2 rounded-full bg-[#337246]" />
+                          Investido (Recebidas)
+                        </div>
                       </div>
                     </div>
                   );
@@ -440,7 +636,7 @@ export default function DashboardSuprimentosPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Package className="h-4 w-4 text-primary" />
-                  SGP — Gestão de Pagamentos
+                  SPG — Gestão de Pagamentos
                 </CardTitle>
               </CardHeader>
               <CardContent>
