@@ -36,6 +36,7 @@ import {
   Plus,
   Trash2,
   FolderOpen,
+  Copy,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -159,6 +160,8 @@ export default function CronogramaPage() {
   const [editingGrupoId, setEditingGrupoId] = useState<number | null>(null);
   const [editingGrupoNome, setEditingGrupoNome] = useState("");
   const [collapsedGrupos, setCollapsedGrupos] = useState<Set<number>>(new Set());
+  const [selectedEtapas, setSelectedEtapas] = useState<Set<number>>(new Set());
+  const [showBulkRemoveModal, setShowBulkRemoveModal] = useState(false);
 
   const { data: projetoQueryData } = useQuery<ApiConfigResponse>({
     queryKey: ["config", "projeto", centroCusto],
@@ -364,6 +367,7 @@ export default function CronogramaPage() {
 
       queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      setSelectedEtapas(new Set());
       toast.success("Cronograma atualizado com sucesso!");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -695,6 +699,98 @@ export default function CronogramaPage() {
     }));
   };
 
+  const toggleSelectEtapa = (id: number) => {
+    setSelectedEtapas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllInGroup = (grupoId: number | null) => {
+    const etapasDoGrupo = cronograma.etapas.filter((e) => (e.grupo_id ?? null) === grupoId);
+    const allSelected = etapasDoGrupo.length > 0 && etapasDoGrupo.every((e) => selectedEtapas.has(e.id));
+    setSelectedEtapas((prev) => {
+      const next = new Set(prev);
+      etapasDoGrupo.forEach((e) => {
+        if (allSelected) next.delete(e.id);
+        else next.add(e.id);
+      });
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const allSelected = cronograma.etapas.length > 0 && cronograma.etapas.every((e) => selectedEtapas.has(e.id));
+    if (allSelected) {
+      setSelectedEtapas(new Set());
+    } else {
+      setSelectedEtapas(new Set(cronograma.etapas.map((e) => e.id)));
+    }
+  };
+
+  const executarRemoverSelecionadas = () => {
+    const ids = selectedEtapas;
+    setCronograma((prev) => {
+      const etapas = prev.etapas.filter((e) => !ids.has(e.id));
+      return { etapas, dias_totais: etapas.reduce((s, e) => s + e.dias, 0) };
+    });
+    setExpandedStages((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+    setProgressoDiario((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => delete next[id]);
+      return next;
+    });
+    setSelectedEtapas(new Set());
+    setShowBulkRemoveModal(false);
+  };
+
+  const duplicarGrupo = async (grupo: EtapaGrupo) => {
+    try {
+      const res = await fetch("/api/config/etapas-grupos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: `${grupo.nome} (Cópia)`, centroCusto }),
+      });
+      if (!res.ok) throw new Error("Falha ao criar grupo");
+      const data = await res.json();
+      const novoGrupoId = data?.data?.id;
+      if (!novoGrupoId) throw new Error("ID do novo grupo não retornado");
+
+      const etapasDoGrupo = cronograma.etapas.filter((e) => e.grupo_id === grupo.id);
+      let tempId = nextTempId;
+      const novasEtapas: EtapaCronograma[] = etapasDoGrupo.map((e) => {
+        const id = tempId;
+        tempId--;
+        return {
+          ...e,
+          id,
+          grupo_id: novoGrupoId,
+          concluida: false,
+          percentual_concluido: 0,
+          data_inicio: undefined,
+          data_fim: undefined,
+        };
+      });
+      setNextTempId(tempId);
+
+      setCronograma((prev) => {
+        const etapas = [...prev.etapas, ...novasEtapas];
+        return { etapas, dias_totais: etapas.reduce((s, e) => s + e.dias, 0) };
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["etapas-grupos"], type: "all" });
+      toast.success(`Grupo "${grupo.nome}" duplicado`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao duplicar grupo");
+    }
+  };
+
   const etapasDatas = useMemo(() => {
     if (!dataInicioProjeto) return null;
     let cursor = dataInicioProjeto;
@@ -774,6 +870,12 @@ export default function CronogramaPage() {
       }`}
     >
       <div className="flex items-center gap-4">
+        <input
+          type="checkbox"
+          checked={selectedEtapas.has(etapa.id)}
+          onChange={() => toggleSelectEtapa(etapa.id)}
+          className="h-4 w-4 rounded border-border accent-primary shrink-0 cursor-pointer"
+        />
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
             etapa.concluida
@@ -1305,6 +1407,16 @@ export default function CronogramaPage() {
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleExcluirGrupo(grupo.id)} disabled={excluirGrupoMutation.isPending}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => duplicarGrupo(grupo)} title="Duplicar grupo">
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                              <input
+                                type="checkbox"
+                                checked={etapasDoGrupo.length > 0 && etapasDoGrupo.every((e) => selectedEtapas.has(e.id))}
+                                onChange={() => toggleSelectAllInGroup(grupo.id)}
+                                className="h-4 w-4 rounded border-border accent-primary cursor-pointer ml-1"
+                                title="Selecionar todas do grupo"
+                              />
                             </>
                           )}
                         </div>
@@ -1344,6 +1456,13 @@ export default function CronogramaPage() {
                   {cronograma.etapas.filter((e) => !e.grupo_id).length > 0 && (
                     <div className="space-y-4">
                       <div className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={cronograma.etapas.filter((e) => !e.grupo_id).length > 0 && cronograma.etapas.filter((e) => !e.grupo_id).every((e) => selectedEtapas.has(e.id))}
+                          onChange={() => toggleSelectAllInGroup(null)}
+                          className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                          title="Selecionar todas sem grupo"
+                        />
                         <span className="font-medium text-muted-foreground">Sem grupo</span>
                         <span className="text-xs text-muted-foreground/60">
                           ({cronograma.etapas.filter((e) => !e.grupo_id).length} etapa(s))
@@ -1379,6 +1498,15 @@ export default function CronogramaPage() {
               ) : (
                 /* Lista plana — sem grupos */
                 <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={cronograma.etapas.length > 0 && cronograma.etapas.every((e) => selectedEtapas.has(e.id))}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground">Selecionar todas</span>
+                  </div>
                   {cronograma.etapas.map((etapa, index) => {
                     const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
                     return renderEtapaCard(etapa, index, index === 0, index === cronograma.etapas.length - 1, dateError);
@@ -1386,7 +1514,30 @@ export default function CronogramaPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-between">
+                {selectedEtapas.size > 0 ? (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">
+                      {selectedEtapas.size} etapa(s) selecionada(s)
+                    </span>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowBulkRemoveModal(true)}
+                      className="gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Excluir Selecionadas
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedEtapas(new Set())}
+                    >
+                      Limpar seleção
+                    </Button>
+                  </div>
+                ) : <div />}
                 <div className="flex items-center gap-3">
                   {hasDateErrors && (
                     <div className="flex items-center gap-2 text-sm text-red-400">
@@ -1426,6 +1577,30 @@ export default function CronogramaPage() {
                 </Button>
                 <Button variant="destructive" onClick={executarRemoverEtapa}>
                   Remover
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Modal de confirmação ao remover etapas selecionadas */}
+          <Dialog open={showBulkRemoveModal} onOpenChange={setShowBulkRemoveModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                  Remover Etapas Selecionadas
+                </DialogTitle>
+                <DialogDescription>
+                  Tem certeza que deseja remover {selectedEtapas.size} etapa(s)? Todo o histórico de avanço diário
+                  associado será permanentemente excluído ao salvar o cronograma.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowBulkRemoveModal(false)}>
+                  Cancelar
+                </Button>
+                <Button variant="destructive" onClick={executarRemoverSelecionadas}>
+                  Remover {selectedEtapas.size} etapa(s)
                 </Button>
               </DialogFooter>
             </DialogContent>

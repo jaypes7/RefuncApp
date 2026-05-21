@@ -18,10 +18,20 @@ import {
   FolderOpen,
   ArrowUp,
   ArrowDown,
+  Copy,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFilter } from "@/contexts/FilterContext";
@@ -89,6 +99,10 @@ export default function ChecklistMobilizacaoPage() {
   // Estado para edição de nome de grupo
   const [editingGrupoId, setEditingGrupoId] = useState<number | null>(null);
   const [editingGrupoNome, setEditingGrupoNome] = useState("");
+
+  // Seleção múltipla de etapas
+  const [selectedEtapas, setSelectedEtapas] = useState<Set<number>>(new Set());
+  const [showBulkRemoveModal, setShowBulkRemoveModal] = useState(false);
 
   const toggleGrupo = (id: number) => {
     setCollapsedGrupos((prev) => {
@@ -530,6 +544,86 @@ export default function ChecklistMobilizacaoPage() {
     }
   };
 
+  const toggleSelectEtapa = (id: number) => {
+    setSelectedEtapas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllInGroup = (grupoEtapas: ChecklistEtapa[]) => {
+    const allSelected = grupoEtapas.length > 0 && grupoEtapas.every((e) => selectedEtapas.has(e.id));
+    setSelectedEtapas((prev) => {
+      const next = new Set(prev);
+      grupoEtapas.forEach((e) => {
+        if (allSelected) next.delete(e.id);
+        else next.add(e.id);
+      });
+      return next;
+    });
+  };
+
+  const toggleSelectAllEtapas = () => {
+    const allSelected = etapas.length > 0 && etapas.every((e) => selectedEtapas.has(e.id));
+    if (allSelected) {
+      setSelectedEtapas(new Set());
+    } else {
+      setSelectedEtapas(new Set(etapas.map((e) => e.id)));
+    }
+  };
+
+  const bulkDeleteEtapasMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map((id) => checklistEtapasApi.remover(id)));
+    },
+    onSuccess: () => {
+      toast.success("Etapas removidas.");
+      queryClient.invalidateQueries({ queryKey: ["checklist-mobilizacao"], type: "all" });
+      setSelectedEtapas(new Set());
+      setShowBulkRemoveModal(false);
+    },
+    onError: () => toast.error("Erro ao remover etapas."),
+  });
+
+  const executarRemoverSelecionadas = () => {
+    bulkDeleteEtapasMutation.mutate(Array.from(selectedEtapas));
+  };
+
+  const duplicarGrupoChecklist = async (grupoId: number, grupoNome: string) => {
+    try {
+      const res = await fetch("/api/config/etapas-grupos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: `${grupoNome} (Cópia)`, centroCusto }),
+      });
+      if (!res.ok) throw new Error("Falha ao criar grupo");
+      const data = await res.json();
+      const novoGrupoId = data?.data?.id;
+      if (!novoGrupoId) throw new Error("ID do novo grupo não retornado");
+
+      const etapasDoGrupo = etapasPorGrupo?.get(grupoId) ?? [];
+      await Promise.all(
+        etapasDoGrupo.map((etapa) =>
+          checklistEtapasApi.criar({
+            centro_custo: centroCusto ?? "",
+            nome: etapa.nome,
+            ordem: 0,
+            etapa_origem_id: null,
+            grupo_id: novoGrupoId,
+          })
+        )
+      );
+
+      queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["checklist-mobilizacao"], type: "all" });
+      toast.success(`Grupo "${grupoNome}" duplicado`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao duplicar grupo");
+    }
+  };
+
   const mediaAvanco = (items: ChecklistSubetapa[]) => {
     if (items.length === 0) return 0;
     const valid = items.filter((i) => i.avanco != null);
@@ -546,7 +640,31 @@ export default function ChecklistMobilizacaoPage() {
               <h1 className="page-title">Checklist Mobilização</h1>
               <p className="page-subtitle">Controle de etapas e subetapas do projeto</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedEtapas.size > 0 && (
+                <>
+                  <span className="text-sm text-muted-foreground">
+                    {selectedEtapas.size} etapa(s)
+                  </span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => setShowBulkRemoveModal(true)}
+                    disabled={bulkDeleteEtapasMutation.isPending}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir Selecionadas
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedEtapas(new Set())}
+                  >
+                    Limpar
+                  </Button>
+                </>
+              )}
               {ordemAlterada && (
                 <Button
                   variant="default"
@@ -666,6 +784,12 @@ export default function ChecklistMobilizacaoPage() {
               return (
                 <Card key={etapa.id} className="glass-card">
                   <CardHeader className="flex flex-row items-center gap-3 pb-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedEtapas.has(etapa.id)}
+                      onChange={() => toggleSelectEtapa(etapa.id)}
+                      className="h-4 w-4 rounded border-border accent-primary shrink-0 cursor-pointer"
+                    />
                     <ListChecks className="h-5 w-5 text-primary" />
                     <div className="flex-1">
                       {isEditingNome ? (
@@ -1018,8 +1142,22 @@ export default function ChecklistMobilizacaoPage() {
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
+                            <Button
+                              size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+                              onClick={() => duplicarGrupoChecklist(grupoId, grupoNome)}
+                              title="Duplicar grupo"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
                           </>
                         )}
+                        <input
+                          type="checkbox"
+                          checked={grupoEtapas.length > 0 && grupoEtapas.every((e) => selectedEtapas.has(e.id))}
+                          onChange={() => toggleSelectAllInGroup(grupoEtapas)}
+                          className="h-4 w-4 rounded border-border accent-primary cursor-pointer ml-1"
+                          title="Selecionar todas do grupo"
+                        />
                       </>
                     )}
                   </div>
@@ -1084,6 +1222,15 @@ export default function ChecklistMobilizacaoPage() {
             if (!etapasPorGrupo) {
               return (
                 <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={etapas.length > 0 && etapas.every((e) => selectedEtapas.has(e.id))}
+                      onChange={toggleSelectAllEtapas}
+                      className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground">Selecionar todas</span>
+                  </div>
                   {etapas.map((etapa) => renderEtapaCard(etapa))}
                 </div>
               );
@@ -1103,6 +1250,30 @@ export default function ChecklistMobilizacaoPage() {
             );
           })()}
         </div>
+
+        {/* Modal de confirmação ao remover etapas selecionadas */}
+        <Dialog open={showBulkRemoveModal} onOpenChange={setShowBulkRemoveModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Remover Etapas Selecionadas
+              </DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja remover {selectedEtapas.size} etapa(s) e todas as suas subetapas?
+                Esta ação não pode ser desfeita.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBulkRemoveModal(false)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={executarRemoverSelecionadas} disabled={bulkDeleteEtapasMutation.isPending}>
+                Remover {selectedEtapas.size} etapa(s)
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </ProtectedRoute>
   );
