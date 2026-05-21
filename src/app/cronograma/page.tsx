@@ -388,13 +388,13 @@ export default function CronogramaPage() {
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        throw new Error(b?.error ?? "Falha ao criar grupo");
+        throw new Error(b?.error ?? "Falha ao criar fase");
       }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["etapas-grupos"], type: "all" });
-      toast.success("Grupo criado");
+      toast.success("Fase criada");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -408,7 +408,7 @@ export default function CronogramaPage() {
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        throw new Error(b?.error ?? "Falha ao renomear grupo");
+        throw new Error(b?.error ?? "Falha ao renomear fase");
       }
       return res.json();
     },
@@ -423,14 +423,14 @@ export default function CronogramaPage() {
       const res = await fetch(`/api/config/etapas-grupos/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        throw new Error(b?.error ?? "Falha ao excluir grupo");
+        throw new Error(b?.error ?? "Falha ao excluir fase");
       }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["etapas-grupos"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["config"], type: "all" });
-      toast.success("Grupo removido");
+      toast.success("Fase removida");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -686,7 +686,7 @@ export default function CronogramaPage() {
   };
 
   const handleCriarGrupo = () => {
-    criarGrupoMutation.mutate("Novo Grupo");
+    criarGrupoMutation.mutate("Nova Fase");
   };
 
   const handleExcluirGrupo = (id: number) => {
@@ -757,10 +757,10 @@ export default function CronogramaPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome: `${grupo.nome} (Cópia)`, centroCusto }),
       });
-      if (!res.ok) throw new Error("Falha ao criar grupo");
+      if (!res.ok) throw new Error("Falha ao criar fase");
       const data = await res.json();
       const novoGrupoId = data?.data?.id;
-      if (!novoGrupoId) throw new Error("ID do novo grupo não retornado");
+      if (!novoGrupoId) throw new Error("ID da nova fase não retornado");
 
       const etapasDoGrupo = cronograma.etapas.filter((e) => e.grupo_id === grupo.id);
       let tempId = nextTempId;
@@ -785,9 +785,9 @@ export default function CronogramaPage() {
       });
 
       queryClient.invalidateQueries({ queryKey: ["etapas-grupos"], type: "all" });
-      toast.success(`Grupo "${grupo.nome}" duplicado`);
+      toast.success(`Fase "${grupo.nome}" duplicada`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao duplicar grupo");
+      toast.error(err instanceof Error ? err.message : "Erro ao duplicar fase");
     }
   };
 
@@ -1341,7 +1341,7 @@ export default function CronogramaPage() {
                   className="gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Adicionar Grupo
+                  Adicionar Fase
                 </Button>
               </div>
 
@@ -1370,7 +1370,7 @@ export default function CronogramaPage() {
                             type="button"
                             onClick={toggleCollapse}
                             className="shrink-0 text-primary hover:text-primary/70 transition-colors"
-                            title={isCollapsed ? "Expandir grupo" : "Colapsar grupo"}
+                            title={isCollapsed ? "Expandir fase" : "Colapsar fase"}
                           >
                             <ChevronDown
                               className={`w-4 h-4 transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`}
@@ -1407,7 +1407,7 @@ export default function CronogramaPage() {
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleExcluirGrupo(grupo.id)} disabled={excluirGrupoMutation.isPending}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => duplicarGrupo(grupo)} title="Duplicar grupo">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => duplicarGrupo(grupo)} title="Duplicar fase">
                                 <Copy className="h-3.5 w-3.5" />
                               </Button>
                               <input
@@ -1415,7 +1415,7 @@ export default function CronogramaPage() {
                                 checked={etapasDoGrupo.length > 0 && etapasDoGrupo.every((e) => selectedEtapas.has(e.id))}
                                 onChange={() => toggleSelectAllInGroup(grupo.id)}
                                 className="h-4 w-4 rounded border-border accent-primary cursor-pointer ml-1"
-                                title="Selecionar todas do grupo"
+                                title="Selecionar todas da fase"
                               />
                             </>
                           )}
@@ -1425,13 +1425,11 @@ export default function CronogramaPage() {
                         {!isCollapsed && (
                           <>
                             <div className="space-y-4">
-                              {etapasDoGrupo.map((etapa) => {
-                                const globalIndex = cronograma.etapas.findIndex((e) => e.id === etapa.id);
-                                const posInGroup = groupIndicesMap.indexOf(globalIndex);
-                                const isFirst = posInGroup === 0;
-                                const isLast = posInGroup === groupIndicesMap.length - 1;
+                              {etapasDoGrupo.map((etapa, indexInGroup) => {
+                                const isFirst = indexInGroup === 0;
+                                const isLast = indexInGroup === etapasDoGrupo.length - 1;
                                 const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
-                                return renderEtapaCard(etapa, globalIndex, isFirst, isLast, dateError);
+                                return renderEtapaCard(etapa, indexInGroup, isFirst, isLast, dateError);
                               })}
                             </div>
 
@@ -1461,25 +1459,18 @@ export default function CronogramaPage() {
                           checked={cronograma.etapas.filter((e) => !e.grupo_id).length > 0 && cronograma.etapas.filter((e) => !e.grupo_id).every((e) => selectedEtapas.has(e.id))}
                           onChange={() => toggleSelectAllInGroup(null)}
                           className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
-                          title="Selecionar todas sem grupo"
+                          title="Selecionar todas sem fase"
                         />
-                        <span className="font-medium text-muted-foreground">Sem grupo</span>
+                        <span className="font-medium text-muted-foreground">Sem fase</span>
                         <span className="text-xs text-muted-foreground/60">
                           ({cronograma.etapas.filter((e) => !e.grupo_id).length} etapa(s))
                         </span>
                       </div>
                       {(() => {
-                        const ungroupedIndices = cronograma.etapas.reduce<number[]>((acc, e, i) => {
-                          if (!e.grupo_id) acc.push(i);
-                          return acc;
-                        }, []);
-                        return cronograma.etapas
-                          .filter((e) => !e.grupo_id)
-                          .map((etapa) => {
-                            const globalIndex = cronograma.etapas.findIndex((e) => e.id === etapa.id);
-                            const posInGroup = ungroupedIndices.indexOf(globalIndex);
+                        const ungrouped = cronograma.etapas.filter((e) => !e.grupo_id);
+                        return ungrouped.map((etapa, indexInGroup) => {
                             const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
-                            return renderEtapaCard(etapa, globalIndex, posInGroup === 0, posInGroup === ungroupedIndices.length - 1, dateError);
+                            return renderEtapaCard(etapa, indexInGroup, indexInGroup === 0, indexInGroup === ungrouped.length - 1, dateError);
                           });
                       })()}
                       <Button
@@ -1490,7 +1481,7 @@ export default function CronogramaPage() {
                         disabled={cronogramaMutation.isPending}
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        Adicionar etapa sem grupo
+                        Adicionar etapa sem fase
                       </Button>
                     </div>
                   )}

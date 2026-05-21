@@ -52,7 +52,7 @@ import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi
 import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 import { ExportPdfButton } from "@/components/export-pdf-button";
-import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
+import { MANSERV_CHART, MANSERV_STATUS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -89,10 +89,6 @@ const chartConfigCurvaS = {
   },
 };
 
-const chartConfigFuncoes = {
-  total: { label: "Colaboradores", color: MANSERV_CHART.primary },
-};
-
 // ============================================================================
 // HELPERS — cores de término
 // ============================================================================
@@ -103,9 +99,6 @@ function fmtDate(v: string | undefined | null): string | null {
   const d = new Date(v + "T00:00:00Z");
   return isNaN(d.getTime()) ? null : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
-
-// Paleta de cores para o pie de funções
-const PIE_COLORS = MANSERV_PIE_COLORS;
 
 function isEtapaAtrasada(etapa: DashboardPrincipalData["etapas"][number]): boolean {
   const hojeRealStr = new Date().toISOString().split("T")[0];
@@ -182,6 +175,88 @@ function DashboardSkeleton() {
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// RELATÓRIO POR FUNÇÃO — sub-componentes
+// ============================================================================
+
+type StatTone = "ok" | "warn" | "danger" | "info" | "muted";
+
+const TONE_DOT: Record<StatTone, string> = {
+  ok: "bg-[#337246]",
+  warn: "bg-amber-500",
+  danger: "bg-red-500",
+  info: "bg-blue-500",
+  muted: "bg-slate-400",
+};
+
+const TONE_TEXT: Record<StatTone, string> = {
+  ok: "text-[#337246]",
+  warn: "text-amber-600 dark:text-amber-400",
+  danger: "text-red-600 dark:text-red-400",
+  info: "text-blue-600 dark:text-blue-400",
+  muted: "text-muted-foreground",
+};
+
+function StatCategory({
+  label,
+  items,
+}: {
+  label: string;
+  items: Array<{ label: string; value: number; tone: StatTone }>;
+}) {
+  return (
+    <div className="rounded-md border border-border/60 bg-background/40 p-2">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+        {label}
+      </p>
+      <div className="space-y-1">
+        {items.map((it) => (
+          <div key={it.label} className="flex items-center gap-1.5">
+            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", TONE_DOT[it.tone])} />
+            <span className="text-foreground/80 truncate">{it.label}</span>
+            <span className={cn("ml-auto font-semibold tabular-nums", TONE_TEXT[it.tone])}>
+              {it.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DetailField({
+  label,
+  value,
+  okIf,
+  dangerIf,
+}: {
+  label: string;
+  value: string | null | undefined;
+  okIf?: string[] | null;
+  dangerIf?: string[];
+}) {
+  const v = value?.toString().trim();
+  let tone: StatTone = "warn";
+  if (!v) {
+    tone = "warn";
+  } else if (dangerIf?.includes(v)) {
+    tone = "danger";
+  } else if (okIf === null || (okIf && okIf.includes(v))) {
+    tone = "ok";
+  } else {
+    tone = "info";
+  }
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", TONE_DOT[tone])} />
+      <span className="text-muted-foreground shrink-0">{label}:</span>
+      <span className={cn("truncate font-medium", TONE_TEXT[tone])}>
+        {v || "Pendente"}
+      </span>
     </div>
   );
 }
@@ -324,6 +399,95 @@ export default function DashboardPage() {
     }
     return Array.from(grupos.entries()).map(([funcao, membros]) => ({ funcao, membros }));
   }, [colaboradoresData, filterNomeFuncoes]);
+
+  // ── Relatório por Função — agregação de status + detalhamento ─────────────
+  const [expandedFuncoes, setExpandedFuncoes] = useState<Set<string>>(new Set());
+  const [expandedRelatorio, setExpandedRelatorio] = useState<Set<string>>(new Set());
+  const [filterRelatorio, setFilterRelatorio] = useState("");
+
+  const toggleFuncao = (funcao: string) => {
+    setExpandedFuncoes((prev) => {
+      const next = new Set(prev);
+      if (next.has(funcao)) {
+        next.delete(funcao);
+        // also collapse individual details when collapsing the group
+        setExpandedRelatorio((r) => { const nr = new Set(r); nr.delete(funcao); return nr; });
+      } else next.add(funcao);
+      return next;
+    });
+  };
+
+  const toggleRelatorio = (funcao: string) => {
+    setExpandedRelatorio((prev) => {
+      const next = new Set(prev);
+      if (next.has(funcao)) next.delete(funcao);
+      else next.add(funcao);
+      return next;
+    });
+  };
+
+  const relatorioPorFuncao = useMemo(() => {
+    const lista = colaboradoresData?.data ?? [];
+    if (lista.length === 0) return [];
+    const filtrada = filterRelatorio
+      ? lista.filter((c) =>
+          (c.FUNCAO_CLT ?? "Não informado")
+            .toLowerCase()
+            .includes(filterRelatorio.toLowerCase()),
+        )
+      : lista;
+    const grupos = new Map<string, Colaborador[]>();
+    for (const row of filtrada) {
+      const fn = row.FUNCAO_CLT ?? "Não informado";
+      if (!grupos.has(fn)) grupos.set(fn, []);
+      grupos.get(fn)!.push(row);
+    }
+    return Array.from(grupos.entries())
+      .map(([funcao, membros]) => {
+        const stats = {
+          aso: { apto: 0, inapto: 0, pendente: 0 },
+          mob: { ok: 0, pendente: 0 },
+          docs: { completo: 0, incompleto: 0, pendente: 0 },
+          exame: { realizado: 0, agendado: 0, pendente: 0 },
+          portal: { liberado: 0, bloqueado: 0, pendente: 0 },
+          treinamento: { concluido: 0, andamento: 0, pendente: 0 },
+          cracha: { emitido: 0, pendente: 0 },
+          ponto: { cadastrado: 0, pendente: 0 },
+        };
+        for (const c of membros) {
+          if (c.ASO === "Apto") stats.aso.apto++;
+          else if (c.ASO === "Inapto") stats.aso.inapto++;
+          else stats.aso.pendente++;
+
+          if (c.MOB?.trim()) stats.mob.ok++;
+          else stats.mob.pendente++;
+
+          if (c.DOCS === "Completo") stats.docs.completo++;
+          else if (c.DOCS === "Incompleto") stats.docs.incompleto++;
+          else stats.docs.pendente++;
+
+          if (c.EXAME === "Realizado") stats.exame.realizado++;
+          else if (c.EXAME === "Agendado") stats.exame.agendado++;
+          else stats.exame.pendente++;
+
+          if (c.PORTAL === "Liberado") stats.portal.liberado++;
+          else if (c.PORTAL === "Bloqueado") stats.portal.bloqueado++;
+          else stats.portal.pendente++;
+
+          if (c.TREINAMENTO === "Concluído") stats.treinamento.concluido++;
+          else if (c.TREINAMENTO === "Em Andamento") stats.treinamento.andamento++;
+          else stats.treinamento.pendente++;
+
+          if (c.CRACHA === "Emitido") stats.cracha.emitido++;
+          else stats.cracha.pendente++;
+
+          if (c.PONTO === "Cadastrado") stats.ponto.cadastrado++;
+          else stats.ponto.pendente++;
+        }
+        return { funcao, membros, stats };
+      })
+      .sort((a, b) => b.membros.length - a.membros.length);
+  }, [colaboradoresData, filterRelatorio]);
 
   // ── Ocorrências manuais ──────────────────────────────────────────────────────
   const queryClient = useQueryClient();
@@ -542,27 +706,6 @@ export default function DashboardPage() {
       { name: "Pendente", value: Pendente || 0, color: "#E5CF61" },
       { name: "Desligado", value: Desligado || 0, color: "#DA291B" },
     ];
-  }, [dashboardData]);
-
-  // Top 9 funções + "Outros" agrupados — alimenta PieChart
-  const dadosFuncoes = useMemo(() => {
-    const lista = dashboardData?.agregacoes?.distribuicaoFuncoes ?? [];
-    if (lista.length === 0) return [];
-    const top = lista.slice(0, 9);
-    const outrosTotal = lista.slice(9).reduce((s, i) => s + i.total, 0);
-    const result = top.map((f, i) => ({
-      name: f.nome,
-      value: f.total,
-      fill: PIE_COLORS[i % PIE_COLORS.length],
-    }));
-    if (outrosTotal > 0) result.push({ name: "Outros", value: outrosTotal, fill: "#e2e2e2" });
-    return result;
-  }, [dashboardData]);
-
-  // Nomes das funções agrupadas em "Outros"
-  const funcoesOutrosNomes = useMemo(() => {
-    const lista = dashboardData?.agregacoes?.distribuicaoFuncoes ?? [];
-    return lista.slice(9).map((f) => f.nome);
   }, [dashboardData]);
 
   // Cálculos dos KPIs
@@ -1786,67 +1929,182 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            {/* ── Distribuição por Função CLT ── */}
-            {dadosFuncoes.length > 0 && (
+            {/* ── Relatório por Função ── */}
+            {relatorioPorFuncao.length > 0 && (
               <div className="mb-6">
                 <Card className="glass-card">
-                  <CardHeader>
-                    <CardTitle>Distribuição por Função CLT</CardTitle>
+                  <CardHeader className="flex flex-row items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-primary" />
+                    <CardTitle>Relatório por Função</CardTitle>
+                    <span className="text-sm font-normal text-muted-foreground">
+                      ({relatorioPorFuncao.reduce((acc, g) => acc + g.membros.length, 0)} colaboradores em {relatorioPorFuncao.length} {relatorioPorFuncao.length === 1 ? "função" : "funções"})
+                    </span>
                   </CardHeader>
                   <CardContent>
-                    <ChartContainer config={chartConfigFuncoes} className="h-[300px] 2xl:h-[400px] w-full">
-                      <BarChart data={dadosFuncoes} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" tick={false} />
-                        <YAxis />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                          {dadosFuncoes.map((entry, i) => (
-                            <Cell key={`fn-${i}`} fill={entry.fill} />
-                          ))}
-                        </Bar>
-                        <ChartTooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const d = payload[0].payload as { name: string; value: number };
-                              const isOutros = d.name === "Outros";
-                              return (
-                                <div className="rounded-md border bg-background px-3 py-2 text-xs shadow-sm max-w-xs">
-                                  <p className="font-semibold">{d.name}</p>
-                                  <p className="text-muted-foreground">{d.value} colaborador{d.value !== 1 ? "es" : ""}</p>
-                                  {isOutros && funcoesOutrosNomes.length > 0 && (
-                                    <div className="mt-1.5 border-t border-border pt-1.5">
-                                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Funções agrupadas:</p>
-                                      <ul className="space-y-0.5">
-                                        {funcoesOutrosNomes.map((nome) => (
-                                          <li key={nome} className="text-[11px] text-foreground">{nome}</li>
-                                        ))}
-                                      </ul>
+                    <Input
+                      placeholder="Filtrar por função..."
+                      value={filterRelatorio}
+                      onChange={(e) => setFilterRelatorio(e.target.value)}
+                      className="mb-4 max-w-md"
+                    />
+                    <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
+                      {relatorioPorFuncao.map(({ funcao, membros, stats }) => {
+                        const grupoAberto = expandedFuncoes.has(funcao);
+                        const expanded = expandedRelatorio.has(funcao);
+                        return (
+                          <div
+                            key={funcao}
+                            className="rounded-lg border border-border bg-card/40 overflow-hidden"
+                          >
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                              onClick={() => toggleFuncao(funcao)}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {grupoAberto ? (
+                                  <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                )}
+                                <span className="font-semibold text-foreground truncate">{funcao}</span>
+                                <span className="shrink-0 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                  {membros.length} {membros.length === 1 ? "colaborador" : "colaboradores"}
+                                </span>
+                              </div>
+                            </button>
+
+                            {grupoAberto && (
+                              <>
+                            {/* Status agregados */}
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 p-3 text-xs">
+                              <StatCategory
+                                label="ASO"
+                                items={[
+                                  { label: "Apto", value: stats.aso.apto, tone: "ok" },
+                                  { label: "Inapto", value: stats.aso.inapto, tone: "danger" },
+                                  { label: "Pendente", value: stats.aso.pendente, tone: "warn" },
+                                ]}
+                              />
+                              <StatCategory
+                                label="MOB"
+                                items={[
+                                  { label: "OK", value: stats.mob.ok, tone: "ok" },
+                                  { label: "Pendente", value: stats.mob.pendente, tone: "warn" },
+                                ]}
+                              />
+                              <StatCategory
+                                label="Documentação"
+                                items={[
+                                  { label: "Completo", value: stats.docs.completo, tone: "ok" },
+                                  { label: "Incompleto", value: stats.docs.incompleto, tone: "danger" },
+                                  { label: "Pendente", value: stats.docs.pendente, tone: "warn" },
+                                ]}
+                              />
+                              <StatCategory
+                                label="Exame"
+                                items={[
+                                  { label: "Realizado", value: stats.exame.realizado, tone: "ok" },
+                                  { label: "Agendado", value: stats.exame.agendado, tone: "info" },
+                                  { label: "Pendente", value: stats.exame.pendente, tone: "warn" },
+                                ]}
+                              />
+                              <StatCategory
+                                label="Portal"
+                                items={[
+                                  { label: "Liberado", value: stats.portal.liberado, tone: "ok" },
+                                  { label: "Bloqueado", value: stats.portal.bloqueado, tone: "danger" },
+                                  { label: "Pendente", value: stats.portal.pendente, tone: "warn" },
+                                ]}
+                              />
+                              <StatCategory
+                                label="Treinamento"
+                                items={[
+                                  { label: "Concluído", value: stats.treinamento.concluido, tone: "ok" },
+                                  { label: "Em Andamento", value: stats.treinamento.andamento, tone: "info" },
+                                  { label: "Pendente", value: stats.treinamento.pendente, tone: "warn" },
+                                ]}
+                              />
+                              <StatCategory
+                                label="Crachá"
+                                items={[
+                                  { label: "Emitido", value: stats.cracha.emitido, tone: "ok" },
+                                  { label: "Pendente", value: stats.cracha.pendente, tone: "warn" },
+                                ]}
+                              />
+                              <StatCategory
+                                label="Ponto"
+                                items={[
+                                  { label: "Cadastrado", value: stats.ponto.cadastrado, tone: "ok" },
+                                  { label: "Pendente", value: stats.ponto.pendente, tone: "warn" },
+                                ]}
+                              />
+                            </div>
+
+                            {/* Ver mais detalhes toggle */}
+                            <div className="flex justify-end px-3 pb-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 text-xs h-7"
+                                onClick={() => toggleRelatorio(funcao)}
+                              >
+                                {expanded ? (
+                                  <>
+                                    <ChevronUp className="h-3.5 w-3.5" />
+                                    Ocultar detalhes
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                    Ver mais detalhes
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+
+                            {/* Detalhes individuais */}
+                            {expanded && (
+                              <div className="border-t border-border bg-background/40 p-3 space-y-2">
+                                {membros.map((c) => (
+                                  <div
+                                    key={c.id ?? `${c.CPF}-${c.NOME}`}
+                                    className="rounded-md border border-border/60 bg-card/60 p-3"
+                                  >
+                                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
+                                      <span className="font-medium text-sm text-foreground">
+                                        {c.NOME}
+                                      </span>
+                                      {c.RE && (
+                                        <span className="font-mono text-xs text-muted-foreground">
+                                          RE {c.RE}
+                                        </span>
+                                      )}
+                                      {c.STATUS && (
+                                        <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
+                                          {c.STATUS}
+                                        </span>
+                                      )}
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                      </BarChart>
-                    </ChartContainer>
-                    {/* Legenda custom */}
-                    <div className="mt-4 grid grid-cols-3 gap-x-6 gap-y-2">
-                      {dadosFuncoes.map((entry) => (
-                        <div
-                          key={entry.name}
-                          className="flex items-center gap-2 text-xs min-w-0"
-                          title={entry.name === "Outros" && funcoesOutrosNomes.length > 0 ? funcoesOutrosNomes.join("\n") : undefined}
-                        >
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: entry.fill }}
-                          />
-                          <span className="truncate font-medium text-foreground">{entry.name}</span>
-                          <span className="ml-auto shrink-0 font-semibold tabular-nums">{entry.value}</span>
-                        </div>
-                      ))}
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-1 text-xs">
+                                      <DetailField label="ASO" value={c.ASO} okIf={["Apto"]} dangerIf={["Inapto"]} />
+                                      <DetailField label="MOB" value={c.MOB?.trim() || null} okIf={null} />
+                                      <DetailField label="Docs" value={c.DOCS} okIf={["Completo"]} dangerIf={["Incompleto"]} />
+                                      <DetailField label="Exame" value={c.EXAME} okIf={["Realizado"]} />
+                                      <DetailField label="Portal" value={c.PORTAL} okIf={["Liberado"]} dangerIf={["Bloqueado"]} />
+                                      <DetailField label="Treinamento" value={c.TREINAMENTO} okIf={["Concluído"]} />
+                                      <DetailField label="Crachá" value={c.CRACHA} okIf={["Emitido"]} />
+                                      <DetailField label="Ponto" value={c.PONTO} okIf={["Cadastrado"]} />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
