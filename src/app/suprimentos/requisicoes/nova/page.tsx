@@ -37,9 +37,11 @@ const itemSchema = z.object({
   nome_item:   z.string().min(1, "Nome obrigatório"),
   categoria:   z.string().min(1, "Categoria obrigatória"),
   unidade:     z.string().min(1, "Unidade obrigatória"),
-  quantidade:  z.number().min(0.01, "Quantidade deve ser maior que 0"),
-  criticidade: z.enum(["baixa", "media", "alta", "critica"]),
-  tipo:        z.enum(["item", "servico"]),
+  quantidade:       z.number().min(0.01, "Quantidade deve ser maior que 0"),
+  valor_item:       z.number().min(0, "Valor deve ser maior ou igual a 0").optional(),
+  data_necessidade: z.string().optional(),
+  criticidade:      z.enum(["baixa", "media", "alta", "critica"]),
+  tipo:             z.enum(["item", "servico"]),
 });
 
 const schema = z.object({
@@ -95,7 +97,7 @@ function NovaRequisicaoForm() {
       coordenador:   "",
       data_abertura: new Date().toISOString().split("T")[0],
       itens: [
-        { nome_item: "", categoria: "", unidade: "und", quantidade: 1, criticidade: "media", tipo: "item" },
+        { nome_item: "", categoria: "", unidade: "und", quantidade: 1, valor_item: undefined, data_necessidade: "", criticidade: "media", tipo: "item" },
       ],
     },
   });
@@ -178,7 +180,7 @@ function NovaRequisicaoForm() {
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={() => append({ nome_item: "", categoria: "", unidade: "und", quantidade: 1, criticidade: "media", tipo: "item" })}
+              onClick={() => append({ nome_item: "", categoria: "", unidade: "und", quantidade: 1, valor_item: undefined, data_necessidade: "", criticidade: "media", tipo: "item" })}
             >
               <Plus className="h-4 w-4" />
               Adicionar Item
@@ -196,6 +198,8 @@ function NovaRequisicaoForm() {
                     <TableHead className="min-w-[160px]">Categoria *</TableHead>
                     <TableHead className="min-w-[100px]">Unidade *</TableHead>
                     <TableHead className="min-w-[100px]">Quantidade *</TableHead>
+                    <TableHead className="min-w-[130px]">Valor Item (R$)</TableHead>
+                    <TableHead className="min-w-[150px]">Data Necessidade</TableHead>
                     <TableHead className="min-w-[120px]">Criticidade</TableHead>
                     <TableHead className="min-w-[120px]">Tipo</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
@@ -248,6 +252,24 @@ function NovaRequisicaoForm() {
                           step="0.01"
                           {...form.register(`itens.${index}.quantidade`, { valueAsNumber: true })}
                           className={form.formState.errors.itens?.[index]?.quantidade ? "border-destructive" : ""}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0,00"
+                          {...form.register(`itens.${index}.valor_item`, {
+                            setValueAs: (value) => value === "" ? undefined : Number(value),
+                          })}
+                          className={form.formState.errors.itens?.[index]?.valor_item ? "border-destructive" : ""}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="date"
+                          {...form.register(`itens.${index}.data_necessidade`)}
                         />
                       </TableCell>
                       <TableCell>

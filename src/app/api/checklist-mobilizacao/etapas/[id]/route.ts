@@ -30,12 +30,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const parsed = ChecklistEtapaSchema.partial().parse(body);
 
     const db = createServerClient();
+    const updatePayload: Record<string, unknown> = {};
+    if (parsed.nome !== undefined) updatePayload.nome = parsed.nome;
+    if (parsed.ordem !== undefined) updatePayload.ordem = parsed.ordem;
+    if ("grupo_id" in parsed) updatePayload.grupo_id = parsed.grupo_id ?? null;
+
     const { error } = await db
       .from("checklist_etapas")
-      .update({
-        nome: parsed.nome,
-        ordem: parsed.ordem,
-      })
+      .update(updatePayload)
       .eq("id", etapaId);
 
     if (error) throw new Error(error.message);

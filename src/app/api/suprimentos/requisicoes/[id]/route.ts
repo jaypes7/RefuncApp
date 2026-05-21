@@ -33,10 +33,26 @@ export async function GET(
       return NextResponse.json({ error: "Requisição não encontrada" }, { status: 404 });
     }
 
+    const ocIds = (ocsRes.data ?? []).map((oc) => oc.id);
+    const { data: ocItensData } = ocIds.length > 0
+      ? await db
+          .from("suprimentos_oc_itens")
+          .select("oc_id, suprimentos_requisicao_itens(*)")
+          .in("oc_id", ocIds)
+      : { data: [] };
+
+    const itensPorOc = new Map<string, unknown[]>();
+    for (const row of ocItensData ?? []) {
+      const ocId = row.oc_id as string;
+      const item = row.suprimentos_requisicao_itens;
+      if (!item) continue;
+      itensPorOc.set(ocId, [...(itensPorOc.get(ocId) ?? []), item]);
+    }
+
     return NextResponse.json({
       ...reqRes.data,
       itens:        itensRes.data ?? [],
-      ocs:          ocsRes.data ?? [],
+      ocs:          (ocsRes.data ?? []).map((oc) => ({ ...oc, itens: itensPorOc.get(oc.id) ?? [] })),
       recebimentos: recebRes.data ?? [],
     });
   } catch (error) {
@@ -56,6 +72,8 @@ export async function GET(
 interface ItemUpdate {
   id: string;
   quantidade?: number;
+  valor_item?: number | null;
+  data_necessidade?: string | null;
   quantidade_estoque?: number;
   criticidade?: string;
 }
@@ -91,6 +109,8 @@ export async function PATCH(
       for (const item of body.itens) {
         const itemUpdate: Record<string, unknown> = {};
         if (item.quantidade !== undefined)         itemUpdate.quantidade = item.quantidade;
+        if (item.valor_item !== undefined)         itemUpdate.valor_item = item.valor_item;
+        if (item.data_necessidade !== undefined)   itemUpdate.data_necessidade = item.data_necessidade || null;
         if (item.quantidade_estoque !== undefined) itemUpdate.quantidade_estoque = item.quantidade_estoque;
         if (item.criticidade !== undefined)        itemUpdate.criticidade = item.criticidade;
 

@@ -400,6 +400,7 @@ export type ChecklistEtapa = {
   id: number;
   centro_custo: string;
   etapa_origem_id: number | null;
+  grupo_id?: number | null;
   nome: string;
   ordem: number;
   created_at?: string;
@@ -963,6 +964,8 @@ export interface RequisicaoItem {
   categoria: string;
   unidade: string;
   quantidade: number;
+  valor_item: number | null;
+  data_necessidade: string | null;
   quantidade_estoque: number;
   criticidade: "baixa" | "media" | "alta" | "critica";
   tipo: "item" | "servico";
@@ -977,6 +980,7 @@ export interface OrdemCompra {
   valor: number | null;
   valor_previsto: number | null;
   previsao_entrega: string | null;
+  itens?: RequisicaoItem[];
   created_at: string;
 }
 
@@ -991,6 +995,7 @@ export interface Recebimento {
   id: string;
   requisicao_id: string;
   tipo: "total" | "parcial";
+  numero_nota: string | null;
   data_recebimento: string;
   observacao: string | null;
   created_at: string;
@@ -1034,6 +1039,8 @@ export const requisicoesSuprimentosApi = {
       categoria: string;
       unidade: string;
       quantidade: number;
+      valor_item?: number | null;
+      data_necessidade?: string | null;
       criticidade: string;
       tipo: string;
     }>;
@@ -1050,10 +1057,12 @@ export const requisicoesSuprimentosApi = {
     valor?: number | null;
     valor_previsto?: number | null;
     previsao_entrega?: string | null;
+    item_ids: string[];
   }) => api.post<OrdemCompra>(`/suprimentos/requisicoes/${id}/oc`, body),
 
   registrarRecebimento: (id: string, body: {
     tipo: "total" | "parcial";
+    numero_nota: string;
     data_recebimento: string;
     observacao?: string;
     itens?: Array<{ item_id: string; quantidade_recebida: number }>;
