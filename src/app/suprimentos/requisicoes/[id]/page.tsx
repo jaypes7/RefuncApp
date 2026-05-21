@@ -11,6 +11,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -128,11 +129,13 @@ const ocSchema = z.object({
   valor:            z.number().optional(),
   valor_previsto:   z.number().optional(),
   previsao_entrega: z.string().optional(),
+  item_ids:         z.array(z.string()).min(1, "Selecione ao menos 1 item"),
 });
 type OCForm = z.infer<typeof ocSchema>;
 
 const recebSchema = z.object({
   tipo:             z.enum(["total", "parcial"]),
+  numero_nota:      z.string().min(1, "Obrigatorio"),
   data_recebimento: z.string().min(1, "Obrigatório"),
   observacao:       z.string().optional(),
 });
@@ -187,6 +190,8 @@ function AbaRevisao({ req, onSaved }: { req: Requisicao; onSaved: () => void }) 
                 <TableHead>Categoria</TableHead>
                 <TableHead>Und</TableHead>
                 <TableHead className="min-w-[100px]">Qtde</TableHead>
+                <TableHead className="min-w-[130px]">Valor Item</TableHead>
+                <TableHead className="min-w-[150px]">Necessidade</TableHead>
                 <TableHead className="min-w-[110px]">Em Estoque</TableHead>
                 <TableHead className="min-w-[130px]">Criticidade</TableHead>
               </TableRow>
@@ -205,6 +210,24 @@ function AbaRevisao({ req, onSaved }: { req: Requisicao; onSaved: () => void }) 
                       value={getVal(item.id, "quantidade", item.quantidade)}
                       onChange={(e) => updateItem(item.id, "quantidade", parseFloat(e.target.value) || 0)}
                       className="w-24"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={getVal(item.id, "valor_item", item.valor_item) ?? ""}
+                      onChange={(e) => updateItem(item.id, "valor_item", e.target.value === "" ? null : parseFloat(e.target.value) || 0)}
+                      className="w-28"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="date"
+                      value={getVal(item.id, "data_necessidade", item.data_necessidade) ?? ""}
+                      onChange={(e) => updateItem(item.id, "data_necessidade", e.target.value || null)}
+                      className="w-36"
                     />
                   </TableCell>
                   <TableCell>
@@ -316,6 +339,8 @@ function AbaItens({ req }: { req: Requisicao }) {
               <TableHead>Und</TableHead>
               <TableHead>Criticidade</TableHead>
               <TableHead>Tipo</TableHead>
+              <TableHead className="text-right">Valor Item</TableHead>
+              <TableHead>Necessidade</TableHead>
               <TableHead className="text-right">Qtde Total</TableHead>
               <TableHead className="text-right">Em Estoque</TableHead>
               <TableHead className="text-right">A Comprar</TableHead>
@@ -337,6 +362,8 @@ function AbaItens({ req }: { req: Requisicao }) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm capitalize">{item.tipo}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.valor_item)}</TableCell>
+                  <TableCell>{formatDate(item.data_necessidade)}</TableCell>
                   <TableCell className="text-right">{item.quantidade}</TableCell>
                   <TableCell className="text-right">{item.quantidade_estoque}</TableCell>
                   <TableCell className="text-right">{aComprar}</TableCell>
@@ -362,8 +389,22 @@ function AbaItens({ req }: { req: Requisicao }) {
 function AbaOC({ req }: { req: Requisicao }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [selectedOcItemIds, setSelectedOcItemIds] = useState<string[]>([]);
 
-  const form = useForm<OCForm>({ resolver: zodResolver(ocSchema) });
+  const form = useForm<OCForm>({
+    resolver: zodResolver(ocSchema),
+    defaultValues: { item_ids: [] },
+  });
+
+  function toggleOcItem(itemId: string, checked: boolean) {
+    setSelectedOcItemIds((current) => {
+      const next = checked
+        ? Array.from(new Set([...current, itemId]))
+        : current.filter((id) => id !== itemId);
+      form.setValue("item_ids", next, { shouldValidate: true, shouldDirty: true });
+      return next;
+    });
+  }
 
   const mutation = useMutation({
     mutationFn: (data: OCForm) =>
@@ -372,11 +413,13 @@ function AbaOC({ req }: { req: Requisicao }) {
         valor:            data.valor ?? null,
         valor_previsto:   data.valor_previsto ?? null,
         previsao_entrega: data.previsao_entrega || null,
+        item_ids:         data.item_ids,
       }),
     onSuccess: () => {
       toast.success("OC registrada com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["req", req.id] });
       form.reset();
+      setSelectedOcItemIds([]);
       setShowForm(false);
     },
     onError: () => toast.error("Erro ao registrar OC"),
@@ -410,6 +453,7 @@ function AbaOC({ req }: { req: Requisicao }) {
                 <TableRow>
                   <TableHead>Nº OC</TableHead>
                   <TableHead>Fornecedor</TableHead>
+                  <TableHead>Itens</TableHead>
                   <TableHead className="text-right">Valor Previsto</TableHead>
                   <TableHead className="text-right">Valor Real</TableHead>
                   <TableHead>Previsão Entrega</TableHead>
@@ -420,6 +464,11 @@ function AbaOC({ req }: { req: Requisicao }) {
                   <TableRow key={oc.id}>
                     <TableCell className="font-medium">{oc.numero_oc}</TableCell>
                     <TableCell>{oc.fornecedor}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {oc.itens && oc.itens.length > 0
+                        ? oc.itens.map((item) => item.nome_item).join(", ")
+                        : "—"}
+                    </TableCell>
                     <TableCell className="text-right">{formatCurrency(oc.valor_previsto)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(oc.valor)}</TableCell>
                     <TableCell>{formatDate(oc.previsao_entrega)}</TableCell>
@@ -458,15 +507,52 @@ function AbaOC({ req }: { req: Requisicao }) {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium leading-none">Valor Previsto (R$)</label>
-                <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor_previsto", { valueAsNumber: true })} />
+                <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor_previsto", { setValueAs: (value) => value === "" ? undefined : Number(value) })} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium leading-none">Valor Real (R$)</label>
-                <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor", { valueAsNumber: true })} />
+                <Input type="number" min="0" step="0.01" placeholder="0,00" {...form.register("valor", { setValueAs: (value) => value === "" ? undefined : Number(value) })} />
               </div>
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">Itens cobertos pela OC *</label>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[52px]"></TableHead>
+                      <TableHead>Item</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead className="text-right">A Comprar</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(req.itens ?? []).map((item) => {
+                      const aComprar = Math.max(0, Number(item.quantidade) - Number(item.quantidade_estoque));
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedOcItemIds.includes(item.id)}
+                              onCheckedChange={(checked) => toggleOcItem(item.id, checked === true)}
+                              aria-label={`Selecionar item ${item.nome_item}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">{item.nome_item}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{item.categoria}</TableCell>
+                          <TableCell className="text-right">{aComprar}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {form.formState.errors.item_ids && (
+                <p className="text-xs text-destructive">{form.formState.errors.item_ids.message}</p>
+              )}
+            </div>
             <div className="flex justify-end gap-3 pt-2">
-              <Button variant="outline" onClick={() => { setShowForm(false); form.reset(); }}>
+              <Button variant="outline" onClick={() => { setShowForm(false); form.reset(); setSelectedOcItemIds([]); }}>
                 Cancelar
               </Button>
               <Button
@@ -496,6 +582,7 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
     resolver: zodResolver(recebSchema),
     defaultValues: {
       tipo:             "total",
+      numero_nota:      "",
       data_recebimento: new Date().toISOString().split("T")[0],
     },
   });
@@ -518,7 +605,7 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
     onSuccess: () => {
       toast.success("Recebimento registrado!");
       queryClient.invalidateQueries({ queryKey: ["req", req.id] });
-      form.reset({ tipo: "total", data_recebimento: new Date().toISOString().split("T")[0] });
+      form.reset({ tipo: "total", numero_nota: "", data_recebimento: new Date().toISOString().split("T")[0] });
       setPartialQtds({});
       setDialogOpen(false);
     },
@@ -550,6 +637,7 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Data</TableHead>
+                  <TableHead>Nota</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Observação</TableHead>
                 </TableRow>
@@ -558,6 +646,7 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
                 {recebimentos.map((receb) => (
                   <TableRow key={receb.id}>
                     <TableCell>{formatDate(receb.data_recebimento)}</TableCell>
+                    <TableCell className="font-medium">{receb.numero_nota || "—"}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={receb.tipo === "total" ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200"}>
                         {receb.tipo === "total" ? "Total" : "Parcial"}
@@ -600,6 +689,13 @@ function AbaRecebimento({ req }: { req: Requisicao }) {
                 <Input type="date" {...form.register("data_recebimento")} />
                 {form.formState.errors.data_recebimento && (
                   <p className="text-xs text-destructive">{form.formState.errors.data_recebimento.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5 flex-1 min-w-[180px]">
+                <label className="text-sm font-medium leading-none">Numero da Nota *</label>
+                <Input placeholder="Ex: NF-12345" {...form.register("numero_nota")} />
+                {form.formState.errors.numero_nota && (
+                  <p className="text-xs text-destructive">{form.formState.errors.numero_nota.message}</p>
                 )}
               </div>
             </div>

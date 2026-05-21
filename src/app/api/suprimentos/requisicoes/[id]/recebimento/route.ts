@@ -16,6 +16,7 @@ interface RecebItemPayload {
 
 interface RecebPayload {
   tipo: "total" | "parcial";
+  numero_nota: string;
   data_recebimento: string;
   observacao?: string;
   itens?: RecebItemPayload[];
@@ -30,8 +31,8 @@ export async function POST(
     const { id } = await params;
     const body = (await request.json()) as RecebPayload;
 
-    if (!body.tipo || !body.data_recebimento) {
-      return NextResponse.json({ error: "Tipo e data são obrigatórios" }, { status: 400 });
+    if (!body.tipo || !body.data_recebimento || !body.numero_nota) {
+      return NextResponse.json({ error: "Tipo, data e numero da nota sao obrigatorios" }, { status: 400 });
     }
 
     const db = createServerClient();
@@ -51,6 +52,7 @@ export async function POST(
       .insert({
         requisicao_id:    id,
         tipo:             body.tipo,
+        numero_nota:      body.numero_nota,
         data_recebimento: body.data_recebimento,
         observacao:       body.observacao ?? null,
       })

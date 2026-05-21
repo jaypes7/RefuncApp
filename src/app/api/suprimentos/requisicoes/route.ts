@@ -54,6 +54,8 @@ interface ItemPayload {
   categoria: string;
   unidade: string;
   quantidade: number;
+  valor_item?: number | null;
+  data_necessidade?: string | null;
   criticidade: string;
   tipo: string;
 }
@@ -96,6 +98,8 @@ export async function POST(request: NextRequest) {
       categoria:          item.categoria,
       unidade:            item.unidade,
       quantidade:         Number(item.quantidade) || 0,
+      valor_item:         item.valor_item ?? null,
+      data_necessidade:   item.data_necessidade || null,
       quantidade_estoque: 0,
       criticidade:        item.criticidade,
       tipo:               item.tipo,

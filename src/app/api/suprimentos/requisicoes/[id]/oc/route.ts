@@ -15,6 +15,7 @@ interface OCPayload {
   valor?: number | null;
   valor_previsto?: number | null;
   previsao_entrega?: string | null;
+  item_ids?: string[];
 }
 
 export async function POST(
@@ -28,6 +29,10 @@ export async function POST(
 
     if (!body.numero_oc || !body.fornecedor) {
       return NextResponse.json({ error: "Número OC e fornecedor são obrigatórios" }, { status: 400 });
+    }
+
+    if (!Array.isArray(body.item_ids) || body.item_ids.length === 0) {
+      return NextResponse.json({ error: "Selecione ao menos 1 item para a OC" }, { status: 400 });
     }
 
     const db = createServerClient();
@@ -58,6 +63,13 @@ export async function POST(
       .single();
 
     if (ocError) throw new Error(ocError.message);
+
+    const ocItensPayload = Array.from(new Set(body.item_ids)).map((itemId) => ({
+      oc_id:   oc.id,
+      item_id: itemId,
+    }));
+    const { error: ocItensError } = await db.from("suprimentos_oc_itens").insert(ocItensPayload);
+    if (ocItensError) throw new Error(ocItensError.message);
 
     // Promove status para em_andamento se estava aberta
     if (req.status === "aberta") {

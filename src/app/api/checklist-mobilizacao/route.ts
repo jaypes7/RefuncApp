@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     // 1. Busca etapas do checklist
     let etapasQuery = db
       .from("checklist_etapas")
-      .select("id, nome, centro_custo, etapa_origem_id, ordem")
+      .select("id, nome, centro_custo, etapa_origem_id, grupo_id, ordem")
       .order("ordem", { ascending: true });
     if (centroCusto?.length) etapasQuery = etapasQuery.in("centro_custo", centroCusto) as typeof etapasQuery;
 
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (precisaSync) {
       const { data: etapasCronograma, error: cronogramaError } = await db
         .from("etapas")
-        .select("id, nome, centro_custo, ordem")
+        .select("id, nome, centro_custo, ordem, grupo_id")
         .in("centro_custo", centroCusto)
         .order("ordem", { ascending: true });
 
@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
         const payload = etapasCronograma.map((e) => ({
           centro_custo: e.centro_custo,
           etapa_origem_id: e.id,
+          grupo_id: e.grupo_id ?? null,
           nome: e.nome,
           ordem: e.ordem ?? 0,
         }));
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
         const { data: inseridas, error: insertError } = await db
           .from("checklist_etapas")
           .insert(payload)
-          .select("id, nome, centro_custo, etapa_origem_id, ordem");
+          .select("id, nome, centro_custo, etapa_origem_id, grupo_id, ordem");
 
         if (insertError) throw new Error(insertError.message);
         etapasChecklist = inseridas ?? [];

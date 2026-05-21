@@ -17,7 +17,7 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
     };
 
     return (
-      <div className="relative inline-flex items-center">
+      <label className={cn("relative inline-flex items-center", props.disabled ? "cursor-not-allowed" : "cursor-pointer")}>
         <input
           type="checkbox"
           ref={ref}
@@ -38,7 +38,7 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
         >
           {checked && <Check className="h-3 w-3" />}
         </div>
-      </div>
+      </label>
     );
   }
 );

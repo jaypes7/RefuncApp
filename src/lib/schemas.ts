@@ -856,6 +856,7 @@ export const ChecklistEtapaSchema = z.object({
   id: z.number().int().optional(),
   centro_custo: z.string().min(1, "Centro de custo é obrigatório"),
   etapa_origem_id: z.number().int().nullable().optional(),
+  grupo_id: z.number().int().nullable().optional(),
   nome: z.string().min(1, "Nome é obrigatório"),
   ordem: z.coerce.number().optional(),
 });

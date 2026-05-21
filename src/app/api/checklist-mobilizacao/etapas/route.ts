@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
         nome: parsed.nome,
         ordem,
         etapa_origem_id: null,
+        grupo_id: parsed.grupo_id ?? null,
       })
       .select("id")
       .single();
