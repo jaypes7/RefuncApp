@@ -8,6 +8,7 @@
  */
 
 import { z } from "zod";
+import { ESCOLARIDADE_OPTIONS, EXPERIENCIA_FUNCAO_OPTIONS } from "@/constants/rh-profile";
 
 // ============================================================================
 // ENUMS E TIPOS
@@ -63,6 +64,8 @@ const PONTO_VALUES = ["Cadastrado", "Pendente"] as const;
 const TREINAMENTO_VALUES = ["Concluído", "Em Andamento", "Pendente"] as const;
 const VR_VALUES = ["Ativo", "Pendente"] as const;
 const UF_VALUES = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"] as const;
+const ESCOLARIDADE_VALUES = ESCOLARIDADE_OPTIONS;
+const EXPERIENCIA_FUNCAO_VALUES = EXPERIENCIA_FUNCAO_OPTIONS;
 
 /**
  * Cria um schema seguro para enums no update que:
@@ -276,6 +279,8 @@ export const ColaboradorSchema = z.object({
   turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
   NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.coerce.number().optional().nullable()),
   CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
+  ESCOLARIDADE: z.preprocess(emptyStringToUndefined, z.enum(ESCOLARIDADE_VALUES).optional().catch(undefined)),
+  EXPERIENCIA_FUNCAO: z.preprocess(emptyStringToUndefined, z.enum(EXPERIENCIA_FUNCAO_VALUES).optional().catch(undefined)),
 });
 
 /**
@@ -357,6 +362,8 @@ export const ColaboradorUpdateSchema = z.object({
   turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
   NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.coerce.number().optional().nullable()),
   CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
+  ESCOLARIDADE: safeEnum(ESCOLARIDADE_VALUES),
+  EXPERIENCIA_FUNCAO: safeEnum(EXPERIENCIA_FUNCAO_VALUES),
 });
 
 // ============================================================================
@@ -711,6 +718,8 @@ export const RhSchema = z.object({
   prorrogacao: DateSchema,
   demissao: DateSchema,
   numero_oracle: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  escolaridade: z.preprocess(emptyStringToUndefined, z.enum(ESCOLARIDADE_VALUES).optional()),
+  experiencia_funcao: z.preprocess(emptyStringToUndefined, z.enum(EXPERIENCIA_FUNCAO_VALUES).optional()),
   created_at: z.string().datetime().optional(),
 });
 

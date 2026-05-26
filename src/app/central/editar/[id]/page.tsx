@@ -64,6 +64,7 @@ import { PassagemForm } from "@/components/PassagemForm";
 import { HospedagemForm } from "@/components/HospedagemForm";
 import { AlimentacaoForm } from "@/components/AlimentacaoForm";
 import { TreinamentosTable } from "@/components/TreinamentosTable";
+import { ESCOLARIDADE_OPTIONS, EXPERIENCIA_FUNCAO_OPTIONS } from "@/constants/rh-profile";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
@@ -144,6 +145,8 @@ const EMPTY: FormData = {
   REALIZAR_TREINAMENTO: "",
   LOCAL_TREINAMENTO: "",
   NUMERO_ORACLE: null,
+  ESCOLARIDADE: "",
+  EXPERIENCIA_FUNCAO: "",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -166,6 +169,8 @@ const O_PONTO = ["Cadastrado", "Pendente"];
 const O_TREINAMENTO = ["Concluído", "Em Andamento", "Pendente"];
 const O_PESSOA = ["Masculino", "Feminino"];
 const O_PRE_ADMISSAO = ["Sim", "Não", "Pendente"];
+const O_ESCOLARIDADE = [...ESCOLARIDADE_OPTIONS];
+const O_EXPERIENCIA_FUNCAO = [...EXPERIENCIA_FUNCAO_OPTIONS];
 const O_UF = [
   "AC",
   "AL",
@@ -543,6 +548,18 @@ export default function EditarColaboradorPage() {
                     placeholder="Selecione o cargo..."
                   />
                 </div>
+                <S
+                  label="Escolaridade"
+                  value={form.ESCOLARIDADE}
+                  onChange={s("ESCOLARIDADE")}
+                  options={O_ESCOLARIDADE}
+                />
+                <S
+                  label="Experiência na função"
+                  value={form.EXPERIENCIA_FUNCAO}
+                  onChange={s("EXPERIENCIA_FUNCAO")}
+                  options={O_EXPERIENCIA_FUNCAO}
+                />
                 <S
                   label="Sexo"
                   value={form.SEXO}
