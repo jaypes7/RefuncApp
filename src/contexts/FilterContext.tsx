@@ -29,7 +29,7 @@ interface FilterContextType {
 
 const STORAGE_KEY = "refunc_centro_custo_filter";
 
-const FilterContext = createContext<FilterContextType | null>(null);
+export const FilterContext = createContext<FilterContextType | null>(null);
 
 export function FilterProvider({ children }: { children: React.ReactNode }) {
   const { user, isLoading: authLoading } = useAuth();
