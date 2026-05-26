@@ -45,8 +45,11 @@ import {
   CalendarClock,
   Globe,
   Briefcase,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import { dashboardRhApi } from "@/lib/axios";
+import { dashboardRhApi, colaboradoresApi, type Colaborador } from "@/lib/axios";
+import { cn } from "@/lib/utils";
 import { useFilter } from "@/contexts/FilterContext";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
@@ -124,6 +127,88 @@ function formatarData(termino: string): string {
 }
 
 // ============================================================================
+// RELATÓRIO POR FUNÇÃO — sub-componentes
+// ============================================================================
+
+type StatTone = "ok" | "warn" | "danger" | "info" | "muted";
+
+const TONE_DOT: Record<StatTone, string> = {
+  ok: "bg-[#337246]",
+  warn: "bg-amber-500",
+  danger: "bg-red-500",
+  info: "bg-blue-500",
+  muted: "bg-slate-400",
+};
+
+const TONE_TEXT: Record<StatTone, string> = {
+  ok: "text-[#337246]",
+  warn: "text-amber-600 dark:text-amber-400",
+  danger: "text-red-600 dark:text-red-400",
+  info: "text-blue-600 dark:text-blue-400",
+  muted: "text-muted-foreground",
+};
+
+function StatCategory({
+  label,
+  items,
+}: {
+  label: string;
+  items: Array<{ label: string; value: number; tone: StatTone }>;
+}) {
+  return (
+    <div className="rounded-md border border-border/60 bg-background/40 p-3">
+      <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2.5">
+        {label}
+      </p>
+      <div className="space-y-2">
+        {items.map((it) => (
+          <div key={it.label} className="flex items-center gap-2">
+            <span className={cn("h-2 w-2 rounded-full shrink-0", TONE_DOT[it.tone])} />
+            <span className="text-sm text-foreground/80 truncate">{it.label}</span>
+            <span className={cn("ml-auto text-sm font-semibold tabular-nums", TONE_TEXT[it.tone])}>
+              {it.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DetailField({
+  label,
+  value,
+  okIf,
+  dangerIf,
+}: {
+  label: string;
+  value: string | null | undefined;
+  okIf?: string[] | null;
+  dangerIf?: string[];
+}) {
+  const v = value?.toString().trim();
+  let tone: StatTone = "warn";
+  if (!v) {
+    tone = "warn";
+  } else if (dangerIf?.includes(v)) {
+    tone = "danger";
+  } else if (okIf === null || (okIf && okIf.includes(v))) {
+    tone = "ok";
+  } else {
+    tone = "info";
+  }
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", TONE_DOT[tone])} />
+      <span className="text-muted-foreground shrink-0">{label}:</span>
+      <span className={cn("truncate font-medium", TONE_TEXT[tone])}>
+        {v || "Pendente"}
+      </span>
+    </div>
+  );
+}
+
+// ============================================================================
 // SKELETON
 // ============================================================================
 
@@ -188,6 +273,11 @@ export default function DashboardRhPage() {
   const [filterCargo, setFilterCargo] = useState("all");
   const [mostrarMapa, setMostrarMapa] = useState(true);
 
+  // ── Relatório por Função ──────────────────────────────────────────────────
+  const [expandedFuncoes, setExpandedFuncoes] = useState<Set<string>>(new Set());
+  const [expandedRelatorio, setExpandedRelatorio] = useState<Set<string>>(new Set());
+  const [filterRelatorio, setFilterRelatorio] = useState("");
+
   const { centroCusto, isReady: filterReady } = useFilter();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -198,6 +288,38 @@ export default function DashboardRhPage() {
     },
     staleTime: 60_000,
     enabled: filterReady,
+  });
+
+  const { data: colaboradoresData } = useQuery({
+    queryKey: ["colaboradores", centroCusto],
+    queryFn: async () => {
+      const first = await colaboradoresApi.listar({
+        centro_custo: centroCusto || undefined,
+        limit: 100,
+        page: 1,
+      });
+      const all = [...first.data.data];
+      const totalPages = first.data.pagination.totalPages;
+      if (totalPages > 1) {
+        const promises = [];
+        for (let p = 2; p <= totalPages; p++) {
+          promises.push(
+            colaboradoresApi.listar({
+              centro_custo: centroCusto || undefined,
+              limit: 100,
+              page: p,
+            })
+          );
+        }
+        const rest = await Promise.all(promises);
+        for (const r of rest) {
+          all.push(...r.data.data);
+        }
+      }
+      return { data: all };
+    },
+    enabled: filterReady,
+    staleTime: 0,
   });
 
   // ── KPIs RH ───────────────────────────────────────────────────────────────
@@ -332,6 +454,91 @@ export default function DashboardRhPage() {
       { uf: "Outros", count: othersCount, fill: "#9e708b", percentValue: Math.round((othersCount / total) * 100 * 10) / 10, percent: ((othersCount / total) * 100).toFixed(1) },
     ];
   }, [data]);
+
+  // ── Relatório por Função ──────────────────────────────────────────────────
+
+  const toggleFuncao = (funcao: string) => {
+    setExpandedFuncoes((prev) => {
+      const next = new Set(prev);
+      if (next.has(funcao)) {
+        next.delete(funcao);
+        setExpandedRelatorio((r) => { const nr = new Set(r); nr.delete(funcao); return nr; });
+      } else next.add(funcao);
+      return next;
+    });
+  };
+
+  const toggleRelatorio = (funcao: string) => {
+    setExpandedRelatorio((prev) => {
+      const next = new Set(prev);
+      if (next.has(funcao)) next.delete(funcao);
+      else next.add(funcao);
+      return next;
+    });
+  };
+
+  const relatorioPorFuncao = useMemo(() => {
+    const lista = colaboradoresData?.data ?? [];
+    if (lista.length === 0) return [];
+    const filtrada = filterRelatorio
+      ? lista.filter((c: Colaborador) =>
+          (c.FUNCAO_CLT ?? "Não informado")
+            .toLowerCase()
+            .includes(filterRelatorio.toLowerCase()),
+        )
+      : lista;
+    const grupos = new Map<string, Colaborador[]>();
+    for (const row of filtrada as Colaborador[]) {
+      const fn = row.FUNCAO_CLT ?? "Não informado";
+      if (!grupos.has(fn)) grupos.set(fn, []);
+      grupos.get(fn)!.push(row);
+    }
+    return Array.from(grupos.entries())
+      .map(([funcao, membros]) => {
+        const stats = {
+          aso: { apto: 0, inapto: 0, pendente: 0 },
+          mob: { ok: 0, pendente: 0 },
+          docs: { completo: 0, incompleto: 0, pendente: 0 },
+          exame: { realizado: 0, agendado: 0, pendente: 0 },
+          portal: { liberado: 0, bloqueado: 0, pendente: 0 },
+          treinamento: { concluido: 0, andamento: 0, pendente: 0 },
+          cracha: { emitido: 0, pendente: 0 },
+          ponto: { cadastrado: 0, pendente: 0 },
+        };
+        for (const c of membros) {
+          if (c.ASO === "Apto") stats.aso.apto++;
+          else if (c.ASO === "Inapto") stats.aso.inapto++;
+          else stats.aso.pendente++;
+
+          if (c.MOB?.trim()) stats.mob.ok++;
+          else stats.mob.pendente++;
+
+          if (c.DOCS === "Completo") stats.docs.completo++;
+          else if (c.DOCS === "Incompleto") stats.docs.incompleto++;
+          else stats.docs.pendente++;
+
+          if (c.EXAME === "Realizado") stats.exame.realizado++;
+          else if (c.EXAME === "Agendado") stats.exame.agendado++;
+          else stats.exame.pendente++;
+
+          if (c.PORTAL === "Liberado") stats.portal.liberado++;
+          else if (c.PORTAL === "Bloqueado") stats.portal.bloqueado++;
+          else stats.portal.pendente++;
+
+          if (c.TREINAMENTO === "Concluído") stats.treinamento.concluido++;
+          else if (c.TREINAMENTO === "Em Andamento") stats.treinamento.andamento++;
+          else stats.treinamento.pendente++;
+
+          if (c.CRACHA === "Emitido") stats.cracha.emitido++;
+          else stats.cracha.pendente++;
+
+          if (c.PONTO === "Cadastrado") stats.ponto.cadastrado++;
+          else stats.ponto.pendente++;
+        }
+        return { funcao, membros, stats };
+      })
+      .sort((a, b) => b.membros.length - a.membros.length);
+  }, [colaboradoresData, filterRelatorio]);
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -898,6 +1105,185 @@ export default function DashboardRhPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* ── Relatório por Função ── */}
+            {relatorioPorFuncao.length > 0 && (
+              <div>
+                <Card className="glass-card">
+                  <CardHeader className="flex flex-row items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-primary" />
+                    <CardTitle>Relatório por Função</CardTitle>
+                    <span className="text-sm font-normal text-muted-foreground">
+                      ({relatorioPorFuncao.reduce((acc, g) => acc + g.membros.length, 0)} colaboradores em {relatorioPorFuncao.length} {relatorioPorFuncao.length === 1 ? "função" : "funções"})
+                    </span>
+                  </CardHeader>
+                  <CardContent>
+                    <Input
+                      placeholder="Filtrar por função..."
+                      value={filterRelatorio}
+                      onChange={(e) => setFilterRelatorio(e.target.value)}
+                      className="mb-4 max-w-md"
+                    />
+                    <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
+                      {relatorioPorFuncao.map(({ funcao, membros, stats }) => {
+                        const grupoAberto = expandedFuncoes.has(funcao);
+                        const expanded = expandedRelatorio.has(funcao);
+                        return (
+                          <div
+                            key={funcao}
+                            className="rounded-lg border border-border bg-card/40 overflow-hidden"
+                          >
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                              onClick={() => toggleFuncao(funcao)}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {grupoAberto ? (
+                                  <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                )}
+                                <span className="font-semibold text-foreground truncate">{funcao}</span>
+                                <span className="shrink-0 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                  {membros.length} {membros.length === 1 ? "colaborador" : "colaboradores"}
+                                </span>
+                              </div>
+                            </button>
+
+                            {grupoAberto && (
+                              <>
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-3">
+                                  <StatCategory
+                                    label="ASO"
+                                    items={[
+                                      { label: "Apto", value: stats.aso.apto, tone: "ok" },
+                                      { label: "Inapto", value: stats.aso.inapto, tone: "danger" },
+                                      { label: "Pendente", value: stats.aso.pendente, tone: "warn" },
+                                    ]}
+                                  />
+                                  <StatCategory
+                                    label="MOB"
+                                    items={[
+                                      { label: "OK", value: stats.mob.ok, tone: "ok" },
+                                      { label: "Pendente", value: stats.mob.pendente, tone: "warn" },
+                                    ]}
+                                  />
+                                  <StatCategory
+                                    label="Documentação"
+                                    items={[
+                                      { label: "Completo", value: stats.docs.completo, tone: "ok" },
+                                      { label: "Incompleto", value: stats.docs.incompleto, tone: "danger" },
+                                      { label: "Pendente", value: stats.docs.pendente, tone: "warn" },
+                                    ]}
+                                  />
+                                  <StatCategory
+                                    label="Exame"
+                                    items={[
+                                      { label: "Realizado", value: stats.exame.realizado, tone: "ok" },
+                                      { label: "Agendado", value: stats.exame.agendado, tone: "info" },
+                                      { label: "Pendente", value: stats.exame.pendente, tone: "warn" },
+                                    ]}
+                                  />
+                                  <StatCategory
+                                    label="Portal"
+                                    items={[
+                                      { label: "Liberado", value: stats.portal.liberado, tone: "ok" },
+                                      { label: "Bloqueado", value: stats.portal.bloqueado, tone: "danger" },
+                                      { label: "Pendente", value: stats.portal.pendente, tone: "warn" },
+                                    ]}
+                                  />
+                                  <StatCategory
+                                    label="Treinamento"
+                                    items={[
+                                      { label: "Concluído", value: stats.treinamento.concluido, tone: "ok" },
+                                      { label: "Em Andamento", value: stats.treinamento.andamento, tone: "info" },
+                                      { label: "Pendente", value: stats.treinamento.pendente, tone: "warn" },
+                                    ]}
+                                  />
+                                  <StatCategory
+                                    label="Crachá"
+                                    items={[
+                                      { label: "Emitido", value: stats.cracha.emitido, tone: "ok" },
+                                      { label: "Pendente", value: stats.cracha.pendente, tone: "warn" },
+                                    ]}
+                                  />
+                                  <StatCategory
+                                    label="Ponto"
+                                    items={[
+                                      { label: "Cadastrado", value: stats.ponto.cadastrado, tone: "ok" },
+                                      { label: "Pendente", value: stats.ponto.pendente, tone: "warn" },
+                                    ]}
+                                  />
+                                </div>
+
+                                <div className="flex justify-end px-3 pb-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1 text-xs h-7"
+                                    onClick={() => toggleRelatorio(funcao)}
+                                  >
+                                    {expanded ? (
+                                      <>
+                                        <ChevronUp className="h-3.5 w-3.5" />
+                                        Ocultar detalhes
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ChevronDown className="h-3.5 w-3.5" />
+                                        Ver mais detalhes
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+
+                                {expanded && (
+                                  <div className="border-t border-border bg-background/40 p-3 space-y-2">
+                                    {membros.map((c) => (
+                                      <div
+                                        key={c.id ?? `${c.CPF}-${c.NOME}`}
+                                        className="rounded-md border border-border/60 bg-card/60 p-3"
+                                      >
+                                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
+                                          <span className="font-medium text-sm text-foreground">
+                                            {c.NOME}
+                                          </span>
+                                          {c.RE && (
+                                            <span className="font-mono text-xs text-muted-foreground">
+                                              RE {c.RE}
+                                            </span>
+                                          )}
+                                          {c.STATUS && (
+                                            <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
+                                              {c.STATUS}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-1 text-xs">
+                                          <DetailField label="ASO" value={c.ASO} okIf={["Apto"]} dangerIf={["Inapto"]} />
+                                          <DetailField label="MOB" value={c.MOB?.trim() || null} okIf={null} />
+                                          <DetailField label="Docs" value={c.DOCS} okIf={["Completo"]} dangerIf={["Incompleto"]} />
+                                          <DetailField label="Exame" value={c.EXAME} okIf={["Realizado"]} />
+                                          <DetailField label="Portal" value={c.PORTAL} okIf={["Liberado"]} dangerIf={["Bloqueado"]} />
+                                          <DetailField label="Treinamento" value={c.TREINAMENTO} okIf={["Concluído"]} />
+                                          <DetailField label="Crachá" value={c.CRACHA} okIf={["Emitido"]} />
+                                          <DetailField label="Ponto" value={c.PONTO} okIf={["Cadastrado"]} />
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
           </div>
         </div>
