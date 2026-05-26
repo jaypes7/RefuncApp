@@ -379,7 +379,38 @@ export type DashboardLogisticaData = {
 
 /** Shape retornada por GET /api/dashboard/suprimentos */
 export type DashboardSuprimentosData = {
-  suprimentos: Omit<DashboardData["agregacoes"]["suprimentos"], "ordens">;
+  suprimentos: {
+    totalInvestido: number;
+    totalOrdens: number;
+    totalAPagar: number;
+    orcado: number;
+    investido: number;
+    distribuicaoStatus: Array<{ status: string; total: number }>;
+    porCategoria: Array<{ categoria: string; valor: number }>;
+    sgpPorTipo: Array<{ tipo: string; valor: number }>;
+    ocAbertas: number;
+    qtRecebimentos: number;
+    itensPendentes: Array<{
+      requisicao_id: string;
+      numero_oc: string;
+      item_id: string;
+      nome_item: string;
+      quantidade: number;
+      quantidade_recebida: number;
+      faltam: number;
+    }>;
+    ocAtrasadas: Array<{
+      numero_oc: string;
+      fornecedor: string;
+      previsao_entrega: string;
+      itens_pendentes: Array<{
+        nome_item: string;
+        quantidade: number;
+        recebido: number;
+        faltam: number;
+      }>;
+    }>;
+  };
 };
 
 // ============================================================================
