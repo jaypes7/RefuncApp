@@ -44,6 +44,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { colaboradoresApi, clinicasApi, treinamentosApi } from "@/lib/axios";
 import { CargoCombobox } from "@/components/CargoCombobox";
 import { TreinamentosSelecao, type TreinamentoSelecionado } from "@/components/TreinamentosSelecao";
+import { ESCOLARIDADE_OPTIONS, EXPERIENCIA_FUNCAO_OPTIONS } from "@/constants/rh-profile";
 
 // ============================================================================
 // FUNÇÃO DEBOUNCE
@@ -79,6 +80,8 @@ const fullSchema = z.object({
   funcaoClt: z.string().optional(),
   histograma: z.string().optional(),
   numeroOracle: z.coerce.number().optional().nullable(),
+  escolaridade: z.enum(ESCOLARIDADE_OPTIONS).optional(),
+  experienciaFuncao: z.enum(EXPERIENCIA_FUNCAO_OPTIONS).optional(),
   cartaOferta: z.enum(["Sim", "Não", "Pendente"]).optional(),
   tipoContrato: z.enum(["Determinado", "Indeterminado"]).optional(),
   contrato: z.enum(["CLT", "PJ", "Estagiário"]).optional(),
@@ -143,6 +146,14 @@ export default function OnboardingPage() {
   const { centroCusto, isReady: filterReady } = useFilter();
   const [treinamentosSelecionados, setTreinamentosSelecionados] = useState<TreinamentoSelecionado[]>([]);
 
+  const invalidateColaboradorCaches = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" }),
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" }),
+      queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" }),
+    ]);
+  };
+
   // Busca clínicas da API
   const { data: clinicasData, isLoading: isLoadingClinicas } = useQuery({
     queryKey: ["clinicas"],
@@ -203,6 +214,8 @@ export default function OnboardingPage() {
       FUNCAO_CLT: data.funcaoClt,
       HISTOGRAMA: data.histograma,
       NUMERO_ORACLE: data.numeroOracle ?? null,
+      ESCOLARIDADE: data.escolaridade,
+      EXPERIENCIA_FUNCAO: data.experienciaFuncao,
       IDADE: data.idade,
       DT_NASCIMENTO: data.dtNascimento,
       CPF: data.cpf.replace(/\D/g, ""),
@@ -223,10 +236,9 @@ export default function OnboardingPage() {
       const colaborador = buildColaboradorPayload(data);
       return colaboradoresApi.criar(colaborador);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Colaborador cadastrado com sucesso!");
-      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
+      await invalidateColaboradorCaches();
       setShowSuccess(true);
       setTimeout(() => {
         router.push("/central");
@@ -250,10 +262,9 @@ export default function OnboardingPage() {
       const colaborador = buildColaboradorPayload(data);
       return colaboradoresApi.criar(colaborador);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Rascunho salvo com sucesso!");
-      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
+      await invalidateColaboradorCaches();
       router.push("/central");
     },
     onError: (error: unknown) => {
@@ -358,6 +369,8 @@ export default function OnboardingPage() {
       funcaoClt: "",
       histograma: "",
       numeroOracle: null,
+      escolaridade: undefined,
+      experienciaFuncao: undefined,
       cartaOferta: undefined,
       contrato: undefined,
       status: undefined,
@@ -405,6 +418,8 @@ export default function OnboardingPage() {
   const asoValue = watch("aso");
   const clinicaValue = watch("clinica");
   const funcaoCltValue = watch("funcaoClt");
+  const escolaridadeValue = watch("escolaridade");
+  const experienciaFuncaoValue = watch("experienciaFuncao");
   const centroCustoValue = watch("centroCusto");
   const cpfValue = watch("cpf");
 
@@ -619,6 +634,40 @@ export default function OnboardingPage() {
                         onChange={(value) => setValue("funcaoClt", value, { shouldValidate: true })}
                         placeholder="Selecione o cargo..."
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Escolaridade</label>
+                      <Select
+                        value={escolaridadeValue || undefined}
+                        onValueChange={(value: (typeof ESCOLARIDADE_OPTIONS)[number]) =>
+                          setValue("escolaridade", value, { shouldValidate: true })
+                        }
+                      >
+                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          {ESCOLARIDADE_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Experiência na função</label>
+                      <Select
+                        value={experienciaFuncaoValue || undefined}
+                        onValueChange={(value: (typeof EXPERIENCIA_FUNCAO_OPTIONS)[number]) =>
+                          setValue("experienciaFuncao", value, { shouldValidate: true })
+                        }
+                      >
+                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          {EXPERIENCIA_FUNCAO_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {/* Sexo */}

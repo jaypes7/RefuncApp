@@ -15,6 +15,7 @@ export const revalidate = 0;
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth, resolveCentroCusto } from "@/lib/auth";
+import { ESCOLARIDADE_OPTIONS, EXPERIENCIA_FUNCAO_OPTIONS } from "@/constants/rh-profile";
 
 // ============================================================================
 // GET /api/dashboard/rh
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     const db = createServerClient();
     let query = db
       .from("colaboradores")
-      .select("cpf,nome,funcao_clt,idade,status,data_admissao,termino,aso,uf,sexo");
+      .select("cpf,nome,funcao_clt,idade,status,data_admissao,termino,aso,exame,uf,sexo,escolaridade,experiencia_funcao");
     if (centroCusto?.length) query = query.in("centro_custo", centroCusto);
     const { data, error } = await query;
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     const comId = rows.filter((r) => r["cpf"] && r["nome"]);
     const totalCadastrados = comId.length;
     const totalAdmitidos = comId.filter(
-      (r) => r["data_admissao"] || (r["status"] && r["status"] !== "Pendente"),
+      (r) => r["exame"] === "Realizado" && r["aso"] === "Apto" && r["status"] === "Ativo",
     ).length;
     const aptoCount = comId.filter((r) => r["aso"] === "Apto").length;
     const inaptoCount = comId.filter((r) => r["aso"] === "Inapto").length;
@@ -96,6 +97,24 @@ export async function GET(request: NextRequest) {
     }
     const distribuicaoSexo = Object.entries(sexoMap).map(([sexo, total]) => ({ sexo, total }));
 
+    const escolaridadeMap: Record<string, number> = {};
+    for (const r of comId) {
+      const escolaridade = String(r["escolaridade"] ?? "").trim();
+      if (escolaridade) escolaridadeMap[escolaridade] = (escolaridadeMap[escolaridade] || 0) + 1;
+    }
+    const distribuicaoEscolaridade = ESCOLARIDADE_OPTIONS
+      .map((escolaridade) => ({ escolaridade, total: escolaridadeMap[escolaridade] || 0 }))
+      .filter((item) => item.total > 0);
+
+    const experienciaFuncaoMap: Record<string, number> = {};
+    for (const r of comId) {
+      const experiencia = String(r["experiencia_funcao"] ?? "").trim();
+      if (experiencia) experienciaFuncaoMap[experiencia] = (experienciaFuncaoMap[experiencia] || 0) + 1;
+    }
+    const distribuicaoExperienciaFuncao = EXPERIENCIA_FUNCAO_OPTIONS
+      .map((experiencia) => ({ experiencia, total: experienciaFuncaoMap[experiencia] || 0 }))
+      .filter((item) => item.total > 0);
+
     // ── Distribuição por UF (todos os colaboradores válidos) ────────────────
     const ufMap: Record<string, number> = {};
     for (const r of comId) {
@@ -138,6 +157,8 @@ export async function GET(request: NextRequest) {
           { status: "Pendente", total: pendenteCount },
         ],
         distribuicaoSexo,
+        distribuicaoEscolaridade,
+        distribuicaoExperienciaFuncao,
       },
     });
   } catch (error) {

@@ -54,6 +54,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrazilMap } from "@/components/BrazilMap";
 import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
+import { ESCOLARIDADE_OPTIONS, EXPERIENCIA_FUNCAO_OPTIONS } from "@/constants/rh-profile";
 
 // ============================================================================
 // CHART CONFIGS
@@ -238,27 +239,25 @@ export default function DashboardRhPage() {
 
   const totalFuncoes = data?.agregacoes?.distribuicaoFuncoes?.length ?? 0;
 
-  // ── Dados fictícios de escolaridade (temporário) ─────────────────────────
+  // ── Escolaridade ─────────────────────────────────────────────────────────
   const dadosEscolaridade = useMemo(() => {
-    const fakeData = [
-      { name: "Ensino Fundamental", value: 45, fill: "#ff460a" },
-      { name: "Ensino Médio", value: 120, fill: "#19365b" },
-      { name: "Técnico", value: 80, fill: "#416e7d" },
-      { name: "Superior", value: 55, fill: "#9c3022" },
-      { name: "Pós-graduação", value: 20, fill: "#ffa78b" },
-    ];
-    return fakeData;
-  }, []);
+    const corMap = new Map<string, string>(ESCOLARIDADE_OPTIONS.map((item, i) => [item, UF_COLORS[i % UF_COLORS.length]]));
+    return (data?.agregacoes?.distribuicaoEscolaridade ?? []).map((item) => ({
+      name: item.escolaridade,
+      value: item.total,
+      fill: corMap.get(item.escolaridade) ?? "#999999",
+    }));
+  }, [data]);
 
-  // ── Dados fictícios de experiência na função (temporário) ─────────────────
+  // ── Experiência na função ────────────────────────────────────────────────
   const dadosExperiencia = useMemo(() => {
-    const fakeData = [
-      { name: "Júnior (até 2 anos)", value: 85, fill: "#ff460a" },
-      { name: "Pleno (2,5 a 4 anos)", value: 60, fill: "#19365b" },
-      { name: "Sênior (5 anos+)", value: 35, fill: "#416e7d" },
-    ];
-    return fakeData;
-  }, []);
+    const corMap = new Map<string, string>(EXPERIENCIA_FUNCAO_OPTIONS.map((item, i) => [item, UF_COLORS[i % UF_COLORS.length]]));
+    return (data?.agregacoes?.distribuicaoExperienciaFuncao ?? []).map((item) => ({
+      name: item.experiencia,
+      value: item.total,
+      fill: corMap.get(item.experiencia) ?? "#999999",
+    }));
+  }, [data]);
 
   // ── Dados ASO (Apto / Inapto / Pendente) ──────────────────────────────────
 
@@ -815,14 +814,11 @@ export default function DashboardRhPage() {
                 </CardContent>
               </Card>
 
-              {/* Card Escolaridade — Dados fictícios temporários */}
+              {/* Card Escolaridade */}
               <Card className="glass-card">
                 <CardHeader className="flex flex-row items-center gap-2 pb-2">
                   <GraduationCap className="h-4 w-4 text-primary" />
                   <CardTitle>Escolaridade</CardTitle>
-                  <span className="ml-auto text-[10px] uppercase tracking-wide text-yellow-500 font-semibold">
-                    Dados fictícios
-                  </span>
                 </CardHeader>
                 <CardContent>
                   <ChartContainer config={configEscolaridade} className="h-[260px] 2xl:h-[340px] w-full">
@@ -860,14 +856,11 @@ export default function DashboardRhPage() {
                 </CardContent>
               </Card>
 
-              {/* Card Experiência na função — Dados fictícios temporários */}
+              {/* Card Experiência na função */}
               <Card className="glass-card">
                 <CardHeader className="flex flex-row items-center gap-2 pb-2">
                   <Briefcase className="h-4 w-4 text-primary" />
                   <CardTitle>Experiência na função</CardTitle>
-                  <span className="ml-auto text-[10px] uppercase tracking-wide text-yellow-500 font-semibold">
-                    Dados fictícios
-                  </span>
                 </CardHeader>
                 <CardContent>
                   <ChartContainer config={configExperiencia} className="h-[260px] 2xl:h-[340px] w-full">

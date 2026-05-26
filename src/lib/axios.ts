@@ -99,6 +99,8 @@ export interface Colaborador {
   TELEFONE?: string | null;
   NUMERO_ORACLE?: number | null;
   CENTRO_CUSTO?: string | null;
+  ESCOLARIDADE?: string | null;
+  EXPERIENCIA_FUNCAO?: string | null;
   turno_trabalho?: string | null;
   TURNO_TRABALHO?: string | null;
   CHECK_IN?: string | null;
@@ -363,6 +365,8 @@ export type DashboardRhData = {
     terminoDetalhado: Array<{ nome: string; funcao_clt: string | null; termino: string; status: string | null; uf: string | null }>;
     distribuicaoASO: Array<{ status: string; total: number }>;
     distribuicaoSexo: Array<{ sexo: string; total: number }>;
+    distribuicaoEscolaridade: Array<{ escolaridade: string; total: number }>;
+    distribuicaoExperienciaFuncao: Array<{ experiencia: string; total: number }>;
   };
 };
 

@@ -79,6 +79,8 @@ function mapRow(row: Record<string, any>): Colaborador {
     NUMERO_ORACLE:        row.numero_oracle     ?? null,
     turno_trabalho:       row.turno_trabalho    ?? null,
     CENTRO_CUSTO:         row.centro_custo      ?? null,
+    ESCOLARIDADE:         row.escolaridade      ?? null,
+    EXPERIENCIA_FUNCAO:   row.experiencia_funcao ?? null,
   };
 }
 
@@ -134,6 +136,8 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
   if (data.NUMERO_ORACLE     !== undefined) row.numero_oracle      = data.NUMERO_ORACLE;
   if (data.turno_trabalho    !== undefined) row.turno_trabalho     = data.turno_trabalho;
   if (data.CENTRO_CUSTO      !== undefined) row.centro_custo       = data.CENTRO_CUSTO;
+  if (data.ESCOLARIDADE      !== undefined) row.escolaridade       = data.ESCOLARIDADE;
+  if (data.EXPERIENCIA_FUNCAO !== undefined) row.experiencia_funcao = data.EXPERIENCIA_FUNCAO;
 
   return row;
 }
