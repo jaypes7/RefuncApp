@@ -209,16 +209,16 @@ function StatCategory({
   items: Array<{ label: string; value: number; tone: StatTone }>;
 }) {
   return (
-    <div className="rounded-md border border-border/60 bg-background/40 p-2">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+    <div className="rounded-md border border-border/60 bg-background/40 p-3">
+      <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2.5">
         {label}
       </p>
-      <div className="space-y-1">
+      <div className="space-y-2">
         {items.map((it) => (
-          <div key={it.label} className="flex items-center gap-1.5">
-            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", TONE_DOT[it.tone])} />
-            <span className="text-foreground/80 truncate">{it.label}</span>
-            <span className={cn("ml-auto font-semibold tabular-nums", TONE_TEXT[it.tone])}>
+          <div key={it.label} className="flex items-center gap-2">
+            <span className={cn("h-2 w-2 rounded-full shrink-0", TONE_DOT[it.tone])} />
+            <span className="text-sm text-foreground/80 truncate">{it.label}</span>
+            <span className={cn("ml-auto text-sm font-semibold tabular-nums", TONE_TEXT[it.tone])}>
               {it.value}
             </span>
           </div>
@@ -400,94 +400,51 @@ export default function DashboardPage() {
     return Array.from(grupos.entries()).map(([funcao, membros]) => ({ funcao, membros }));
   }, [colaboradoresData, filterNomeFuncoes]);
 
-  // ── Relatório por Função — agregação de status + detalhamento ─────────────
-  const [expandedFuncoes, setExpandedFuncoes] = useState<Set<string>>(new Set());
-  const [expandedRelatorio, setExpandedRelatorio] = useState<Set<string>>(new Set());
-  const [filterRelatorio, setFilterRelatorio] = useState("");
-
-  const toggleFuncao = (funcao: string) => {
-    setExpandedFuncoes((prev) => {
-      const next = new Set(prev);
-      if (next.has(funcao)) {
-        next.delete(funcao);
-        // also collapse individual details when collapsing the group
-        setExpandedRelatorio((r) => { const nr = new Set(r); nr.delete(funcao); return nr; });
-      } else next.add(funcao);
-      return next;
-    });
-  };
-
-  const toggleRelatorio = (funcao: string) => {
-    setExpandedRelatorio((prev) => {
-      const next = new Set(prev);
-      if (next.has(funcao)) next.delete(funcao);
-      else next.add(funcao);
-      return next;
-    });
-  };
-
-  const relatorioPorFuncao = useMemo(() => {
+  // ── Status Geral — agregação global de todos os colaboradores ────────────
+  const statusGeral = useMemo(() => {
     const lista = colaboradoresData?.data ?? [];
-    if (lista.length === 0) return [];
-    const filtrada = filterRelatorio
-      ? lista.filter((c) =>
-          (c.FUNCAO_CLT ?? "Não informado")
-            .toLowerCase()
-            .includes(filterRelatorio.toLowerCase()),
-        )
-      : lista;
-    const grupos = new Map<string, Colaborador[]>();
-    for (const row of filtrada) {
-      const fn = row.FUNCAO_CLT ?? "Não informado";
-      if (!grupos.has(fn)) grupos.set(fn, []);
-      grupos.get(fn)!.push(row);
+    const stats = {
+      aso: { apto: 0, inapto: 0, pendente: 0 },
+      mob: { ok: 0, pendente: 0 },
+      docs: { completo: 0, incompleto: 0, pendente: 0 },
+      exame: { realizado: 0, agendado: 0, pendente: 0 },
+      portal: { liberado: 0, bloqueado: 0, pendente: 0 },
+      treinamento: { concluido: 0, andamento: 0, pendente: 0 },
+      cracha: { emitido: 0, pendente: 0 },
+      ponto: { cadastrado: 0, pendente: 0 },
+    };
+    for (const c of lista) {
+      if (c.ASO === "Apto") stats.aso.apto++;
+      else if (c.ASO === "Inapto") stats.aso.inapto++;
+      else stats.aso.pendente++;
+
+      if (c.MOB?.trim()) stats.mob.ok++;
+      else stats.mob.pendente++;
+
+      if (c.DOCS === "Completo") stats.docs.completo++;
+      else if (c.DOCS === "Incompleto") stats.docs.incompleto++;
+      else stats.docs.pendente++;
+
+      if (c.EXAME === "Realizado") stats.exame.realizado++;
+      else if (c.EXAME === "Agendado") stats.exame.agendado++;
+      else stats.exame.pendente++;
+
+      if (c.PORTAL === "Liberado") stats.portal.liberado++;
+      else if (c.PORTAL === "Bloqueado") stats.portal.bloqueado++;
+      else stats.portal.pendente++;
+
+      if (c.TREINAMENTO === "Concluído") stats.treinamento.concluido++;
+      else if (c.TREINAMENTO === "Em Andamento") stats.treinamento.andamento++;
+      else stats.treinamento.pendente++;
+
+      if (c.CRACHA === "Emitido") stats.cracha.emitido++;
+      else stats.cracha.pendente++;
+
+      if (c.PONTO === "Cadastrado") stats.ponto.cadastrado++;
+      else stats.ponto.pendente++;
     }
-    return Array.from(grupos.entries())
-      .map(([funcao, membros]) => {
-        const stats = {
-          aso: { apto: 0, inapto: 0, pendente: 0 },
-          mob: { ok: 0, pendente: 0 },
-          docs: { completo: 0, incompleto: 0, pendente: 0 },
-          exame: { realizado: 0, agendado: 0, pendente: 0 },
-          portal: { liberado: 0, bloqueado: 0, pendente: 0 },
-          treinamento: { concluido: 0, andamento: 0, pendente: 0 },
-          cracha: { emitido: 0, pendente: 0 },
-          ponto: { cadastrado: 0, pendente: 0 },
-        };
-        for (const c of membros) {
-          if (c.ASO === "Apto") stats.aso.apto++;
-          else if (c.ASO === "Inapto") stats.aso.inapto++;
-          else stats.aso.pendente++;
-
-          if (c.MOB?.trim()) stats.mob.ok++;
-          else stats.mob.pendente++;
-
-          if (c.DOCS === "Completo") stats.docs.completo++;
-          else if (c.DOCS === "Incompleto") stats.docs.incompleto++;
-          else stats.docs.pendente++;
-
-          if (c.EXAME === "Realizado") stats.exame.realizado++;
-          else if (c.EXAME === "Agendado") stats.exame.agendado++;
-          else stats.exame.pendente++;
-
-          if (c.PORTAL === "Liberado") stats.portal.liberado++;
-          else if (c.PORTAL === "Bloqueado") stats.portal.bloqueado++;
-          else stats.portal.pendente++;
-
-          if (c.TREINAMENTO === "Concluído") stats.treinamento.concluido++;
-          else if (c.TREINAMENTO === "Em Andamento") stats.treinamento.andamento++;
-          else stats.treinamento.pendente++;
-
-          if (c.CRACHA === "Emitido") stats.cracha.emitido++;
-          else stats.cracha.pendente++;
-
-          if (c.PONTO === "Cadastrado") stats.ponto.cadastrado++;
-          else stats.ponto.pendente++;
-        }
-        return { funcao, membros, stats };
-      })
-      .sort((a, b) => b.membros.length - a.membros.length);
-  }, [colaboradoresData, filterRelatorio]);
+    return { total: lista.length, stats };
+  }, [colaboradoresData]);
 
   // ── Ocorrências manuais ──────────────────────────────────────────────────────
   const queryClient = useQueryClient();
@@ -1929,182 +1886,80 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            {/* ── Relatório por Função ── */}
-            {relatorioPorFuncao.length > 0 && (
+            {/* ── Status Geral ── */}
+            {statusGeral.total > 0 && (
               <div className="mb-6">
                 <Card className="glass-card">
                   <CardHeader className="flex flex-row items-center gap-2">
                     <Briefcase className="h-4 w-4 text-primary" />
-                    <CardTitle>Relatório por Função</CardTitle>
+                    <CardTitle>Status Geral</CardTitle>
                     <span className="text-sm font-normal text-muted-foreground">
-                      ({relatorioPorFuncao.reduce((acc, g) => acc + g.membros.length, 0)} colaboradores em {relatorioPorFuncao.length} {relatorioPorFuncao.length === 1 ? "função" : "funções"})
+                      ({statusGeral.total} colaboradores)
                     </span>
                   </CardHeader>
                   <CardContent>
-                    <Input
-                      placeholder="Filtrar por função..."
-                      value={filterRelatorio}
-                      onChange={(e) => setFilterRelatorio(e.target.value)}
-                      className="mb-4 max-w-md"
-                    />
-                    <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
-                      {relatorioPorFuncao.map(({ funcao, membros, stats }) => {
-                        const grupoAberto = expandedFuncoes.has(funcao);
-                        const expanded = expandedRelatorio.has(funcao);
-                        return (
-                          <div
-                            key={funcao}
-                            className="rounded-lg border border-border bg-card/40 overflow-hidden"
-                          >
-                            <button
-                              type="button"
-                              className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
-                              onClick={() => toggleFuncao(funcao)}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                {grupoAberto ? (
-                                  <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                )}
-                                <span className="font-semibold text-foreground truncate">{funcao}</span>
-                                <span className="shrink-0 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                                  {membros.length} {membros.length === 1 ? "colaborador" : "colaboradores"}
-                                </span>
-                              </div>
-                            </button>
-
-                            {grupoAberto && (
-                              <>
-                            {/* Status agregados */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 p-3 text-xs">
-                              <StatCategory
-                                label="ASO"
-                                items={[
-                                  { label: "Apto", value: stats.aso.apto, tone: "ok" },
-                                  { label: "Inapto", value: stats.aso.inapto, tone: "danger" },
-                                  { label: "Pendente", value: stats.aso.pendente, tone: "warn" },
-                                ]}
-                              />
-                              <StatCategory
-                                label="MOB"
-                                items={[
-                                  { label: "OK", value: stats.mob.ok, tone: "ok" },
-                                  { label: "Pendente", value: stats.mob.pendente, tone: "warn" },
-                                ]}
-                              />
-                              <StatCategory
-                                label="Documentação"
-                                items={[
-                                  { label: "Completo", value: stats.docs.completo, tone: "ok" },
-                                  { label: "Incompleto", value: stats.docs.incompleto, tone: "danger" },
-                                  { label: "Pendente", value: stats.docs.pendente, tone: "warn" },
-                                ]}
-                              />
-                              <StatCategory
-                                label="Exame"
-                                items={[
-                                  { label: "Realizado", value: stats.exame.realizado, tone: "ok" },
-                                  { label: "Agendado", value: stats.exame.agendado, tone: "info" },
-                                  { label: "Pendente", value: stats.exame.pendente, tone: "warn" },
-                                ]}
-                              />
-                              <StatCategory
-                                label="Portal"
-                                items={[
-                                  { label: "Liberado", value: stats.portal.liberado, tone: "ok" },
-                                  { label: "Bloqueado", value: stats.portal.bloqueado, tone: "danger" },
-                                  { label: "Pendente", value: stats.portal.pendente, tone: "warn" },
-                                ]}
-                              />
-                              <StatCategory
-                                label="Treinamento"
-                                items={[
-                                  { label: "Concluído", value: stats.treinamento.concluido, tone: "ok" },
-                                  { label: "Em Andamento", value: stats.treinamento.andamento, tone: "info" },
-                                  { label: "Pendente", value: stats.treinamento.pendente, tone: "warn" },
-                                ]}
-                              />
-                              <StatCategory
-                                label="Crachá"
-                                items={[
-                                  { label: "Emitido", value: stats.cracha.emitido, tone: "ok" },
-                                  { label: "Pendente", value: stats.cracha.pendente, tone: "warn" },
-                                ]}
-                              />
-                              <StatCategory
-                                label="Ponto"
-                                items={[
-                                  { label: "Cadastrado", value: stats.ponto.cadastrado, tone: "ok" },
-                                  { label: "Pendente", value: stats.ponto.pendente, tone: "warn" },
-                                ]}
-                              />
-                            </div>
-
-                            {/* Ver mais detalhes toggle */}
-                            <div className="flex justify-end px-3 pb-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1 text-xs h-7"
-                                onClick={() => toggleRelatorio(funcao)}
-                              >
-                                {expanded ? (
-                                  <>
-                                    <ChevronUp className="h-3.5 w-3.5" />
-                                    Ocultar detalhes
-                                  </>
-                                ) : (
-                                  <>
-                                    <ChevronDown className="h-3.5 w-3.5" />
-                                    Ver mais detalhes
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-
-                            {/* Detalhes individuais */}
-                            {expanded && (
-                              <div className="border-t border-border bg-background/40 p-3 space-y-2">
-                                {membros.map((c) => (
-                                  <div
-                                    key={c.id ?? `${c.CPF}-${c.NOME}`}
-                                    className="rounded-md border border-border/60 bg-card/60 p-3"
-                                  >
-                                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
-                                      <span className="font-medium text-sm text-foreground">
-                                        {c.NOME}
-                                      </span>
-                                      {c.RE && (
-                                        <span className="font-mono text-xs text-muted-foreground">
-                                          RE {c.RE}
-                                        </span>
-                                      )}
-                                      {c.STATUS && (
-                                        <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
-                                          {c.STATUS}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-1 text-xs">
-                                      <DetailField label="ASO" value={c.ASO} okIf={["Apto"]} dangerIf={["Inapto"]} />
-                                      <DetailField label="MOB" value={c.MOB?.trim() || null} okIf={null} />
-                                      <DetailField label="Docs" value={c.DOCS} okIf={["Completo"]} dangerIf={["Incompleto"]} />
-                                      <DetailField label="Exame" value={c.EXAME} okIf={["Realizado"]} />
-                                      <DetailField label="Portal" value={c.PORTAL} okIf={["Liberado"]} dangerIf={["Bloqueado"]} />
-                                      <DetailField label="Treinamento" value={c.TREINAMENTO} okIf={["Concluído"]} />
-                                      <DetailField label="Crachá" value={c.CRACHA} okIf={["Emitido"]} />
-                                      <DetailField label="Ponto" value={c.PONTO} okIf={["Cadastrado"]} />
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      <StatCategory
+                        label="ASO"
+                        items={[
+                          { label: "Apto", value: statusGeral.stats.aso.apto, tone: "ok" },
+                          { label: "Inapto", value: statusGeral.stats.aso.inapto, tone: "danger" },
+                          { label: "Pendente", value: statusGeral.stats.aso.pendente, tone: "warn" },
+                        ]}
+                      />
+                      <StatCategory
+                        label="MOB"
+                        items={[
+                          { label: "OK", value: statusGeral.stats.mob.ok, tone: "ok" },
+                          { label: "Pendente", value: statusGeral.stats.mob.pendente, tone: "warn" },
+                        ]}
+                      />
+                      <StatCategory
+                        label="Documentação"
+                        items={[
+                          { label: "Completo", value: statusGeral.stats.docs.completo, tone: "ok" },
+                          { label: "Incompleto", value: statusGeral.stats.docs.incompleto, tone: "danger" },
+                          { label: "Pendente", value: statusGeral.stats.docs.pendente, tone: "warn" },
+                        ]}
+                      />
+                      <StatCategory
+                        label="Exame"
+                        items={[
+                          { label: "Realizado", value: statusGeral.stats.exame.realizado, tone: "ok" },
+                          { label: "Agendado", value: statusGeral.stats.exame.agendado, tone: "info" },
+                          { label: "Pendente", value: statusGeral.stats.exame.pendente, tone: "warn" },
+                        ]}
+                      />
+                      <StatCategory
+                        label="Portal"
+                        items={[
+                          { label: "Liberado", value: statusGeral.stats.portal.liberado, tone: "ok" },
+                          { label: "Bloqueado", value: statusGeral.stats.portal.bloqueado, tone: "danger" },
+                          { label: "Pendente", value: statusGeral.stats.portal.pendente, tone: "warn" },
+                        ]}
+                      />
+                      <StatCategory
+                        label="Treinamento"
+                        items={[
+                          { label: "Concluído", value: statusGeral.stats.treinamento.concluido, tone: "ok" },
+                          { label: "Em Andamento", value: statusGeral.stats.treinamento.andamento, tone: "info" },
+                          { label: "Pendente", value: statusGeral.stats.treinamento.pendente, tone: "warn" },
+                        ]}
+                      />
+                      <StatCategory
+                        label="Crachá"
+                        items={[
+                          { label: "Emitido", value: statusGeral.stats.cracha.emitido, tone: "ok" },
+                          { label: "Pendente", value: statusGeral.stats.cracha.pendente, tone: "warn" },
+                        ]}
+                      />
+                      <StatCategory
+                        label="Ponto"
+                        items={[
+                          { label: "Cadastrado", value: statusGeral.stats.ponto.cadastrado, tone: "ok" },
+                          { label: "Pendente", value: statusGeral.stats.ponto.pendente, tone: "warn" },
+                        ]}
+                      />
                     </div>
                   </CardContent>
                 </Card>
