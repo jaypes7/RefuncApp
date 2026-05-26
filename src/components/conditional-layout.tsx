@@ -6,15 +6,16 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
-/** Rotas que não exibem a sidebar nem aplicam o padding lateral */
 const AUTH_ROUTES = ["/login"];
+const FULLSCREEN_PREFIXES = ["/dashboard/tv"];
 
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const isAuthRoute = AUTH_ROUTES.includes(pathname);
+  const isFullscreen = FULLSCREEN_PREFIXES.some((p) => pathname.startsWith(p));
 
-  if (isAuthRoute) {
+  if (isAuthRoute || isFullscreen) {
     return <>{children}</>;
   }
 
