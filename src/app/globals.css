@@ -295,6 +295,77 @@
         @apply text-primary font-normal;
     }
 
+    [data-cardtv-stage] [data-cardtv-slide] {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        width: min(100%, 1360px);
+        height: 100%;
+        max-height: 100%;
+        margin: auto;
+        overflow: hidden;
+    }
+
+    [data-cardtv-stage] [data-cardtv-row] {
+        display: grid;
+        min-height: 0;
+        gap: 1rem;
+    }
+
+    [data-cardtv-stage] [data-cardtv-row="single"] {
+        grid-template-columns: minmax(0, 1fr);
+        flex: 1 1 0;
+    }
+
+    [data-cardtv-stage] [data-cardtv-row="row"] {
+        grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+        flex: 1 1 0;
+    }
+
+    [data-cardtv-stage] [data-cardtv-row="kpi-row"] {
+        grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+        flex: 0 0 auto;
+    }
+
+    [data-cardtv-stage] [data-cardtv-slide] > [data-cardtv-row]:only-child {
+        flex: 1 1 0;
+    }
+
+    [data-cardtv-stage] [data-cardtv-row] > [data-cardtv-clone] {
+        min-width: 0;
+        height: 100%;
+        max-height: 100%;
+        overflow: auto;
+        scrollbar-width: thin;
+    }
+
+    [data-cardtv-stage] [data-cardtv-clone] {
+        grid-column: auto !important;
+    }
+
+    [data-cardtv-stage] [data-slot="card"] {
+        border-radius: 0.5rem;
+    }
+
+    [data-cardtv-stage] [data-slot="card-title"] {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    [data-cardtv-stage] .big-number {
+        font-size: clamp(1.75rem, 3.2vw, 2.5rem) !important;
+        line-height: 1.05;
+        overflow-wrap: anywhere;
+    }
+
+    [data-cardtv-stage] [data-cardtv-row="kpi-row"] [data-slot="card"] {
+        gap: 0.75rem;
+    }
+
+    [data-cardtv-stage] table {
+        min-width: 720px;
+    }
+
     .chart-title {
         @apply text-[12px] font-medium;
     }

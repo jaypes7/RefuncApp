@@ -768,7 +768,7 @@ export default function DashboardPage() {
 
             {/* ── Card de Cabeçalho do Projeto ── */}
             {configData && centroCusto && (
-              <Card className="glass-card mb-6">
+              <Card data-cardtv-id="geral-info-projeto" className="glass-card mb-6">
                 <CardHeader className="pb-3 flex flex-row items-center gap-2">
                   <Briefcase className="h-4 w-4 text-primary" />
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -837,7 +837,7 @@ export default function DashboardPage() {
                   ? Math.min(100, Math.round((kpis.total / previsto) * 100))
                   : 0;
                 return (
-                  <Card className="glass-card">
+                  <Card data-cardtv-id="geral-previsto-real" className="glass-card">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                       <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                         Previsto vs Real
@@ -876,7 +876,7 @@ export default function DashboardPage() {
               })()}
 
               {/* Saúde (ASO) */}
-              <Card className="glass-card">
+              <Card data-cardtv-id="geral-saude-ocupacional" className="glass-card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                     Saúde Ocupacional
@@ -893,6 +893,7 @@ export default function DashboardPage() {
 
               {/* Pendências setoriais */}
               <Card
+                data-cardtv-id="geral-pontos-atencao"
                 className={cn(
                   "glass-card transition-colors",
                   kpis.pendenciasSetoriais > 0 && "border-[#FFB800]/60 bg-[#FFB800]/10"
@@ -1039,7 +1040,7 @@ export default function DashboardPage() {
               <div ref={evolucaoTimelineRef}>
                 <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
                   {/* Curva S (Avanço Físico) — 2/3 da largura */}
-                  <Card className="glass-card lg:col-span-2">
+                  <Card data-cardtv-id="geral-evolucao-projeto" className="glass-card lg:col-span-2">
                     <CardHeader className="flex flex-row items-start justify-between gap-4">
                       <div>
                         <CardTitle>Evolução do Projeto</CardTitle>
@@ -1296,7 +1297,7 @@ export default function DashboardPage() {
                   </Card>
 
                   {/* Ocorrências — 1/3 da largura */}
-                  <Card className="glass-card lg:col-span-1 flex flex-col h-[460px] 2xl:h-[590px] overflow-hidden">
+                  <Card data-cardtv-id="geral-linha-tempo-contrato" className="glass-card lg:col-span-1 flex flex-col h-[460px] 2xl:h-[590px] overflow-hidden">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -1772,7 +1773,7 @@ export default function DashboardPage() {
             {/* ── Status Contratual + Lista de Términos — grid side-by-side ── */}
             <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
               {/* Card Status Contratação */}
-              <Card className="glass-card">
+              <Card data-cardtv-id="geral-status-contratacao" className="glass-card">
                 <CardHeader>
                   <CardTitle>Status Contratação</CardTitle>
                 </CardHeader>
@@ -1819,7 +1820,7 @@ export default function DashboardPage() {
               </Card>
 
               {/* Card Lista de Funções */}
-              <Card className="glass-card h-[480px] 2xl:h-[520px]">
+              <Card data-cardtv-id="geral-lista-funcoes" className="glass-card h-[480px] 2xl:h-[520px]">
                 <CardHeader className="flex flex-row items-center gap-2 pb-2">
                   <CalendarClock className="h-4 w-4 text-primary" />
                   <CardTitle>Lista de Funções</CardTitle>
@@ -1889,7 +1890,7 @@ export default function DashboardPage() {
             {/* ── Status Geral ── */}
             {statusGeral.total > 0 && (
               <div className="mb-6">
-                <Card className="glass-card">
+                <Card data-cardtv-id="geral-status-geral" className="glass-card">
                   <CardHeader className="flex flex-row items-center gap-2">
                     <Briefcase className="h-4 w-4 text-primary" />
                     <CardTitle>Status Geral</CardTitle>
