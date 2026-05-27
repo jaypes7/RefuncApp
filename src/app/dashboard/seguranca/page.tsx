@@ -257,7 +257,7 @@ export default function DashboardSegurancaPage() {
 
           {/* KPI Cards — 3 colunas: Total FITs | Treinamentos | Aprovados Portal */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Card className="glass-card">
+            <Card data-cardtv-id="seguranca-total-fits" className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Total de FITs
@@ -270,7 +270,7 @@ export default function DashboardSegurancaPage() {
               </CardContent>
             </Card>
 
-            <Card className="glass-card">
+            <Card data-cardtv-id="seguranca-treinamentos-concluidos" className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Treinamentos Concluídos
@@ -289,7 +289,7 @@ export default function DashboardSegurancaPage() {
               </CardContent>
             </Card>
 
-            <Card className="glass-card">
+            <Card data-cardtv-id="seguranca-aprovados-portal" className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Aprovados Portal
@@ -313,7 +313,7 @@ export default function DashboardSegurancaPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
             {/* Rosca — Status Portal */}
-            <Card className="glass-card">
+            <Card data-cardtv-id="seguranca-status-portal" className="glass-card">
               <CardHeader className="flex flex-row items-center gap-2 pb-2">
                 <FileCheck2 className="h-4 w-4 text-primary" />
                 <CardTitle>Status Portal</CardTitle>
@@ -389,7 +389,7 @@ export default function DashboardSegurancaPage() {
             </Card>
 
             {/* Barras — RPV */}
-            <Card className="glass-card">
+            <Card data-cardtv-id="seguranca-distribuicao-rpv" className="glass-card">
               <CardHeader className="flex flex-row items-center gap-2 pb-2">
                 <ShieldCheck className="h-4 w-4 text-primary" />
                 <CardTitle>Distribuição RPV</CardTitle>
@@ -465,7 +465,7 @@ export default function DashboardSegurancaPage() {
 
           {/* Gráfico — Treinamentos */}
           {dadosTrein.length > 0 && (
-            <Card className="glass-card">
+            <Card data-cardtv-id="seguranca-status-treinamento" className="glass-card">
               <CardHeader className="flex flex-row items-center gap-2 pb-2">
                 <GraduationCap className="h-4 w-4 text-primary" />
                 <CardTitle>Status de Treinamento</CardTitle>
