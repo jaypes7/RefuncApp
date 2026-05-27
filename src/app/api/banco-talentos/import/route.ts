@@ -15,6 +15,21 @@ function toInt(value: unknown): number | null {
   return isNaN(n) ? null : Math.floor(n);
 }
 
+function getAgeFromDate(date: string | null): number | null {
+  if (!date) return null;
+  const birthDate = new Date(`${date}T00:00:00`);
+  if (isNaN(birthDate.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 && age <= 120 ? age : null;
+}
+
 function getBySchema(row: RawRow, headerMap: Map<string, string>, schemaId: string): unknown {
   for (const [header, schema] of headerMap.entries()) {
     if (schema === schemaId) return row[header];
@@ -57,11 +72,14 @@ export async function POST(request: NextRequest) {
       }
       if (cpfRaw) seenCpfs.add(cpfRaw);
 
+      const dtNasc = sanitizeDate(getBySchema(row, headerMap, "dt_nasc") ?? null);
+      const idade = toInt(getBySchema(row, headerMap, "idade") ?? null) ?? getAgeFromDate(dtNasc);
+
       records.push({
-        pessoa: toStr(getBySchema(row, headerMap, "pessoa") ?? "") || null,
+        pessoa: toStr(getBySchema(row, headerMap, "pessoa") ?? getBySchema(row, headerMap, "re") ?? "") || null,
         nome,
-        idade: toInt(getBySchema(row, headerMap, "idade") ?? null),
-        dt_nasc: sanitizeDate(getBySchema(row, headerMap, "dt_nasc") ?? null),
+        idade,
+        dt_nasc: dtNasc,
         cpf: cpfRaw || null,
         municipio: toStr(getBySchema(row, headerMap, "municipio") ?? "") || null,
         uf: toStr(getBySchema(row, headerMap, "uf") ?? "") || null,
