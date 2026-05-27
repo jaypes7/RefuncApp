@@ -298,7 +298,7 @@ export default function DashboardLogisticaPage() {
 
           {/* KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Card className="glass-card">
+            <Card data-cardtv-id="logistica-ocupacao-total" className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Ocupação Total
@@ -315,7 +315,7 @@ export default function DashboardLogisticaPage() {
               </CardContent>
             </Card>
 
-            <Card className="glass-card">
+            <Card data-cardtv-id="logistica-total-hospedes" className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Total de Hóspedes
@@ -332,7 +332,7 @@ export default function DashboardLogisticaPage() {
               </CardContent>
             </Card>
 
-            <Card className="glass-card">
+            <Card data-cardtv-id="logistica-vagas-disponiveis" className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                   Vagas Disponíveis
@@ -351,7 +351,7 @@ export default function DashboardLogisticaPage() {
           </div>
 
           {/* Gráfico de Barras */}
-          <Card className="glass-card">
+          <Card data-cardtv-id="logistica-ocupacao-hotel" className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BedDouble className="h-5 w-5 text-primary" />
@@ -421,7 +421,7 @@ export default function DashboardLogisticaPage() {
           </Card>
 
           {/* Tabela de detalhes */}
-          <Card className="glass-card">
+          <Card data-cardtv-id="logistica-detalhes-hotel" className="glass-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Hotel className="h-5 w-5 text-primary" />
@@ -479,7 +479,7 @@ export default function DashboardLogisticaPage() {
 
           {/* Turnos de Trabalho */}
           {dadosTurnos.length > 0 && (
-            <Card className="glass-card">
+            <Card data-cardtv-id="logistica-turnos" className="glass-card">
               <CardHeader>
                 <CardTitle>Turnos de Trabalho</CardTitle>
               </CardHeader>
