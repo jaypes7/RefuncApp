@@ -414,24 +414,12 @@ Você é livre para usar, modificar e distribuir este software.
 
 ---
 
-## 🙏 Agradecimentos
-
-Agradecimentos especiais a:
-
-- [Next.js](https://nextjs.org) - Framework excepcional
-- [Vercel](https://vercel.com) - Plataforma de deployment
-- [shadcn/ui](https://ui.shadcn.com) - Componentes fantásticos
-- [Tailwind CSS](https://tailwindcss.com) - Estilização poderosa
-- Toda a comunidade open source
-
----
-
 <div align="center">
 
 ### ⭐ Se este projeto foi útil, considere dar uma estrela!
 
-[![GitHub stars](https://img.shields.io/github/stars/seu-usuario/refuncapp-web?style=social)](https://github.com/jaypes7/RefuncApp)
-[![GitHub followers](https://img.shields.io/github/followers/seu-usuario?style=social)](https://github.com/jaypes7)
+[![GitHub stars](https://img.shields.io/github/stars/jaypes7/refuncapp?style=social)](https://github.com/jaypes7/RefuncApp)
+[![GitHub followers](https://img.shields.io/github/followers/jaypes7?style=social)](https://github.com/jaypes7)
 
 **Made with ❤️ usando Next.js + TypeScript + Tailwind CSS**
 
