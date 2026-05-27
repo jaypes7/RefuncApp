@@ -622,7 +622,7 @@ export default function DashboardRhPage() {
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Card className="glass-card">
+              <Card data-cardtv-id="rh-total-cadastrados" className="glass-card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                     Total Cadastrados
@@ -635,7 +635,7 @@ export default function DashboardRhPage() {
                 </CardContent>
               </Card>
 
-              <Card className="glass-card">
+              <Card data-cardtv-id="rh-admitidos" className="glass-card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                     Admitidos
@@ -650,7 +650,7 @@ export default function DashboardRhPage() {
                 </CardContent>
               </Card>
 
-              <Card className="glass-card">
+              <Card data-cardtv-id="rh-funcoes-distintas" className="glass-card">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
                     Funções Distintas
@@ -860,7 +860,7 @@ export default function DashboardRhPage() {
             {/* Faixa Etária + Sexo — grid side-by-side */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:h-[420px]">
               {/* Faixa Etária */}
-              <Card className="glass-card h-full">
+              <Card data-cardtv-id="rh-faixa-etaria" className="glass-card h-full">
                 <CardHeader className="flex flex-row items-center gap-2">
                   <CardTitle>Distribuição por Faixa Etária</CardTitle>
                   <span className="text-sm font-normal text-muted-foreground">
@@ -909,7 +909,7 @@ export default function DashboardRhPage() {
               </Card>
 
               {/* Distribuição por Sexo */}
-              <Card className="glass-card h-full">
+              <Card data-cardtv-id="rh-genero" className="glass-card h-full">
                 <CardHeader>
                   <CardTitle>Distribuição por Gênero</CardTitle>
                 </CardHeader>
@@ -961,7 +961,7 @@ export default function DashboardRhPage() {
             {/* ASO + Escolaridade + Experiência — grid side-by-side */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               {/* Card ASO — Distribuição de Saúde Ocupacional */}
-              <Card className="glass-card">
+              <Card data-cardtv-id="rh-aso" className="glass-card">
                 <CardHeader className="flex flex-row items-center gap-2 pb-2">
                   <ShieldCheck className="h-4 w-4 text-primary" />
                   <CardTitle>Distribuição ASO</CardTitle>
@@ -1022,7 +1022,7 @@ export default function DashboardRhPage() {
               </Card>
 
               {/* Card Escolaridade */}
-              <Card className="glass-card">
+              <Card data-cardtv-id="rh-escolaridade" className="glass-card">
                 <CardHeader className="flex flex-row items-center gap-2 pb-2">
                   <GraduationCap className="h-4 w-4 text-primary" />
                   <CardTitle>Escolaridade</CardTitle>
@@ -1064,7 +1064,7 @@ export default function DashboardRhPage() {
               </Card>
 
               {/* Card Experiência na função */}
-              <Card className="glass-card">
+              <Card data-cardtv-id="rh-experiencia-funcao" className="glass-card">
                 <CardHeader className="flex flex-row items-center gap-2 pb-2">
                   <Briefcase className="h-4 w-4 text-primary" />
                   <CardTitle>Experiência na função</CardTitle>

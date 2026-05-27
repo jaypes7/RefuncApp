@@ -414,18 +414,6 @@ Você é livre para usar, modificar e distribuir este software.
 
 ---
 
-## 🙏 Agradecimentos
-
-Agradecimentos especiais a:
-
-- [Next.js](https://nextjs.org) - Framework excepcional
-- [Vercel](https://vercel.com) - Plataforma de deployment
-- [shadcn/ui](https://ui.shadcn.com) - Componentes fantásticos
-- [Tailwind CSS](https://tailwindcss.com) - Estilização poderosa
-- Toda a comunidade open source
-
----
-
 <div align="center">
 
 ### ⭐ Se este projeto foi útil, considere dar uma estrela!

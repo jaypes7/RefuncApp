@@ -7,7 +7,7 @@ import { Sidebar } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
 const AUTH_ROUTES = ["/login"];
-const FULLSCREEN_PREFIXES = ["/dashboard/tv"];
+const FULLSCREEN_PREFIXES = ["/dashboard/tv", "/dashboard/cardtv"];
 
 export function ConditionalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
