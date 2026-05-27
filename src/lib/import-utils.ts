@@ -33,7 +33,7 @@ export interface ImportReport {
 
 export const HEADER_ALIASES: Record<string, string[]> = {
   re: ["RE", "RE (REGISTRO)", "REGISTRO", "N PESSOA", "N_PESSOA", "NUMERO PESSOA", "NÚMERO PESSOA", "COD FUNCIONARIO"],
-  nome: ["NOME", "NOME COMPLETO", "NOME DO COLABORADOR", "NOME DO FUNCIONARIO", "NOME FUNCIONARIO"],
+  nome: ["NOME", "NOME COMPLETO", "NOME DO COLABORADOR", "NOME DO FUNCIONARIO", "NOME FUNCIONARIO", "FUNCIONARIO", "FUNCIONÁRIO"],
   cpf: ["CPF", "C.P.F.", "C P F", "CPF DO COLABORADOR", "CPF FUNCIONARIO", "CPF DO FUNCIONÁRIO"],
   funcao: ["FUNÇÃO CLT", "FUNCAO CLT", "FUNÇÃO", "FUNCAO", "CARGO", "CARGO CLT", "FUNÇÃO/CARGO", "FUNCAO/CARGO"],
   dt_nasc: ["DT NASC", "DT_NASC", "DT NASCIMENTO", "DATA NASCIMENTO", "DATA DE NASCIMENTO", "NASCIMENTO", "DATA NASC"],
@@ -322,18 +322,26 @@ export function mapStrictEnums(schemaId: string, rawValue: string | null): strin
 export function buildHeaderMap(headers: string[]): Map<string, string> {
   const map = new Map<string, string>();
 
+  const normalizeHeader = (value: string) =>
+    value
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .replace(/\s+/g, " ");
+
   // ── Passagem 1: Match Exato ─────────────────────────────────────────────────
   // Máxima prioridade: header normalizado idêntico a qualquer alias → mapeado.
   // Garante que "TURNO" não perca para "HORAS TURNO" na passagem seguinte.
   for (const rawHeader of headers) {
-    const normalized = rawHeader.trim().toUpperCase().replace(/\s+/g, " ");
+    const normalized = normalizeHeader(rawHeader);
     for (const [schemaId, aliases] of Object.entries(HEADER_ALIASES)) {
       // Guarda financeira para 'hotel': nunca mapeia se o header contiver
       // palavras de custo/valor — independente de ser exato ou substring.
       if (schemaId === "hotel" && /\bCUSTO|VALOR|C\.C\.|C\. C\.\b/.test(normalized)) continue;
 
       const exactMatch = aliases.some((alias) => {
-        const a = alias.toUpperCase().replace(/\s+/g, " ");
+        const a = normalizeHeader(alias);
         return normalized === a;
       });
       if (exactMatch) {
@@ -350,13 +358,14 @@ export function buildHeaderMap(headers: string[]): Map<string, string> {
   for (const rawHeader of headers) {
     if (map.has(rawHeader)) continue; // já resolvido na Passagem 1
 
-    const normalized = rawHeader.trim().toUpperCase().replace(/\s+/g, " ");
+    const normalized = normalizeHeader(rawHeader);
     for (const [schemaId, aliases] of Object.entries(HEADER_ALIASES)) {
       // 'hotel' aceita apenas match exato; a Passagem 1 já tratou o caso.
       if (schemaId === "hotel") continue;
 
       const substringMatch = aliases.some((alias) => {
-        const a = alias.toUpperCase().replace(/\s+/g, " ");
+        const a = normalizeHeader(alias);
+        if (schemaId === "uf" && a === "ESTADO") return normalized === a;
         // Aliases curtos (≤3 chars, ex: "RE", "UF") mantêm exigência de match
         // exato mesmo no fallback — evita que "AREA" capture o alias "RE".
         if (a.length <= 3) return normalized === a;

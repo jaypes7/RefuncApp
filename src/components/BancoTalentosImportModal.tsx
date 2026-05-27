@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { bancoTalentosApi } from "@/lib/axios";
+import { buildHeaderMap } from "@/lib/import-utils";
 import { maskCPF } from "@/lib/utils";
 
 interface ImportModalProps {
@@ -41,6 +42,13 @@ interface PreviewRow {
   cpf: string;
   nome: string;
   municipio: string;
+}
+
+function getBySchema(row: RawRow, headerMap: Map<string, string>, schemaId: string): unknown {
+  for (const [header, schema] of headerMap.entries()) {
+    if (schema === schemaId) return row[header];
+  }
+  return undefined;
 }
 
 export function BancoTalentosImportModal({ open, onOpenChange, onSuccess }: ImportModalProps) {
@@ -77,10 +85,11 @@ export function BancoTalentosImportModal({ open, onOpenChange, onSuccess }: Impo
           return;
         }
 
+        const headerMap = buildHeaderMap(Object.keys(rows[0] ?? {}));
         const preview = rows.slice(0, 5).map((row) => ({
-          cpf: String(row["CPF"] ?? row["C.P.F."] ?? "").replace(/\D/g, ""),
-          nome: String(row["NOME"] ?? row["NOME COMPLETO"] ?? ""),
-          municipio: String(row["MUNICIPIO"] ?? row["MUNICÍPIO"] ?? ""),
+          cpf: String(getBySchema(row, headerMap, "cpf") ?? "").replace(/\D/g, ""),
+          nome: String(getBySchema(row, headerMap, "nome") ?? ""),
+          municipio: String(getBySchema(row, headerMap, "municipio") ?? ""),
         }));
 
         setPreviewData(preview);
