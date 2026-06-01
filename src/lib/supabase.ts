@@ -23,15 +23,24 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 // ── Modo demonstração: sem Supabase ─────────────────────────────────────────
-// Em DEMO_MODE todas as rotas usam demoRepository — Supabase não é inicializado.
+// Usa NEXT_PUBLIC_DEMO_MODE (e não DEMO_MODE) porque este módulo é importado
+// tanto em Server Components/API Routes quanto em Client Components.
+// Variáveis sem NEXT_PUBLIC_ são undefined no bundle do browser.
 
-const DEMO_MODE = process.env.DEMO_MODE === "true";
+const DEMO_MODE =
+  process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
+  process.env.DEMO_MODE === "true";
 
 const PLACEHOLDER_URL = "https://placeholder.supabase.co";
 const PLACEHOLDER_KEY = "placeholder-anon-key";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? (DEMO_MODE ? PLACEHOLDER_URL : "");
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? (DEMO_MODE ? PLACEHOLDER_KEY : "");
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??
+  (DEMO_MODE ? PLACEHOLDER_URL : "");
+
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  (DEMO_MODE ? PLACEHOLDER_KEY : "");
 
 if (!DEMO_MODE && (!supabaseUrl || !supabaseAnonKey)) {
   throw new Error(
@@ -51,8 +60,8 @@ export const supabase: SupabaseClient = createClient(
 
 export const createServerClient = (): SupabaseClient => {
   if (DEMO_MODE) {
-    // Em modo demo, nenhuma rota deve chamar createServerClient diretamente.
-    // O bloco demo no topo de cada route.ts retorna antes de chegar aqui.
+    // Em modo demo nenhuma rota deve chegar aqui —
+    // o bloco demo no topo de cada route.ts retorna antes.
     throw new Error(
       "[Demo] createServerClient chamado em DEMO_MODE. " +
         "A rota não implementou o bloco demo corretamente.",
