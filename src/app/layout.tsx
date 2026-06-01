@@ -6,8 +6,11 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { FilterProvider } from "@/contexts/FilterContext";
 import { ConditionalLayout } from "@/components/conditional-layout";
 import { AuthGlobalUI } from "@/components/auth-global-ui";
+import { DemoBanner } from "@/components/DemoBanner";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 export const metadata: Metadata = {
   title: "RefuncApp - Gestão de Mobilização",
@@ -33,6 +36,7 @@ export default function RootLayout({
         <Providers>
           <AuthProvider>
             <FilterProvider>
+              {DEMO_MODE && <DemoBanner />}
               <ConditionalLayout>{children}</ConditionalLayout>
               <AuthGlobalUI />
               <Toaster position="top-right" richColors closeButton />
