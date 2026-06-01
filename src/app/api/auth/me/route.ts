@@ -9,18 +9,30 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, normalizeCentroCusto } from "@/lib/auth";
 
+const DEMO_MODE = process.env.DEMO_MODE === "true";
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Não autenticado" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    // Busca flag atualizada no banco
+    // ── DEMO MODE: dados vêm do JWT (sem consulta ao banco) ─────────────────
+    if (DEMO_MODE) {
+      return NextResponse.json({
+        user: {
+          re: user.re,
+          nome: user.nome || null,
+          perfil: user.perfil || null,
+          centro_custo: normalizeCentroCusto(user.centro_custo),
+          precisaRedefinirSenha: false,
+        },
+      });
+    }
+
+    // ── PRODUÇÃO: busca flag atualizada no banco ─────────────────────────────
     const { createServerClient } = await import("@/lib/supabase");
     const db = createServerClient();
     const { data: dbUser } = await db
@@ -40,9 +52,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("[API Me] Erro:", error);
-    return NextResponse.json(
-      { error: "Erro interno" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

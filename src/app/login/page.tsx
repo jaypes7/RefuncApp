@@ -1,8 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
+import { Lock, ArrowRight, Loader2, Eye, EyeOff, FlaskConical } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+const DEMO_USERS = [
+  { label: "Administrador", re: "admin@demo.com", senha: "demo123" },
+  { label: "Coordenador",   re: "coordenador@demo.com", senha: "demo123" },
+  { label: "Analista RH",   re: "rh@demo.com", senha: "demo123" },
+] as const;
 
 export default function LoginPage() {
   const { login, error: authError, isLoading } = useAuth();
@@ -10,6 +18,13 @@ export default function LoginPage() {
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [localError, setLocalError] = useState("");
+
+  const handleDemoLogin = (re: string, senha: string) => {
+    setRe(re);
+    setSenha(senha);
+    setLocalError("");
+    login(re, senha);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,11 +92,37 @@ export default function LoginPage() {
             </small>
           </div>
 
+          {/* ── Acesso rápido demo ── */}
+          {DEMO_MODE && (
+            <div className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+                <FlaskConical className="h-4 w-4" />
+                Ambiente de demonstração — acesso rápido
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {DEMO_USERS.map((u) => (
+                  <button
+                    key={u.re}
+                    type="button"
+                    onClick={() => handleDemoLogin(u.re, u.senha)}
+                    disabled={isLoading}
+                    className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                  >
+                    {u.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                Todos usam a senha <code className="rounded bg-amber-200 px-1 dark:bg-amber-800">demo123</code>
+              </p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* RE */}
+            {/* RE / E-mail */}
             <div>
               <label htmlFor="re" className="field-label">
-                RE (Registro)
+                {DEMO_MODE ? "E-mail de acesso" : "RE (Registro)"}
               </label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
@@ -91,7 +132,7 @@ export default function LoginPage() {
                   id="re"
                   type="text"
                   inputMode="numeric"
-                  placeholder="Ex: 000000"
+                  placeholder={DEMO_MODE ? "admin@demo.com" : "Ex: 000000"}
                   value={re}
                   onChange={(e) => {
                     setRe(e.target.value);
@@ -99,7 +140,9 @@ export default function LoginPage() {
                   }}
                   disabled={isLoading}
                   className="input-enterprise pl-9"
-                  autoComplete="off"
+                  autoComplete={DEMO_MODE ? "email" : "off"}
+                  type={DEMO_MODE ? "email" : "text"}
+                  inputMode={DEMO_MODE ? "email" : "numeric"}
                   required
                 />
               </div>
