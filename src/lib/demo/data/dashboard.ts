@@ -115,42 +115,62 @@ export function getDashboardLogistica() {
 
 export function getDashboardSuprimentos() {
   return {
-    total_investido: 623450.75,
+    total_investido: 354050,
     orcado: DEMO_CONFIG.orcado_suprimentos,
-    total_ordens: 18,
-    ordens_entregues: 11,
-    ordens_pendentes: 5,
-    ordens_atrasadas: 2,
-    entrega_pct: 61,
+    total_ordens: 12,
+    ordens_entregues: 7,
+    ordens_pendentes: 4,
+    ordens_atrasadas: 1,
+    entrega_pct: 58,
     status_ordens: [
-      { status: "Entregue",  total: 11 },
-      { status: "Pendente",  total: 5  },
-      { status: "Atrasada",  total: 2  },
+      { status: "Entregue",  total: 7 },
+      { status: "Pendente",  total: 4 },
+      { status: "Atrasada",  total: 1 },
+    ],
+    por_categoria: [
+      { categoria: "EPI",        total: 4, valor: 159700 },
+      { categoria: "Uniforme",   total: 2, valor: 46800  },
+      { categoria: "Ferramenta", total: 3, valor: 75500  },
+      { categoria: "Serviço",    total: 2, valor: 54000  },
+      { categoria: "Outros",     total: 1, valor: 18050  },
     ],
   };
 }
 
 // ── Dashboard Segurança ───────────────────────────────────────────────────────
+// Shape exato esperado pela página dashboard/seguranca/page.tsx:
+// { total, distribuicaoRpv, distribuicaoTreinamento, distribuicaoStatusPortal }
 
 export function getDashboardSeguranca() {
   const total = DEMO_COLABORADORES.length;
+
+  // Portal — labels exatos usados pela página: "Aprovado", "Pendente", "Aprovado - DEMITIDO"
+  const distribuicaoStatusPortal = [
+    { label: "Aprovado",            value: DEMO_COLABORADORES.filter((c) => c.portal === "Aprovado").length },
+    { label: "Pendente",            value: DEMO_COLABORADORES.filter((c) => c.portal === "Pendente").length },
+    { label: "Aprovado - DEMITIDO", value: DEMO_COLABORADORES.filter((c) => c.portal === "Aprovado - DEMITIDO").length },
+  ];
+
+  // RPV — labels: "OK", "Pendente", "N/A"
+  const distribuicaoRpv = [
+    { label: "OK",      value: DEMO_COLABORADORES.filter((c) => c.rpv === "OK").length      },
+    { label: "Pendente",value: DEMO_COLABORADORES.filter((c) => c.rpv === "Pendente").length },
+    { label: "N/A",     value: DEMO_COLABORADORES.filter((c) => c.rpv === "N/A").length      },
+  ];
+
+  // Treinamento — labels: "Concluído", "Em Andamento", "Pendente"
+  const distribuicaoTreinamento = [
+    { label: "Concluído",    value: DEMO_COLABORADORES.filter((c) => c.treinamento === "Concluído").length    },
+    { label: "Em Andamento", value: DEMO_COLABORADORES.filter((c) => c.treinamento === "Em Andamento").length },
+    { label: "Pendente",     value: DEMO_COLABORADORES.filter((c) => c.treinamento === "Pendente").length     },
+  ];
+
   return {
-    total_fits: total,
-    aptos: DEMO_COLABORADORES.filter((c) => c.aso_status === "Apto").length,
-    inaptos: DEMO_COLABORADORES.filter((c) => c.aso_status === "Inapto").length,
-    pendentes: DEMO_COLABORADORES.filter((c) => c.aso_status === "Pendente").length,
-    treinamentos_concluidos: DEMO_COLABORADORES.filter((c) => c.treinamento === "Concluído").length,
-    portal_aprovados: DEMO_COLABORADORES.filter((c) => c.portal === "Liberado").length,
-    status_portal: [
-      { status: "Liberado",  total: DEMO_COLABORADORES.filter((c) => c.portal === "Liberado").length  },
-      { status: "Pendente",  total: DEMO_COLABORADORES.filter((c) => c.portal === "Pendente").length  },
-      { status: "Bloqueado", total: DEMO_COLABORADORES.filter((c) => c.portal === "Bloqueado").length },
-    ],
-    distribuicao_aso: [
-      { label: "Apto",     value: DEMO_COLABORADORES.filter((c) => c.aso_status === "Apto").length     },
-      { label: "Inapto",   value: DEMO_COLABORADORES.filter((c) => c.aso_status === "Inapto").length   },
-      { label: "Pendente", value: DEMO_COLABORADORES.filter((c) => c.aso_status === "Pendente").length },
-    ],
+    total,
+    distribuicaoStatusPortal,
+    distribuicaoRpv,
+    distribuicaoTreinamento,
+    // Campos extras para compatibilidade com versões alternativas da página
     status_treinamentos: [
       { status: "Concluído",    total: DEMO_COLABORADORES.filter((c) => c.treinamento === "Concluído").length    },
       { status: "Em Andamento", total: DEMO_COLABORADORES.filter((c) => c.treinamento === "Em Andamento").length },

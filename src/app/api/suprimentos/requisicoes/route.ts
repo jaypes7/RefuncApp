@@ -14,7 +14,24 @@ export async function GET(request: NextRequest) {
 
     if (process.env.DEMO_MODE === "true") {
       const { DEMO_REQUISICOES } = await import("@/lib/demo/repository");
-      return NextResponse.json({ data: DEMO_REQUISICOES, total: DEMO_REQUISICOES.length });
+      const { searchParams } = new URL(request.url);
+      const page  = Math.max(1, Number(searchParams.get("page") ?? 1));
+      const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 20)));
+      const status = searchParams.get("status")?.trim() ?? "";
+      const search = searchParams.get("search")?.trim().toLowerCase() ?? "";
+
+      let filtered = [...DEMO_REQUISICOES];
+      if (status) filtered = filtered.filter((r) => r.status === status);
+      if (search) filtered = filtered.filter((r) => r.titulo.toLowerCase().includes(search) || r.coordenador.toLowerCase().includes(search));
+
+      const total      = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const data       = filtered.slice((page - 1) * limit, page * limit);
+
+      return NextResponse.json({
+        data,
+        pagination: { page, limit, total, totalPages },
+      });
     }
 
     const { searchParams } = new URL(request.url);
