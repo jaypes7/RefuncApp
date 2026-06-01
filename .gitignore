@@ -47,8 +47,11 @@ next-env.d.ts
 # Claude Code (configurações e contexto interno)
 .claude/
 
-# Documentação interna (não vai para o repositório)
+# Documentação interna e relatórios de segurança (não vai para o repositório)
 contexti.md
+relatoriopentest.md
+*pentest*.md
+*vulnerabilidades*.md
 estrutura.md
 features.md
 metricas.md

@@ -58,6 +58,12 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const body = await request.json();
+
+    if (process.env.DEMO_MODE === "true") {
+      const { demoWrite } = await import("@/lib/demo/handler");
+      return demoWrite(body);
+    }
+
     const { texto, data } = ComentarioCreateSchema.parse(body);
 
     const ccBody = (body as { centro_custo?: string | string[] }).centro_custo;

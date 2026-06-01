@@ -605,6 +605,12 @@ export async function GET(request: NextRequest) {
   try {
     const currentUser = await requireAuth();
 
+    // ── DEMO MODE ────────────────────────────────────────────────────────────
+    if (process.env.DEMO_MODE === "true") {
+      const { getDashboardPrincipal } = await import("@/lib/demo/repository");
+      return NextResponse.json(getDashboardPrincipal());
+    }
+
     const { searchParams } = new URL(request.url);
     const ccParam = searchParams.get("centro_custo") || undefined;
     const centroCusto = resolveCentroCusto(currentUser, ccParam);

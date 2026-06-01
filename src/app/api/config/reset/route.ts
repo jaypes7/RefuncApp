@@ -25,6 +25,12 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth("admin");
 
+    // ── DEMO MODE: reset destrutivo bloqueado ────────────────────────────────
+    if (process.env.DEMO_MODE === "true") {
+      const { demoBlocked } = await import("@/lib/demo/handler");
+      return demoBlocked("reset de projeto não está disponível no ambiente de demonstração");
+    }
+
     const body = await request.json().catch(() => ({}));
     const centroCusto = body?.centro_custo;
 

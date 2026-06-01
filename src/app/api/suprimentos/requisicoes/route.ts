@@ -12,6 +12,11 @@ export async function GET(request: NextRequest) {
   try {
     await requireAuth();
 
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_REQUISICOES } = await import("@/lib/demo/repository");
+      return NextResponse.json({ data: DEMO_REQUISICOES, total: DEMO_REQUISICOES.length });
+    }
+
     const { searchParams } = new URL(request.url);
     const page   = Math.max(1, Number(searchParams.get("page") ?? 1));
     const limit  = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 50)));
@@ -123,6 +128,12 @@ interface CreatePayload {
 export async function POST(request: NextRequest) {
   try {
     await requireAuth();
+
+    if (process.env.DEMO_MODE === "true") {
+      const body = await request.json();
+      const { demoWrite } = await import("@/lib/demo/handler");
+      return demoWrite(body);
+    }
 
     const body = (await request.json()) as CreatePayload;
     const { titulo, coordenador, data_abertura, status = "rascunho", itens } = body;

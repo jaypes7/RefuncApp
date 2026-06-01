@@ -194,6 +194,19 @@ export async function GET(request: NextRequest) {
   try {
     const currentUser = await requireAuth("user");
 
+    // ── DEMO MODE ────────────────────────────────────────────────────────────
+    if (process.env.DEMO_MODE === "true") {
+      const { searchParams } = new URL(request.url);
+      const { listColaboradores } = await import("@/lib/demo/repository");
+      const result = listColaboradores({
+        status: searchParams.get("status") ?? undefined,
+        search: searchParams.get("search") ?? undefined,
+        limit:  Number(searchParams.get("limit") ?? 50),
+        offset: (Number(searchParams.get("page") ?? 1) - 1) * Number(searchParams.get("limit") ?? 50),
+      });
+      return NextResponse.json({ data: result, total: result.length });
+    }
+
     const { searchParams } = new URL(request.url);
     const queryParams = {
       page:         searchParams.get("page")         || "1",
@@ -296,6 +309,11 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth("user");
     const body = await request.json();
+
+    if (process.env.DEMO_MODE === "true") {
+      const { demoWrite } = await import("@/lib/demo/handler");
+      return demoWrite(body);
+    }
 
     // Valida o body usando o schema de criação
     const validated = ColaboradorCreateSchema.parse(body);

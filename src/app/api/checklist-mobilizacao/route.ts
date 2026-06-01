@@ -23,6 +23,12 @@ import { ZodError } from "zod";
 export async function GET(request: NextRequest) {
   try {
     const currentUser = await requireAuth("admin");
+
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_CHECKLIST } = await import("@/lib/demo/repository");
+      return NextResponse.json([DEMO_CHECKLIST]);
+    }
+
     const { searchParams } = new URL(request.url);
     const ccParam = searchParams.get("centro_custo") || undefined;
     const centroCusto = resolveCentroCusto(currentUser, ccParam);

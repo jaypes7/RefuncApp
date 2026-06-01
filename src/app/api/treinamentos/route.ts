@@ -13,6 +13,12 @@ import { requireAuth } from "@/lib/auth";
 export async function GET(_request: NextRequest) {
   try {
     await requireAuth("user");
+
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_TREINAMENTOS } = await import("@/lib/demo/repository");
+      return NextResponse.json(DEMO_TREINAMENTOS);
+    }
+
     const supabase = createServerClient();
 
     const { data, error } = await supabase

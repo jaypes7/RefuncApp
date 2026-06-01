@@ -7,10 +7,16 @@ import { ClinicaSchema } from "@/lib/schemas";
 export async function GET() {
   try {
     await requireAuth();
+
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_CLINICAS } = await import("@/lib/demo/repository");
+      return NextResponse.json(DEMO_CLINICAS);
+    }
+
     const db = createServerClient();
     const { data, error } = await db
       .from("configuracoes_clinicas")
-      .select("id, nome, endereco, cidade, ativo") // 'ativo' conforme o SQL
+      .select("id, nome, endereco, cidade, ativo")
       .order("nome", { ascending: true });
 
     if (error) throw error;

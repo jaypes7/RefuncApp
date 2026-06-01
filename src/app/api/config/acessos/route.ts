@@ -18,6 +18,14 @@ import { hashPassword, DEFAULT_PASSWORD } from "@/lib/password";
 export async function GET() {
   try {
     await requireAuth();
+
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_USERS } = await import("@/lib/demo/repository");
+      return NextResponse.json(
+        DEMO_USERS.map(({ senha_hash: _, ...u }) => u),
+      );
+    }
+
     const db = createServerClient();
     const { data, error } = await db
       .from("usuarios_permitidos")

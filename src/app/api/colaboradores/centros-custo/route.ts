@@ -19,6 +19,11 @@ export async function GET() {
   try {
     await requireAuth();
 
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_CENTROS_CUSTO } = await import("@/lib/demo/repository");
+      return NextResponse.json(DEMO_CENTROS_CUSTO);
+    }
+
     const db = createServerClient();
     const { data, error } = await db
       .from("configuracoes")

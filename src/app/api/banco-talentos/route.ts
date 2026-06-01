@@ -21,6 +21,11 @@ export async function GET(request: NextRequest) {
   try {
     await requireAuth("admin");
 
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_BANCO_TALENTOS } = await import("@/lib/demo/repository");
+      return NextResponse.json({ data: DEMO_BANCO_TALENTOS, total: DEMO_BANCO_TALENTOS.length });
+    }
+
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20")));

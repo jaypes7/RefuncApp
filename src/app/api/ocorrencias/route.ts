@@ -24,6 +24,12 @@ const OcorrenciaCreateSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const currentUser = await requireAuth();
+
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_OCORRENCIAS } = await import("@/lib/demo/repository");
+      return NextResponse.json(DEMO_OCORRENCIAS);
+    }
+
     const db = createServerClient();
 
     const { searchParams } = new URL(request.url);
@@ -58,6 +64,12 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth("user");
     const body = await request.json();
+
+    if (process.env.DEMO_MODE === "true") {
+      const { demoWrite } = await import("@/lib/demo/handler");
+      return demoWrite(body);
+    }
+
     const { texto, data } = OcorrenciaCreateSchema.parse(body);
 
     // Extrai centro_custo do body e normaliza para string única

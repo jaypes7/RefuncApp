@@ -21,6 +21,12 @@ const PendenciaCreateSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const currentUser = await requireAuth();
+
+    if (process.env.DEMO_MODE === "true") {
+      const { DEMO_PENDENCIAS } = await import("@/lib/demo/repository");
+      return NextResponse.json(DEMO_PENDENCIAS);
+    }
+
     const db = createServerClient();
 
     const { searchParams } = new URL(request.url);
@@ -54,6 +60,12 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth("user");
     const body = await request.json();
+
+    if (process.env.DEMO_MODE === "true") {
+      const { demoWrite } = await import("@/lib/demo/handler");
+      return demoWrite(body);
+    }
+
     const { texto } = PendenciaCreateSchema.parse(body);
 
     const ccBody = (body as { centro_custo?: string | string[] }).centro_custo;
