@@ -130,8 +130,8 @@ export default function LoginPage() {
                 </div>
                 <input
                   id="re"
-                  type="text"
-                  inputMode="numeric"
+                  type={DEMO_MODE ? "email" : "text"}
+                  inputMode={DEMO_MODE ? "email" : "numeric"}
                   placeholder={DEMO_MODE ? "admin@demo.com" : "Ex: 000000"}
                   value={re}
                   onChange={(e) => {
@@ -141,8 +141,6 @@ export default function LoginPage() {
                   disabled={isLoading}
                   className="input-enterprise pl-9"
                   autoComplete={DEMO_MODE ? "email" : "off"}
-                  type={DEMO_MODE ? "email" : "text"}
-                  inputMode={DEMO_MODE ? "email" : "numeric"}
                   required
                 />
               </div>
