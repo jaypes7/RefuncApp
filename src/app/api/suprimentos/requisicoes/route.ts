@@ -46,6 +46,58 @@ export async function GET(request: NextRequest) {
 }
 
 // ============================================================================
+// DELETE /api/suprimentos/requisicoes  (body: { ids: string[] })
+// ============================================================================
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await requireAuth();
+
+    const body = (await request.json()) as { ids?: string[] };
+    const ids = body?.ids;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json({ error: "Nenhum ID informado" }, { status: 400 });
+    }
+
+    const db = createServerClient();
+
+    const { data: recebimentos } = await db
+      .from("suprimentos_recebimentos")
+      .select("id")
+      .in("requisicao_id", ids);
+    const recebimentoIds = (recebimentos ?? []).map((r) => r.id);
+    if (recebimentoIds.length > 0) {
+      await db.from("suprimentos_recebimento_itens").delete().in("recebimento_id", recebimentoIds);
+    }
+    await db.from("suprimentos_recebimentos").delete().in("requisicao_id", ids);
+
+    const { data: ocs } = await db
+      .from("suprimentos_ordens_compra")
+      .select("id")
+      .in("requisicao_id", ids);
+    const ocIds = (ocs ?? []).map((o) => o.id);
+    if (ocIds.length > 0) {
+      await db.from("suprimentos_oc_itens").delete().in("oc_id", ocIds);
+    }
+    await db.from("suprimentos_ordens_compra").delete().in("requisicao_id", ids);
+
+    await db.from("suprimentos_requisicao_itens").delete().in("requisicao_id", ids);
+
+    const { error } = await db.from("suprimentos_requisicoes").delete().in("id", ids);
+    if (error) throw new Error(error.message);
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    console.error("[DELETE /api/suprimentos/requisicoes]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
+}
+
+// ============================================================================
 // POST /api/suprimentos/requisicoes
 // ============================================================================
 

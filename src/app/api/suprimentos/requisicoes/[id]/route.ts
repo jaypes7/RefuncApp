@@ -65,6 +65,55 @@ export async function GET(
 }
 
 // ============================================================================
+// DELETE /api/suprimentos/requisicoes/[id]
+// ============================================================================
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    await requireAuth();
+    const { id } = await params;
+
+    const db = createServerClient();
+
+    const { data: recebimentos } = await db
+      .from("suprimentos_recebimentos")
+      .select("id")
+      .eq("requisicao_id", id);
+    const recebimentoIds = (recebimentos ?? []).map((r) => r.id);
+    if (recebimentoIds.length > 0) {
+      await db.from("suprimentos_recebimento_itens").delete().in("recebimento_id", recebimentoIds);
+    }
+    await db.from("suprimentos_recebimentos").delete().eq("requisicao_id", id);
+
+    const { data: ocs } = await db
+      .from("suprimentos_ordens_compra")
+      .select("id")
+      .eq("requisicao_id", id);
+    const ocIds = (ocs ?? []).map((o) => o.id);
+    if (ocIds.length > 0) {
+      await db.from("suprimentos_oc_itens").delete().in("oc_id", ocIds);
+    }
+    await db.from("suprimentos_ordens_compra").delete().eq("requisicao_id", id);
+
+    await db.from("suprimentos_requisicao_itens").delete().eq("requisicao_id", id);
+
+    const { error } = await db.from("suprimentos_requisicoes").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    console.error("[DELETE /api/suprimentos/requisicoes/[id]]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
+}
+
+// ============================================================================
 // PATCH /api/suprimentos/requisicoes/[id]
 // Atualiza status e/ou edita itens (revisão / salvar rascunho / promover para aberta)
 // ============================================================================

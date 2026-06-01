@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -206,7 +206,7 @@ export function EditColaboradorModal({
   const queryClient = useQueryClient();
 
   // Busca clínicas
-  const { data: clinicasData } = useQuery({
+  const { data: clinicasData, isLoading: isLoadingClinicas } = useQuery({
     queryKey: ["clinicas"],
     queryFn: async () => {
       const response = await clinicasApi.listar();
@@ -214,7 +214,7 @@ export function EditColaboradorModal({
     },
   });
 
-  const clinicas = clinicasData?.data || [];
+  const clinicas = useMemo(() => clinicasData || [], [clinicasData]);
 
   const {
     register,
@@ -337,6 +337,20 @@ export function EditColaboradorModal({
   const clinicaValue = useWatch({ control, name: "CLINICA" });
   const treinamentoValue = useWatch({ control, name: "TREINAMENTO" });
   const realizarTreinamentoValue = useWatch({ control, name: "REALIZAR_TREINAMENTO" });
+
+  const clinicaOptions = useMemo(
+    () => [
+      ...new Map(
+        [
+          clinicaValue ? { id: -1, nome: clinicaValue } : null,
+          ...clinicas,
+        ]
+          .filter((clinica): clinica is { id: number; nome: string } => Boolean(clinica?.nome?.trim()))
+          .map((clinica) => [clinica.nome, clinica]),
+      ).values(),
+    ],
+    [clinicaValue, clinicas],
+  );
 
   if (!colaborador) return null;
 
@@ -720,12 +734,16 @@ export function EditColaboradorModal({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(clinicas as Array<{ id: number; nome: string }>).map(
-                        (c) => (
+                      {clinicaOptions.length === 0 ? (
+                        <SelectItem value="__empty__" disabled>
+                          {isLoadingClinicas ? "Carregando..." : "Nenhuma clínica cadastrada"}
+                        </SelectItem>
+                      ) : (
+                        clinicaOptions.map((c) => (
                           <SelectItem key={c.id} value={c.nome}>
                             {c.nome}
                           </SelectItem>
-                        ),
+                        ))
                       )}
                     </SelectContent>
                   </Select>

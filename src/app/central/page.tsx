@@ -99,6 +99,27 @@ function getInitials(name: string): string {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
+const CENTRAL_PAGE_STORAGE_KEY = "central-colaboradores-page";
+
+function parsePositivePage(value: string | null): number | null {
+  if (!value) return null;
+  const page = Number(value);
+  return Number.isInteger(page) && page > 0 ? page : null;
+}
+
+function getInitialCentralPage(): number {
+  if (typeof window === "undefined") return 1;
+
+  const urlPage = parsePositivePage(
+    new URLSearchParams(window.location.search).get("page"),
+  );
+  if (urlPage) return urlPage;
+
+  return parsePositivePage(
+    window.sessionStorage.getItem(CENTRAL_PAGE_STORAGE_KEY),
+  ) ?? 1;
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: Status }) {
@@ -181,7 +202,7 @@ export default function CentralPage() {
   const debouncedSearch = useDebounce(search, 500);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [cargoFilter, setCargoFilter] = useState<string[]>([]);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(getInitialCentralPage);
 
   // Estado do modal de upload
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -195,6 +216,25 @@ export default function CentralPage() {
   const [realocarModalOpen, setRealocarModalOpen] = useState(false);
 
   const limit = 20;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.sessionStorage.setItem(CENTRAL_PAGE_STORAGE_KEY, String(page));
+
+    const url = new URL(window.location.href);
+    if (page > 1) {
+      url.searchParams.set("page", String(page));
+    } else {
+      url.searchParams.delete("page");
+    }
+
+    const nextPath = `${url.pathname}${url.search}${url.hash}`;
+    const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextPath !== currentPath) {
+      router.replace(nextPath, { scroll: false });
+    }
+  }, [page, router]);
 
   // Busca os centros de custo disponíveis para o dropdown
   const { data: centrosDisponiveisData } = useQuery({
