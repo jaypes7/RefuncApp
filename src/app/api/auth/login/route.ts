@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     // ── DEMO MODE: autentica contra lista local ──────────────────────────────
     if (DEMO_MODE) {
       const { validateDemoCredentials } = await import("@/lib/demo/repository");
-      const usuario = await validateDemoCredentials(re, senha);
+      const usuario = validateDemoCredentials(re, senha);
 
       if (!usuario) {
         return NextResponse.json({ error: "E-mail ou senha incorretos" }, { status: 401 });
