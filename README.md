@@ -22,15 +22,16 @@
 
 **REFUNC APP** é uma solução empresarial para centralizar e automatizar o controle do ciclo completo de onboarding de colaboradores em projetos de implantação e construção. 
 
-O sistema gerencia desde o cadastro inicial até a liberação para operação em campo, com acompanhamento em tempo real de etapas administrativas, métricas executivas e geração de relatórios integrados com **Google Sheets**.
+O sistema gerencia desde o cadastro inicial até a liberação para operação em campo, com acompanhamento em tempo real de etapas administrativas, métricas executivas e geração de relatórios integrados com **Supabase**.
 
 ### 🎯 Objetivo Principal
 
 Eliminar silos de informação entre departamentos (RH, Logística, Segurança) através de:
-- ✅ Centralização de dados de colaboradores
+- ✅ Centralização de dados de colaboradores em banco de dados seguro
 - 📊 Dashboards executivos com métricas em tempo real
 - 🔄 Automação do ciclo de onboarding
 - 📈 Acompanhamento de prazos e metas
+- 📸 Documentação e registro fotográfico
 
 ---
 
@@ -41,6 +42,7 @@ Eliminar silos de informação entre departamentos (RH, Logística, Segurança) 
 - **Dashboard RH**: Análise demográfica dos colaboradores
 - **Dashboard Logística**: Status de hospedagem e transporte
 - **Dashboard Suprimentos**: Requisições e ordens de compra
+- **Relatório Executivo**: Visualizações avançadas com curva S e métricas
 - **Curva S**: Visualização do progresso do projeto vs. planejado
 
 ### 👥 Gestão de Colaboradores
@@ -49,21 +51,26 @@ Eliminar silos de informação entre departamentos (RH, Logística, Segurança) 
 - 📤 Importação em lote via **XLSX** com validação de duplicidades
 - 📥 Exportação de dados em tempo real
 - 🚦 Acompanhamento de status e etapas
+- 📸 Registros fotográficos de mobilizações
+- 📋 Checklists de mobilização
+- 💬 Sistema de comentários com editor rich-text
 - ♿ Interface acessível e responsiva
 
 ### ⚙️ Configurações Avançadas
 - 🏥 Gerenciamento de clínicas credenciadas
 - 🏨 Configuração de hotéis e vagas
-- 👤 Controle de usuários permitidos
+- 👤 Controle de usuários e acesso restrito
 - 📋 Definição dinâmica de etapas do projeto
 - 📅 Cronograma e duração de cada fase
 - 📊 Metas e métricas do projeto
+- 🔐 Gerenciamento de permissões e segurança
 
 ### 🔐 Segurança e Autenticação
-- 🔑 Autenticação via JWT
-- 🛡️ Endpoints protegidos
+- 🔑 Autenticação via Supabase Auth + JWT
+- 🛡️ Row Level Security (RLS) no banco de dados
 - 📝 Logs de auditoria completos
-- 👥 Sistema de roles e permissões (planejado)
+- 👥 Sistema de roles e permissões
+- 🔒 Endpoints protegidos com validação de token
 
 ---
 
@@ -96,17 +103,21 @@ Eliminar silos de informação entre departamentos (RH, Logística, Segurança) 
 ### Backend & Integração
 | Tecnologia | Propósito |
 |---|---|
-| **Google Sheets API v4** | Banco de dados em planilha |
+| **Supabase** | Banco de dados PostgreSQL + autenticação |
 | **Axios** | Cliente HTTP |
 | **Zod** | Validação e schemas |
 | **Jose** | JWT para autenticação |
+| **Vercel Analytics** | Métricas de performance e uso |
 
-### Formulários & Validação
+### Formulários, Validação & Edição
 | Tecnologia | Propósito |
 |---|---|
 | **React Hook Form** | Gerenciamento de formulários |
 | **Zod** | Schema validation |
 | **React IMask** | Máscaras de input |
+| **TipTap** | Editor rich-text para comentários e relatórios |
+| **jsPDF** | Geração de PDFs |
+| **html-to-image** | Conversão de HTML para imagem |
 
 ---
 
@@ -150,7 +161,7 @@ Eliminar silos de informação entre departamentos (RH, Logística, Segurança) 
 
 - **Node.js** 18+ e **npm** ou **yarn**
 - **Git**
-- **Credenciais Google Sheets API** (para integração de dados)
+- **Credenciais Supabase** (para banco de dados e autenticação)
 
 ### Passos de Instalação
 
@@ -172,19 +183,19 @@ yarn install
 Crie um arquivo `.env.local` na raiz do projeto:
 
 ```env
-# Google Sheets API
-NEXT_PUBLIC_GOOGLE_SHEET_ID=seu_sheet_id
-GOOGLE_SHEETS_API_KEY=sua_chave_api
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=sua_url_supabase
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anonima_supabase
+SUPABASE_SERVICE_ROLE_KEY=sua_chave_de_servico_supabase
 
-# Autenticação JWT
+# Autenticação JWT (opcional, se usar JWT customizado)
 JWT_SECRET=sua_chave_secreta_jwt
 
 # URL da aplicação
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-# Banco de dados (Sheets)
-DATABASE_TYPE=google_sheets
 ```
+
+> Obtenha as credenciais Supabase em: https://app.supabase.com/projects
 
 4. **Execute o servidor de desenvolvimento**
 ```bash
@@ -205,6 +216,7 @@ Ao fazer login, você terá acesso aos dashboards específicos:
 - **Dashboard RH**: Análise demográfica dos colaboradores
 - **Dashboard Logística**: Status de hospedagem e transporte
 - **Dashboard Suprimentos**: Requisições e ordens de compra
+- **Relatório Executivo**: Métricas avançadas com curva S
 
 ### 👥 Central de Colaboradores
 
@@ -234,6 +246,33 @@ Na seção **Configurações**, configure:
 - **Cronograma**: Configure duração das etapas
 - **Usuários**: Gerencie acessos
 - **Projeto**: Defina metas e datas
+### 📸 Registros Fotográficos
+
+Tire e organize fotos de mobilizações:
+
+- Upload de fotos em lote
+- Associação com colaboradores
+- Organização por projeto e etapa
+- Visualização em galeria
+
+### 📋 Checklists
+
+Acompanhe checklist de mobilização:
+
+- Itens configuráveis por projeto
+- Atribuição a colaboradores
+- Histórico de alterações
+- Status em tempo real
+
+### 💬 Comentários e Documentação
+
+Sistema de comentários com editor rich-text:
+
+- Editor visual com formatação
+- Anexação de imagens e documentos
+- Histórico de conversas
+- Notificações de menções
+
 
 ---
 
@@ -243,27 +282,47 @@ Na seção **Configurações**, configure:
 refuncapp-web/
 ├── src/
 │   ├── app/
-│   │   ├── api/                    # Rotas API
-│   │   │   ├── auth/              # Autenticação
-│   │   │   ├── colaboradores/     # CRUD colaboradores
-│   │   │   ├── config/            # Configurações
-│   │   │   └── dashboard/         # Dados para dashboards
-│   │   ├── central/               # Página Central (CRUD)
-│   │   ├── configuracoes/         # Página Configurações
-│   │   ├── dashboard/             # Páginas Dashboards
-│   │   └── login/                 # Página Login
-│   ├── components/                # Componentes React
-│   │   ├── ui/                   # Componentes UI (shadcn)
-│   │   └── modals/               # Modais
-│   ├── contexts/                 # Context API
-│   ├── hooks/                    # Custom hooks
-│   ├── lib/                      # Utilitários
-│   │   ├── auth.ts              # Autenticação
-│   │   ├── axios.ts             # Cliente HTTP
-│   │   ├── schemas.ts           # Validações Zod
-│   │   └── project-math.ts      # Cálculos do projeto
-│   └── services/                # Serviços (API integration)
-├── public/                       # Assets estáticos
+│   │   ├── api/                         # Rotas API Next.js
+│   │   │   ├── auth/                   # Autenticação
+│   │   │   ├── colaboradores/          # CRUD colaboradores
+│   │   │   ├── banco-talentos/         # Banco de talentos
+│   │   │   ├── checklist-mobilizacao/  # Checklists
+│   │   │   ├── registros-fotograficos/ # Fotos
+│   │   │   ├── comentarios-cliente/    # Comentários
+│   │   │   ├── config/                 # Configurações
+│   │   │   ├── dashboard/              # Dados para dashboards
+│   │   │   ├── relatorio/              # Relatórios
+│   │   │   ├── logs/                   # Auditoria
+│   │   │   └── export/                 # Exportação
+│   │   ├── central/                    # Página Central (CRUD)
+│   │   ├── configuracoes/              # Página Configurações
+│   │   ├── dashboard/                  # Páginas Dashboards
+│   │   ├── relatorio-executivo/        # Relatório Executivo
+│   │   ├── registros-fotograficos/     # Registros Fotográficos
+│   │   ├── checklist-mobilizacao/      # Checklists
+│   │   └── login/                      # Página Login
+│   ├── components/                     # Componentes React
+│   │   ├── ui/                        # Componentes UI (shadcn)
+│   │   ├── tv/                        # Componentes TV/Tela Grande
+│   │   ├── modals/                    # Modais
+│   │   └── relatorio-*.tsx            # Componentes de Relatório
+│   ├── contexts/                      # Context API
+│   │   ├── AuthContext.tsx           # Autenticação
+│   │   └── FilterContext.tsx         # Filtros
+│   ├── hooks/                        # Custom hooks
+│   ├── lib/                          # Utilitários
+│   │   ├── auth.ts                  # Autenticação Supabase
+│   │   ├── axios.ts                 # Cliente HTTP
+│   │   ├── supabase.ts              # Cliente Supabase
+│   │   ├── schemas.ts               # Validações Zod
+│   │   ├── project-math.ts          # Cálculos do projeto
+│   │   ├── date-utils.ts            # Utilitários de data
+│   │   └── utils.ts                 # Utilitários gerais
+│   └── services/                    # Serviços (API integration)
+├── supabase/
+│   └── migrations/                  # Migrações de banco de dados
+├── public/                          # Assets estáticos
+│   └── geo/                        # Dados geográficos
 ├── package.json
 ├── tsconfig.json
 ├── next.config.ts
@@ -274,54 +333,42 @@ refuncapp-web/
 
 ## 🔄 Fluxo de Dados
 
-```
-XLSX Input ──→ Validação ──→ Google Sheets ──→ Dashboard Métricas ──→ Visualização
-  (Upload)    (Duplicidade) (Colaboradores)      (+ Gráficos)        (UI)
-                   ↑                                      ↓
-                   └──── Entrada Manual (Cadastro) ────→ Exportação XLSX
-```
-
----
-
-## 📊 Métricas Principais
-
-O sistema acompanha automaticamente:
-
-| Métrica | Descrição |
-|---------|-----------|
-| **Cadastrados** | CPF + NOME preenchidos |
-| **Admitidos** | Cadastrado + DATA_ADMISSÃO preenchida |
-| **Liberados** | Admitido + (PORTAL = Liberado OU ASO = Apto) |
-| **Em Treinamento** | Liberado + TREINAMENTO = Em Andamento |
-| **Portal Liberado** | Status de acesso ao portal do cliente |
-
----
-
-## 🔐 Autenticação
-
-O sistema utiliza **JWT (JSON Web Tokens)** para autenticação:
+O sistema utiliza **Supabase Auth** com **JWT** para autenticação:
 
 ```
-1. Login → Credenciais validadas
-2. Token JWT gerado → Armazenado no cliente
+1. Login → Credenciais validadas no Supabase
+2. Token JWT gerado → Armazenado no cliente + localStorage
 3. Requisições → Token no header Authorization
-4. Validação → Server verifica assinatura do token
-5. Renovação → Token renovado a cada requisição
+4. Validação → Server verifica assinatura e RLS
+5. Refresh → Token automaticamente renovado pelo Supabase
+6. Logout → Session encerrada no servidor
 ```
+
+### Row Level Security (RLS)
+
+Todas as tabelas possuem RLS habilitado, garantindo que:
+- Usuários só acessem dados que têm permissão
+- Operações CRUD são filtradas por usuário/role
+- Segurança em múltiplos níveis (banco de dados + aplicação)
 
 ---
 
 ## 📝 Logs de Auditoria
 
-Todas as ações são registradas em log:
+Todas as ações são registradas em log no banco de dados:
 
 | Campo | Descrição |
 |-------|-----------|
-| **TIMESTAMP** | Data/hora exata da ação |
-| **USUARIO** | Email do usuário |
-| **ACAO** | ADICIONAR, EDITAR, REMOVER, IMPORTAR, CONFIG |
-| **DETALHES** | Descrição legível da ação |
-| **CPF_COLABORADOR** | CPF do colaborador envolvido |
+| **TIMESTAMP** | Data/hora exata da ação (UTC) |
+| **USUARIO_ID** | ID do usuário que realizou a ação |
+| **USUARIO_EMAIL** | Email do usuário |
+| **ACAO** | ADICIONAR, EDITAR, REMOVER, IMPORTAR, EXPORTAR |
+| **TABELA** | Tabela afetada |
+| **REGISTRO_ID** | ID do registro modificado |
+| **DADOS_ANTERIORES** | Snapshot dos dados antes da mudança |
+| **DADOS_NOVOS** | Snapshot dos dados após a mudança |
+| **IP_ADDRESS** | Endereço IP da requisição |
+| **STATUS** | Sucesso ou erro |
 
 ---
 
@@ -329,10 +376,46 @@ Todas as ações são registradas em log:
 
 ### 🔴 Prioridade Máxima (Em Desenvolvimento)
 - ✅ Dashboards específicos (RH, Logística, Suprimentos)  
-- 🔄 Dropdown na aba Dashboard para filtrar visões
-- 🔄 Toggle para recolher sidebar
+- ✅ Registros fotográficos de mobilizações
+- ✅ Checklists de mobilização
+- ✅ Sistema de comentários com editor rich-text
+- ✅ Relatório executivo com curva S
+- 🔄 Otimizações de performance e SEO
+- 🔄 Melhorias na experiência do usuário
 
 ### 🟡 Prioridade Média (Próximas Semanas)
+- [ ] Sistema avançado de notificações (email/SMS)
+- [ ] Integração com sistemas externos (ERP)
+- [ ] Backup automático de dados
+- [ ] API pública para integrações
+- [ ] Dashboard mobile otimizado
+
+### 🔵 Prioridade Baixa (Roadmap Futuro)
+- [ ] Inteligência artificial para previsões (ML)
+- [ ] Análise preditiva de riscos
+- [ ] Automação workflow com IA
+- [ ] Integração com calendário (Google/Outlook)
+- [ ] Mobile app nativo (iOS/Android)ação |
+| ✅ Registros fotográficos de mobilizações
+- ✅ Checklists de mobilização
+- ✅ Sistema de comentários com editor rich-text
+- ✅ Relatório executivo com curva S
+- 🔄 Otimizações de performance e SEO
+- 🔄 Melhorias na experiência do usuário
+
+### 🟡 Prioridade Média (Próximas Semanas)
+- [ ] Sistema avançado de notificações (email/SMS)
+- [ ] Integração com sistemas externos (ERP)
+- [ ] Backup automático de dados
+- [ ] API pública para integrações
+- [ ] Dashboard mobile otimizado
+
+### 🔵 Prioridade Baixa (Roadmap Futuro)
+- [ ] Inteligência artificial para previsões (ML)
+- [ ] Análise preditiva de riscos
+- [ ] Automação workflow com IA
+- [ ] Integração com calendário (Google/Outlook)
+- [ ] Mobile app nativo (iOS/Android)nas)
 - [ ] Revisão de rotas de salvamento de dados
 - [ ] Integração completa com Google Sheets
 - [ ] Logs com timestamp correto

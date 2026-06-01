@@ -561,7 +561,7 @@ export interface Clinica {
 }
 
 export const clinicasApi = {
-  listar: () => api.get<{ data: Clinica[] }>("/clinicas"),
+  listar: () => api.get<Clinica[]>("/clinicas"),
 };
 
 // ============================================================================
@@ -1102,4 +1102,10 @@ export const requisicoesSuprimentosApi = {
     observacao?: string;
     itens?: Array<{ item_id: string; quantidade_recebida: number }>;
   }) => api.post<Recebimento>(`/suprimentos/requisicoes/${id}/recebimento`, body),
+
+  deletar: (id: string) =>
+    api.delete(`/suprimentos/requisicoes/${id}`),
+
+  deletarVarios: (ids: string[]) =>
+    api.delete("/suprimentos/requisicoes", { data: { ids } }),
 };

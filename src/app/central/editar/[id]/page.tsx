@@ -23,7 +23,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -56,7 +56,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { colaboradoresApi, type Colaborador } from "@/lib/axios";
+import { colaboradoresApi, clinicasApi, type Colaborador } from "@/lib/axios";
 import { maskCPF, formatTelefone } from "@/lib/utils";
 import { IMaskInput } from "react-imask";
 import { CargoCombobox } from "@/components/CargoCombobox";
@@ -252,11 +252,13 @@ function S({
   value,
   onChange,
   options,
+  emptyLabel = "Nenhuma opção disponível",
 }: {
   label: string;
   value: string | null | undefined;
   onChange: (v: string) => void;
   options: string[];
+  emptyLabel?: string;
 }) {
   return (
     <div className="space-y-2">
@@ -272,11 +274,17 @@ function S({
         </SelectTrigger>
         <SelectContent>
           {/* Nenhum SelectItem com value="" aqui */}
-          {options.map((opt) => (
-            <SelectItem key={opt} value={opt}>
-              {opt}
+          {options.length === 0 ? (
+            <SelectItem value="__empty__" disabled>
+              {emptyLabel}
             </SelectItem>
-          ))}
+          ) : (
+            options.map((opt) => (
+              <SelectItem key={opt} value={opt}>
+                {opt}
+              </SelectItem>
+            ))
+          )}
         </SelectContent>
       </Select>
     </div>
@@ -321,6 +329,14 @@ export default function EditarColaboradorPage() {
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const { data: clinicas = [], isLoading: isLoadingClinicas } = useQuery({
+    queryKey: ["clinicas"],
+    queryFn: async () => {
+      const response = await clinicasApi.listar();
+      return response.data;
+    },
+  });
+
   // ── setters ─────────────────────────────────────────────────────────────
 
   const set = useCallback(
@@ -336,6 +352,15 @@ export default function EditarColaboradorPage() {
     (k: keyof FormData) => (v: string) => set(k, (v || null) as never),
     [set],
   );
+
+  const clinicaOptions = [
+    ...new Set(
+      [
+        form.CLINICA?.trim() || null,
+        ...clinicas.map((clinica) => clinica.nome?.trim()).filter(Boolean),
+      ].filter((nome): nome is string => Boolean(nome)),
+    ),
+  ];
 
   // ── fetch ────────────────────────────────────────────────────────────────
 
@@ -773,11 +798,12 @@ export default function EditarColaboradorPage() {
                   onChange={s("EXAME")}
                   options={O_EXAME}
                 />
-                <F
+                <S
                   label="Clínica"
                   value={form.CLINICA}
-                  onChange={t("CLINICA")}
-                  placeholder="Nome da clínica responsável"
+                  onChange={s("CLINICA")}
+                  options={clinicaOptions}
+                  emptyLabel={isLoadingClinicas ? "Carregando..." : "Nenhuma clínica cadastrada"}
                 />
                 <S
                   label="ASO"

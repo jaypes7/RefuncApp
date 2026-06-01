@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -23,10 +24,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Package } from "lucide-react";
+import { Plus, Search, Package, Trash2 } from "lucide-react";
 import { requisicoesSuprimentosApi, type Requisicao } from "@/lib/axios";
 import { formatDateBR } from "@/lib/date-utils";
+import { toast } from "sonner";
 
 // ============================================================================
 // STATUS CONFIG
@@ -65,9 +75,12 @@ function formatDate(dateStr: string | null | undefined) {
 
 function RequisicoesList() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [search, setSearch]     = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [page, setPage]         = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<{ ids: string[]; single: boolean } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["suprimentos-requisicoes", page, search, statusFilter],
@@ -85,6 +98,56 @@ function RequisicoesList() {
   const requisicoes: Requisicao[] = data?.data ?? [];
   const totalPages = data?.pagination.totalPages ?? 1;
 
+  const deleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 1) {
+        await requisicoesSuprimentosApi.deletar(ids[0]);
+      } else {
+        await requisicoesSuprimentosApi.deletarVarios(ids);
+      }
+    },
+    onSuccess: (_data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ["suprimentos-requisicoes"] });
+      setSelected(new Set());
+      setDeleteTarget(null);
+      toast.success(ids.length === 1 ? "Requisição excluída." : `${ids.length} requisições excluídas.`);
+    },
+    onError: () => {
+      toast.error("Erro ao excluir. Tente novamente.");
+    },
+  });
+
+  const allPageIds = requisicoes.map((r) => r.id);
+  const allSelected = allPageIds.length > 0 && allPageIds.every((id) => selected.has(id));
+  const someSelected = allPageIds.some((id) => selected.has(id));
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        allPageIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        allPageIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const selectedCount = selected.size;
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -99,10 +162,22 @@ function RequisicoesList() {
               Gerencie as requisições de materiais e serviços
             </p>
           </div>
-          <Button onClick={() => router.push("/suprimentos/requisicoes/nova")} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Nova Requisição
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedCount > 0 && (
+              <Button
+                variant="destructive"
+                className="gap-2"
+                onClick={() => setDeleteTarget({ ids: Array.from(selected), single: false })}
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir {selectedCount} selecionada{selectedCount > 1 ? "s" : ""}
+              </Button>
+            )}
+            <Button onClick={() => router.push("/suprimentos/requisicoes/nova")} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Nova Requisição
+            </Button>
+          </div>
         </div>
 
         {/* Filtros */}
@@ -146,25 +221,35 @@ function RequisicoesList() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allSelected}
+                      data-state={someSelected && !allSelected ? "indeterminate" : undefined}
+                      onCheckedChange={toggleAll}
+                      aria-label="Selecionar todas"
+                      disabled={isLoading || requisicoes.length === 0}
+                    />
+                  </TableHead>
                   <TableHead>Título</TableHead>
                   <TableHead>Coordenador</TableHead>
                   <TableHead>Data Abertura</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criada em</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 5 }).map((_, j) => (
+                      {Array.from({ length: 7 }).map((_, j) => (
                         <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
                       ))}
                     </TableRow>
                   ))
                 ) : requisicoes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       Nenhuma requisição encontrada
                     </TableCell>
                   </TableRow>
@@ -173,13 +258,40 @@ function RequisicoesList() {
                     <TableRow
                       key={req.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => router.push(`/suprimentos/requisicoes/${req.id}`)}
+                      data-selected={selected.has(req.id)}
                     >
-                      <TableCell className="font-medium">{req.titulo}</TableCell>
-                      <TableCell>{req.coordenador}</TableCell>
-                      <TableCell>{formatDate(req.data_abertura)}</TableCell>
-                      <TableCell><StatusBadge status={req.status} /></TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{formatDate(req.created_at)}</TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selected.has(req.id)}
+                          onCheckedChange={() => toggleOne(req.id)}
+                          aria-label={`Selecionar ${req.titulo}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium" onClick={() => router.push(`/suprimentos/requisicoes/${req.id}`)}>
+                        {req.titulo}
+                      </TableCell>
+                      <TableCell onClick={() => router.push(`/suprimentos/requisicoes/${req.id}`)}>
+                        {req.coordenador}
+                      </TableCell>
+                      <TableCell onClick={() => router.push(`/suprimentos/requisicoes/${req.id}`)}>
+                        {formatDate(req.data_abertura)}
+                      </TableCell>
+                      <TableCell onClick={() => router.push(`/suprimentos/requisicoes/${req.id}`)}>
+                        <StatusBadge status={req.status} />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm" onClick={() => router.push(`/suprimentos/requisicoes/${req.id}`)}>
+                        {formatDate(req.created_at)}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteTarget({ ids: [req.id], single: true })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -203,6 +315,36 @@ function RequisicoesList() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Diálogo de confirmação de exclusão */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Confirmar exclusão</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.ids.length === 1
+                ? "Tem certeza que deseja excluir esta requisição? Esta ação não pode ser desfeita."
+                : `Tem certeza que deseja excluir ${deleteTarget?.ids.length} requisições? Esta ação não pode ser desfeita.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={deleteMutation.isPending}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.ids)}
+            >
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -84,7 +84,7 @@ const fullSchema = z.object({
   experienciaFuncao: z.enum(EXPERIENCIA_FUNCAO_OPTIONS).optional(),
   cartaOferta: z.enum(["Sim", "Não", "Pendente"]).optional(),
   tipoContrato: z.enum(["Determinado", "Indeterminado"]).optional(),
-  contrato: z.enum(["CLT", "PJ", "Estagiário"]).optional(),
+  contrato: z.enum(["CLT", "PJ", "Temporário", "Estagiário"]).optional(),
   status: z.enum(["Ativo", "Pendente", "Inativo", "Desligado"]).optional(),
   enviadoRh: z.enum(["Sim", "Não", "Pendente"]).optional(),
   vinculado: z.string().optional(),
@@ -164,7 +164,7 @@ export default function OnboardingPage() {
     enabled: filterReady,
   });
 
-  const clinicas = clinicasData?.data || [];
+  const clinicas = clinicasData || [];
 
   // Busca projetos cadastrados para o dropdown de centro de custo
   const { data: projetosData } = useQuery({
@@ -715,7 +715,7 @@ export default function OnboardingPage() {
                     {/* UF */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium">UF</label>
-                      <Select value={ufValue} onValueChange={(value) => setValue("uf", value, { shouldValidate: true })}>
+                      <Select value={ufValue || undefined} onValueChange={(value) => setValue("uf", value, { shouldValidate: true })}>
                         <SelectTrigger><SelectValue placeholder="Selecione a UF" /></SelectTrigger>
                         <SelectContent>
                           {ufs.map((uf) => (<SelectItem key={uf} value={uf}>{uf}</SelectItem>))}
@@ -782,11 +782,12 @@ export default function OnboardingPage() {
 
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Contrato</label>
-                      <Select value={contratoValue || undefined} onValueChange={(value: "CLT" | "PJ" | "Estagiário") => setValue("contrato", value, { shouldValidate: true })}>
+                      <Select value={contratoValue || undefined} onValueChange={(value: "CLT" | "PJ" | "Temporário" | "Estagiário") => setValue("contrato", value, { shouldValidate: true })}>
                         <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="CLT">CLT</SelectItem>
                           <SelectItem value="PJ">PJ</SelectItem>
+                          <SelectItem value="Temporário">Temporário</SelectItem>
                           <SelectItem value="Estagiário">Estagiário</SelectItem>
                         </SelectContent>
                       </Select>
@@ -959,8 +960,10 @@ export default function OnboardingPage() {
                         <SelectContent>
                           {isLoadingClinicas ? (
                             <SelectItem value="__loading__" disabled>Carregando...</SelectItem>
+                          ) : clinicas.length === 0 ? (
+                            <SelectItem value="__empty__" disabled>Nenhuma clínica cadastrada</SelectItem>
                           ) : (
-                            clinicas.map((c: { nome: string }) => (
+                            clinicas.map((c) => (
                               <SelectItem key={c.nome} value={c.nome}>{c.nome}</SelectItem>
                             ))
                           )}
