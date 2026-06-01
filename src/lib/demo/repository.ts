@@ -19,6 +19,7 @@ export type { DemoColaborador } from "./data/colaboradores";
 export {
   DEMO_CONFIG,
   DEMO_ETAPAS,
+  DEMO_GRUPOS_ETAPAS,
   DEMO_CLINICAS,
   DEMO_HOTEIS,
   DEMO_CENTROS_CUSTO,

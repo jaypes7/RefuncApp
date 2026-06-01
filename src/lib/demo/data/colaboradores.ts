@@ -54,8 +54,27 @@ const PORTAL_DIST = ["Aprovado","Aprovado","Aprovado","Pendente","Pendente","Apr
 // RPV: labels que o dashboard de segurança espera
 const RPV_DIST = ["OK","OK","OK","OK","Pendente","Pendente","N/A"];
 
-const ASO_DIST  = ["Apto","Apto","Apto","Apto","Pendente","Inapto"];
-const TREIN_DIST = ["Concluído","Concluído","Concluído","Em Andamento","Em Andamento","Pendente"];
+const ASO_DIST    = ["Apto","Apto","Apto","Apto","Pendente","Inapto"];
+const TREIN_DIST  = ["Concluído","Concluído","Concluído","Em Andamento","Em Andamento","Pendente"];
+const EXAME_DIST  = ["Realizado","Realizado","Realizado","Realizado","Agendado","Pendente"];
+const DOCS_DIST   = ["Completo","Completo","Completo","Incompleto","Pendente"];
+const PONTO_DIST  = ["Cadastrado","Cadastrado","Cadastrado","Pendente"];
+const MOB_DIST    = [
+  "VAN-LINHA-01","VAN-LINHA-01","VAN-LINHA-02","VAN-LINHA-02",
+  "ÔNIBUS-A","ÔNIBUS-A","ÔNIBUS-B","",
+];
+const TURNO_DIST  = ["Diurno","Diurno","Diurno","Noturno","Noturno","12x36"];
+const ESC_DIST    = [
+  "Ensino Médio","Ensino Médio","Ensino Médio","Ensino Médio",
+  "Técnico","Técnico","Técnico",
+  "Ensino Superior","Ensino Superior",
+  "Pós-graduação",
+];
+const EXP_DIST    = [
+  "Júnior (até 2 anos)","Júnior (até 2 anos)",
+  "Pleno (2.5 a 4 anos)","Pleno (2.5 a 4 anos)","Pleno (2.5 a 4 anos)",
+  "Sênior (5 anos+)",
+];
 
 const UFS = ["PA","PA","PA","PA","SP","BA","RJ","MG","CE","MA","AM","TO"];
 const MUNICIPIOS: Record<string,string[]> = {
@@ -69,11 +88,19 @@ const MUNICIPIOS: Record<string,string[]> = {
   AM: ["Manaus","Parintins","Itacoatiara"],
   TO: ["Palmas","Araguaína","Gurupi"],
 };
-const SEXOS = ["M","M","M","F","F"];
+const SEXOS  = ["M","M","M","F","F"];
 const HOTEIS = ["Hotel Alpha Executivo","Hotel Beta Confort","Pousada Gama",null];
 const CLINICAS = ["Clínica Saúde Total","Centro Médico Ocupacional","Clínica Bem Estar"];
 
 function pick<T>(arr: T[], idx: number): T { return arr[idx % arr.length]; }
+
+// Gera datas de término para ~40 colaboradores (0-39): próximos 5-90 dias
+function gerarTermino(i: number): string | null {
+  if (i >= 40) return null;
+  if (i < 5)  return relDate(3  + i * 1);   // crítico: vence em 3-7 dias
+  if (i < 10) return relDate(8  + (i - 5) * 1); // alerta: vence em 8-12 dias
+  return relDate(16 + (i - 10) * 2);             // normal: vence em 16-76 dias
+}
 
 export interface DemoColaborador {
   id: string;
@@ -99,6 +126,14 @@ export interface DemoColaborador {
   rpv: string;
   cracha: string;
   treinamento: string;
+  exame: string;
+  docs: string;
+  mob: string;
+  ponto: string;
+  termino: string | null;
+  escolaridade: string;
+  experiencia_funcao: string;
+  turno_trabalho: string;
   centro_custo: string;
   created_at: string;
 }
@@ -110,33 +145,42 @@ export const DEMO_COLABORADORES: DemoColaborador[] = NOMES.map((nome, i) => {
   const anoNasc = new Date().getFullYear() - idade;
   const status = pick(STATUS_DIST, i);
   const ativo  = status === "Ativo";
+  const asoStatus = pick(ASO_DIST, i);
 
   return {
-    id:           `collab-${String(i + 1).padStart(4, "0")}`,
-    re:           `RE-${String(i + 1).padStart(4, "0")}`,
-    nome:         nome.toUpperCase(),
-    cpf:          CPF_BASE[i],
-    funcao:       pick(FUNCOES, i + 3),
+    id:                `collab-${String(i + 1).padStart(4, "0")}`,
+    re:                `RE-${String(i + 1).padStart(4, "0")}`,
+    nome:              nome.toUpperCase(),
+    cpf:               CPF_BASE[i],
+    funcao:            pick(FUNCOES, i + 3),
     status,
     uf,
-    municipio:    pick(municipioList, i),
-    sexo:         pick(SEXOS, i),
+    municipio:         pick(municipioList, i),
+    sexo:              pick(SEXOS, i),
     idade,
-    dt_nasc:      `${anoNasc}-${String((i % 12) + 1).padStart(2,"0")}-${String((i % 28) + 1).padStart(2,"0")}`,
-    telefone:     `(${60 + (i % 30)}) 9${String(i * 1234 + 10000).slice(0,4)}-${String(i * 5678 + 1000).slice(0,4)}`,
-    aso_status:   pick(ASO_DIST, i),
-    clinica:      pick(CLINICAS, i),
-    data_exame:   ativo ? relDate(-(i % 45)) : null,
-    hotel:        i < 65 ? pick(HOTEIS, i) : null,
-    data_admissao: ativo ? relDate(-(i % 80) - 5) : null,
-    status_adm:   ativo ? "Admitido" : "Pendente",
-    contrato_tipo: i % 5 === 0 ? "PJ" : "CLT",
-    portal:       pick(PORTAL_DIST, i),
-    rpv:          pick(RPV_DIST, i),
-    cracha:       pick(["Emitido","Emitido","Pendente"], i),
-    treinamento:  pick(TREIN_DIST, i),
-    centro_custo: "DEMO-001",
-    created_at:   relDate(-(i % 90) - 10),
+    dt_nasc:           `${anoNasc}-${String((i % 12) + 1).padStart(2,"0")}-${String((i % 28) + 1).padStart(2,"0")}`,
+    telefone:          `(${60 + (i % 30)}) 9${String(i * 1234 + 10000).slice(0,4)}-${String(i * 5678 + 1000).slice(0,4)}`,
+    aso_status:        asoStatus,
+    clinica:           pick(CLINICAS, i),
+    data_exame:        ativo ? relDate(-(i % 45)) : null,
+    hotel:             i < 65 ? pick(HOTEIS, i) : null,
+    data_admissao:     ativo ? relDate(-(i % 80) - 5) : null,
+    status_adm:        ativo ? "Admitido" : "Pendente",
+    contrato_tipo:     i % 5 === 0 ? "PJ" : "CLT",
+    portal:            pick(PORTAL_DIST, i),
+    rpv:               pick(RPV_DIST, i),
+    cracha:            pick(["Emitido","Emitido","Pendente"], i),
+    treinamento:       pick(TREIN_DIST, i),
+    exame:             pick(EXAME_DIST, i),
+    docs:              pick(DOCS_DIST, i),
+    mob:               ativo ? pick(MOB_DIST, i) : "",
+    ponto:             ativo ? pick(PONTO_DIST, i) : "Pendente",
+    termino:           gerarTermino(i),
+    escolaridade:      pick(ESC_DIST, i),
+    experiencia_funcao: pick(EXP_DIST, i),
+    turno_trabalho:    ativo ? pick(TURNO_DIST, i) : "Diurno",
+    centro_custo:      "DEMO-001",
+    created_at:        relDate(-(i % 90) - 10),
   };
 });
 

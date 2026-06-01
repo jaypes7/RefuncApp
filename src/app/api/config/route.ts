@@ -56,8 +56,37 @@ export async function GET(request: NextRequest) {
 
     // ── DEMO MODE ────────────────────────────────────────────────────────────
     if (process.env.DEMO_MODE === "true") {
-      const { DEMO_CONFIG, DEMO_ETAPAS } = await import("@/lib/demo/repository");
-      return NextResponse.json({ config: DEMO_CONFIG, etapas: DEMO_ETAPAS });
+      const { DEMO_CONFIG, DEMO_ETAPAS, DEMO_GRUPOS_ETAPAS } = await import("@/lib/demo/repository");
+
+      const etapasConfig: EtapaConfig[] = DEMO_ETAPAS.map((e) => ({
+        id:                  e.id,
+        nome:                e.nome,
+        duracaoDias:         e.duracao_dias,
+        concluida:           e.concluida ?? false,
+        percentualConcluido: e.percentual_fisico,
+        dataInicio:          e.data_inicio,
+        dataFim:             e.data_fim,
+        grupoId:             e.grupo_id ?? null,
+      }));
+
+      return NextResponse.json({
+        data: {
+          DIAS_TOTAIS_PROJETO:   DEMO_CONFIG.dias_totais_projeto,
+          DATA_INICIO_PROJETO:   DEMO_CONFIG.data_inicio_projeto,
+          DATA_FIM_PROJETO:      DEMO_CONFIG.data_fim_projeto,
+          ETAPA_ATUAL:           5,
+          META_ADMISSOES:        DEMO_CONFIG.meta_admissoes,
+          ETAPAS_PROJETO:        etapasConfig,
+          GRUPOS_ETAPAS:         DEMO_GRUPOS_ETAPAS,
+          GERENTE_OPERACOES:     DEMO_CONFIG.gerente_operacoes,
+          GERENTE_CONTRATO:      DEMO_CONFIG.gerente_contrato,
+          NOME_CLIENTE:          DEMO_CONFIG.nome_cliente,
+          CENTRO_CUSTO:          DEMO_CONFIG.centro_custo,
+          COLABORADORES_PREVISTOS: DEMO_CONFIG.colaboradores_previstos,
+          ORCADO_SUPRIMENTOS:    DEMO_CONFIG.orcado_suprimentos,
+          FERIADOS_PROJETO:      [],
+        },
+      });
     }
 
     const { searchParams } = new URL(request.url);

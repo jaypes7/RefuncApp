@@ -197,14 +197,61 @@ export async function GET(request: NextRequest) {
     // ── DEMO MODE ────────────────────────────────────────────────────────────
     if (process.env.DEMO_MODE === "true") {
       const { searchParams } = new URL(request.url);
-      const { listColaboradores } = await import("@/lib/demo/repository");
-      const result = listColaboradores({
-        status: searchParams.get("status") ?? undefined,
-        search: searchParams.get("search") ?? undefined,
-        limit:  Number(searchParams.get("limit") ?? 50),
-        offset: (Number(searchParams.get("page") ?? 1) - 1) * Number(searchParams.get("limit") ?? 50),
+      const page  = Math.max(1, Number(searchParams.get("page")  ?? 1));
+      const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 50)));
+
+      const { DEMO_COLABORADORES } = await import("@/lib/demo/repository");
+      let filtered = [...DEMO_COLABORADORES];
+      const statusFilter = searchParams.get("status");
+      const searchFilter = searchParams.get("search")?.toLowerCase();
+      if (statusFilter) filtered = filtered.filter((c) => c.status === statusFilter);
+      if (searchFilter) filtered = filtered.filter((c) =>
+        c.nome.toLowerCase().includes(searchFilter) || c.cpf.includes(searchFilter),
+      );
+
+      const total      = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const paged      = filtered.slice((page - 1) * limit, page * limit);
+
+      const data = paged.map((c) => ({
+        id:                 c.id,
+        RE:                 c.re,
+        NOME:               c.nome,
+        CPF:                c.cpf,
+        STATUS:             c.status,
+        FUNCAO_CLT:         c.funcao,
+        SEXO:               c.sexo === "M" ? "Masculino" : "Feminino",
+        IDADE:              c.idade,
+        DT_NASCIMENTO:      c.dt_nasc,
+        UF:                 c.uf,
+        MUNICIPIO:          c.municipio,
+        TELEFONE:           c.telefone,
+        ASO:                c.aso_status,
+        CLINICA:            c.clinica,
+        EXAME:              c.exame,
+        DOCS:               c.docs,
+        // PORTAL nos colaboradores: "Liberado"/"Bloqueado"/"Pendente"
+        PORTAL:             c.portal === "Aprovado" ? "Liberado"
+                          : c.portal === "Aprovado - DEMITIDO" ? "Bloqueado"
+                          : "Pendente",
+        TREINAMENTO:        c.treinamento,
+        CRACHA:             c.cracha,
+        PONTO:              c.ponto,
+        MOB:                c.mob,
+        DATA_ADMISSAO:      c.data_admissao,
+        HOTEL:              c.hotel,
+        TERMINO:            c.termino,
+        ESCOLARIDADE:       c.escolaridade,
+        EXPERIENCIA_FUNCAO: c.experiencia_funcao,
+        turno_trabalho:     c.turno_trabalho,
+        CENTRO_CUSTO:       c.centro_custo,
+        CREATED_AT:         c.created_at,
+      }));
+
+      return NextResponse.json({
+        data,
+        pagination: { page, limit, total, totalPages },
       });
-      return NextResponse.json({ data: result, total: result.length });
     }
 
     const { searchParams } = new URL(request.url);
