@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { etapas } = ConfigEtapasSchema.parse(body);
-    const centroCusto = body.centroCusto ?? "09.06.0001.171";
+    const centroCusto = body.centroCusto ?? "DEMO-001";
 
     // Busca as datas do projeto para validar as datas das etapas
     const { data: configData, error: configError } = await supabase

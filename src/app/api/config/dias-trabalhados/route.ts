@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const ccParam = searchParams.get("centro_custo") || undefined;
-    const centroCusto = resolveCentroCusto(currentUser, ccParam)?.[0] || "09.06.0001.171";
+    const centroCusto = resolveCentroCusto(currentUser, ccParam)?.[0] || "DEMO-001";
 
     const db = createServerClient();
     const { data, error } = await db
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { dias_trabalhados, centro_custo } = body;
-    const targetCentroCusto = resolveCentroCusto(currentUser, centro_custo)?.[0] || "09.06.0001.171";
+    const targetCentroCusto = resolveCentroCusto(currentUser, centro_custo)?.[0] || "DEMO-001";
 
     if (!Array.isArray(dias_trabalhados)) {
       return NextResponse.json(

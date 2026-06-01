@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       feriados_projeto,
     } = ConfigProjetoSchema.parse(body);
 
-    const targetCentroCusto = centroCusto ?? "09.06.0001.171";
+    const targetCentroCusto = centroCusto ?? "DEMO-001";
     const shouldUpdateFeriados = Object.prototype.hasOwnProperty.call(
       body,
       "feriados_projeto",

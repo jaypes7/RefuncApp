@@ -30,9 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — nunca versionar arquivos com credenciais reais
 .env*
 .env.local
+# Templates de exemplo são seguros para versionar
+!.env.demo.example
+!.env.example
 
 # vercel
 .vercel

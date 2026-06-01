@@ -2521,7 +2521,7 @@ export default function ConfiguracoesPage() {
             <div>
               <label className="text-sm font-medium mb-1.5 block">Centro de Custo *</label>
               <Input
-                placeholder="Ex: 09.06.0001.171"
+                placeholder="Ex: DEMO-001"
                 value={novoProjetoCC}
                 onChange={(e) => setNovoProjetoCC(e.target.value)}
               />

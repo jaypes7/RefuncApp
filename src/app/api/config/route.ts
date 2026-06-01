@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
     );
 
     // ── Upsert configuracoes por centro de custo ────────────────────────────
-    const targetCentroCusto = centroCusto ?? "09.06.0001.171";
+    const targetCentroCusto = centroCusto ?? "DEMO-001";
     const { error: configError } = await supabase
       .from("configuracoes")
       .upsert(

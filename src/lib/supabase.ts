@@ -22,12 +22,18 @@
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-// ── Validação em tempo de inicialização ──────────────────────────────────────
+// ── Modo demonstração: sem Supabase ─────────────────────────────────────────
+// Em DEMO_MODE todas as rotas usam demoRepository — Supabase não é inicializado.
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const DEMO_MODE = process.env.DEMO_MODE === "true";
 
-if (!supabaseUrl || !supabaseAnonKey) {
+const PLACEHOLDER_URL = "https://placeholder.supabase.co";
+const PLACEHOLDER_KEY = "placeholder-anon-key";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? (DEMO_MODE ? PLACEHOLDER_URL : "");
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? (DEMO_MODE ? PLACEHOLDER_KEY : "");
+
+if (!DEMO_MODE && (!supabaseUrl || !supabaseAnonKey)) {
   throw new Error(
     "[Supabase] NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY " +
       "devem estar definidas em .env.local",
@@ -36,10 +42,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // ── Cliente universal (anon key / RLS ativo) ─────────────────────────────────
 
-/**
- * Use este cliente em Client Components e em qualquer lugar onde as
- * regras de RLS devem ser respeitadas.
- */
 export const supabase: SupabaseClient = createClient(
   supabaseUrl,
   supabaseAnonKey,
@@ -47,18 +49,16 @@ export const supabase: SupabaseClient = createClient(
 
 // ── Factory de cliente servidor (service role / sem RLS) ─────────────────────
 
-/**
- * Cria um novo cliente Supabase com a SERVICE ROLE KEY.
- *
- * Por segurança, é uma **factory** (não um singleton) para evitar que
- * credenciais de admin vázem entre requisições em ambientes serverless.
- *
- * @example
- * // Dentro de uma API Route (src/app/api/...)
- * const db = createServerClient();
- * const { data } = await db.from("colaboradores").select("*");
- */
 export const createServerClient = (): SupabaseClient => {
+  if (DEMO_MODE) {
+    // Em modo demo, nenhuma rota deve chamar createServerClient diretamente.
+    // O bloco demo no topo de cada route.ts retorna antes de chegar aqui.
+    throw new Error(
+      "[Demo] createServerClient chamado em DEMO_MODE. " +
+        "A rota não implementou o bloco demo corretamente.",
+    );
+  }
+
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!serviceRoleKey) {
@@ -68,23 +68,13 @@ export const createServerClient = (): SupabaseClient => {
     );
   }
 
-  return createClient(supabaseUrl!, serviceRoleKey, {
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
-      // Desabilita persistência de sessão no servidor — cada request é isolado
       autoRefreshToken: false,
       persistSession: false,
       detectSessionInUrl: false,
     },
   });
 };
-
-// ── Tipos de banco de dados (Database types) ─────────────────────────────────
-// Quando o schema do Supabase estiver gerado via `supabase gen types`,
-// importe o tipo Database e tipifique os clientes:
-//
-//   import { Database } from "@/types/supabase";
-//   export const supabase = createClient<Database>(url, anonKey);
-//
-// Por ora, os clientes são não-tipados para não bloquear o desenvolvimento.
 
 export default supabase;

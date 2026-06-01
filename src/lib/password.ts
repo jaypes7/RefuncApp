@@ -8,7 +8,8 @@
 
 import bcrypt from "bcryptjs";
 
-export const DEFAULT_PASSWORD = "123456";
+export const DEFAULT_PASSWORD =
+  process.env.DEFAULT_USER_PASSWORD ?? "demo123";
 
 const SALT_ROUNDS = 10;
 
