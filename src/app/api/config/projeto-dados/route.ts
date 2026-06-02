@@ -67,33 +67,6 @@ export async function POST(request: NextRequest) {
         (configAtual?.feriados_projeto as string[] | null) ?? null;
     }
 
-    const targetCentroCusto = centroCusto ?? "09.06.0001.171";
-    const shouldUpdateFeriados = Object.prototype.hasOwnProperty.call(
-      body,
-      "feriados_projeto",
-    );
-    let feriadosProjetoAtualizados =
-      feriados_projeto?.map((d) =>
-        d instanceof Date ? d.toISOString().split("T")[0] : String(d),
-      ) ?? null;
-
-    if (!shouldUpdateFeriados) {
-      const { data: configAtual, error: configAtualError } = await supabase
-        .from("configuracoes")
-        .select("feriados_projeto")
-        .eq("centro_custo", centroCustoOriginal ?? targetCentroCusto)
-        .maybeSingle();
-
-      if (configAtualError) {
-        throw new Error(
-          `Erro ao buscar feriados atuais: ${configAtualError.message}`,
-        );
-      }
-
-      feriadosProjetoAtualizados =
-        (configAtual?.feriados_projeto as string[] | null) ?? null;
-    }
-
     const dataInicioFmt = fmt(dataInicio);
     const dataFimFmt = fmt(dataFim);
     const diasTotais = calculateWorkingDays(
@@ -200,20 +173,9 @@ export async function POST(request: NextRequest) {
     } else {
       // Criação ou edição sem mudança de CC
       const { error } = await supabase
-      // Criação ou edição sem mudança de CC
-      const { error } = await supabase
         .from("configuracoes")
         .upsert(payload, { onConflict: "centro_custo" });
 
-      if (error) {
-        if (error.code === "23505") {
-          return NextResponse.json(
-            { error: "Centro de custo já existe" },
-            { status: 409 },
-          );
-        }
-        throw new Error(`Erro ao salvar no Supabase: ${error.message}`);
-      }
       if (error) {
         if (error.code === "23505") {
           return NextResponse.json(
