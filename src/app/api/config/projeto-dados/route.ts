@@ -116,8 +116,6 @@ export async function POST(request: NextRequest) {
       feriados_projeto:
         feriadosProjetoAtualizados && feriadosProjetoAtualizados.length > 0
           ? feriadosProjetoAtualizados
-        feriadosProjetoAtualizados && feriadosProjetoAtualizados.length > 0
-          ? feriadosProjetoAtualizados
           : null,
     };
 
