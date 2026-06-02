@@ -73,7 +73,6 @@ export async function POST(request: NextRequest) {
       dataInicioFmt,
       dataFimFmt,
       feriadosProjetoAtualizados ?? undefined,
-      feriadosProjetoAtualizados ?? undefined,
     );
 
     const payload = {
