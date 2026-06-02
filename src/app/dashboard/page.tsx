@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,8 @@ import {
   Cell,
   Area,
   AreaChart,
+  BarChart,
+  Bar,
   BarChart,
   Bar,
   XAxis,
@@ -44,14 +47,19 @@ import {
   ChevronUp,
   CalendarClock,
   FolderOpen,
+  CalendarClock,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, pendenciasApi, colaboradoresApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente, type PendenciaManual, type Colaborador } from "@/lib/axios";
+
+import { dashboardPrincipalApi, configApi, ocorrenciasApi, comentariosClienteApi, pendenciasApi, colaboradoresApi, type DashboardPrincipalData, type Ocorrencia, type ComentarioCliente, type PendenciaManual, type Colaborador } from "@/lib/axios";
 import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 import { ExportPdfButton } from "@/components/export-pdf-button";
+import { MANSERV_CHART, MANSERV_STATUS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 import { MANSERV_CHART, MANSERV_STATUS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +102,11 @@ const chartConfigCurvaS = {
 // ============================================================================
 
 /** Retorna classificação de urgência baseada em comparação de datas (YYYY-MM-DD). */
+// ============================================================================
+// HELPERS — cores de término
+// ============================================================================
+
+/** Retorna classificação de urgência baseada em comparação de datas (YYYY-MM-DD). */
 function fmtDate(v: string | undefined | null): string | null {
   if (!v) return null;
   const d = new Date(v + "T00:00:00Z");
@@ -103,6 +116,24 @@ function fmtDate(v: string | undefined | null): string | null {
 function isEtapaAtrasada(etapa: DashboardPrincipalData["etapas"][number]): boolean {
   const hojeRealStr = new Date().toISOString().split("T")[0];
 
+  // Caso 1: etapa passou do prazo final e não foi concluída
+  if (etapa.dataFim && hojeRealStr > etapa.dataFim && etapa.percentualConcluido < 100) {
+    return true;
+  }
+
+  // Caso 2: dentro do prazo, mas evolução diária está abaixo do previsto
+  if (etapa.evolucaoDiaria && etapa.evolucaoDiaria.length > 0) {
+    let lastBeforeToday = -1;
+    for (let i = 0; i < etapa.evolucaoDiaria.length; i++) {
+      if (etapa.evolucaoDiaria[i].data <= hojeRealStr) lastBeforeToday = i;
+      else break;
+    }
+
+    if (lastBeforeToday !== -1) {
+      const previsto = etapa.evolucaoDiaria[lastBeforeToday].previsto;
+      const realizado = etapa.evolucaoDiaria[lastBeforeToday].realizado;
+      return realizado < previsto;
+    }
   // Caso 1: etapa passou do prazo final e não foi concluída
   if (etapa.dataFim && hojeRealStr > etapa.dataFim && etapa.percentualConcluido < 100) {
     return true;
