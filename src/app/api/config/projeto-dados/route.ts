@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           : null,
     };
 
-    // ── Edição com mudança de centro de custo: usa stored procedure transacional ──
+    // ── Edição com mudança de centro de custo: atualiza todas as tabelas ──
     if (centroCustoOriginal && centroCustoOriginal !== targetCentroCusto) {
       // Verifica duplicidade antes de executar a migração
       const { data: existing } = await supabase
@@ -107,15 +107,67 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { error: rpcError } = await supabase.rpc("migrar_centro_custo", {
-        antigo: centroCustoOriginal,
-        novo: targetCentroCusto,
-      });
+      // 1. Inserir novo registro em configuracoes com o novo CC (satisfaz FK dos filhos)
+      const { error: insertErr } = await supabase
+        .from("configuracoes")
+        .insert({ ...payload, centro_custo: targetCentroCusto });
 
-      if (rpcError) {
-        throw new Error(
-          `Falha ao migrar centro de custo: ${rpcError.message}`,
-        );
+      if (insertErr) {
+        throw new Error(`Erro ao criar novo centro de custo: ${insertErr.message}`);
+      }
+
+      // 2. Migrar todas as tabelas filhas do CC antigo para o novo
+      const tabelasFilhas = [
+        "colaboradores",
+        "etapas",
+        "etapas_grupos",
+        "checklist_etapas",
+        "checklist_subetapas",
+        "etapas_progresso_diario",
+        "registros_fotograficos",
+        "relatorios_executivos",
+        "logistica_controle",
+        "seguranca_fits",
+        "pendencias_manuais",
+        "ocorrencias",
+      ] as const;
+
+      for (const tabela of tabelasFilhas) {
+        const { error } = await supabase
+          .from(tabela)
+          .update({ centro_custo: targetCentroCusto })
+          .eq("centro_custo", centroCustoOriginal);
+        if (error) {
+          throw new Error(`Erro ao migrar tabela ${tabela}: ${error.message}`);
+        }
+      }
+
+      // usuarios_permitidos armazena centro_custo como array — substitui o valor no array
+      const { data: usersComCC } = await supabase
+        .from("usuarios_permitidos")
+        .select("id, centro_custo")
+        .contains("centro_custo", [centroCustoOriginal]);
+
+      if (usersComCC && usersComCC.length > 0) {
+        for (const user of usersComCC) {
+          const novoArray = (user.centro_custo as string[]).map((cc: string) =>
+            cc === centroCustoOriginal ? targetCentroCusto : cc,
+          );
+          await supabase
+            .from("usuarios_permitidos")
+            .update({ centro_custo: novoArray })
+            .eq("id", user.id);
+        }
+      }
+
+      // 3. Remover o registro antigo em configuracoes (agora sem filhos referenciando-o)
+      const { error: deleteErr } = await supabase
+        .from("configuracoes")
+        .delete()
+        .eq("centro_custo", centroCustoOriginal);
+
+      if (deleteErr) {
+        throw new Error(`Erro ao remover centro de custo antigo: ${deleteErr.message}`);
       }
     } else {
       // Criação ou edição sem mudança de CC

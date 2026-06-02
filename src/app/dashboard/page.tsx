@@ -362,8 +362,9 @@ export default function DashboardPage() {
 
   // Curva S por fase: computa curvaS points a partir de evolucaoDiaria das etapas de cada fase
   const curvaDataPorFase = useMemo(() => {
-    if (!etapasPorGrupo) return new Map<number, Array<{ mes: string; data: string; previsto: number; realizado: number }>>();
-    const result = new Map<number, Array<{ mes: string; data: string; previsto: number; realizado: number }>>();
+    if (!etapasPorGrupo) return new Map<number, Array<{ mes: string; data: string; previsto: number; realizado: number | null }>>();
+    const hoje = new Date().toISOString().slice(0, 10);
+    const result = new Map<number, Array<{ mes: string; data: string; previsto: number; realizado: number | null }>>();
     for (const grupo of etapasPorGrupo.grupos) {
       const etapasFase = etapasPorGrupo.byGrupo.get(grupo.id) ?? [];
       const totalDias = etapasFase.reduce((s, e) => s + e.duracaoDias, 0);
@@ -393,7 +394,7 @@ export default function DashboardPage() {
           }
         }
         const [, month, day] = data.split("-");
-        return { mes: `${day}/${month}`, data, previsto: Math.round(previsto * 10) / 10, realizado: Math.round(realizado * 10) / 10 };
+        return { mes: `${day}/${month}`, data, previsto: Math.round(previsto * 10) / 10, realizado: data > hoje ? null : Math.round(realizado * 10) / 10 };
       });
       result.set(grupo.id, pontos);
     }
