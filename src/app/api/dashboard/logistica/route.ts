@@ -49,27 +49,40 @@ export async function GET(request: NextRequest) {
       colabIds = (colabRows ?? []).map((r) => r.id as string).filter(Boolean);
     }
 
+    // CC existe mas não tem colaboradores: retorna resposta vazia sem bater no banco
+    if (colabIds !== null && colabIds.length === 0) {
+      const { data: hoteisData } = await db
+        .from("configuracoes_hoteis")
+        .select("nome, qt_vagas");
+      const sumVagasTotais = (hoteisData ?? []).reduce(
+        (s, h) => s + Number(h.qt_vagas ?? 0),
+        0
+      );
+      return NextResponse.json({
+        kpis: {
+          totalVagas: sumVagasTotais,
+          totalPreenchidas: 0,
+          totalDisponiveis: sumVagasTotais,
+          ocupacaoTotal: 0,
+        },
+        vagasHoteis: [],
+        turnoTrabalho: [],
+      });
+    }
+
     // Query de hospedagens (novo modelo)
     let hospedagemQuery = db
       .from("colaborador_hospedagens")
       .select("hotel_nome, colaborador_id");
 
     if (colabIds !== null) {
-      if (colabIds.length === 0) {
-        hospedagemQuery = hospedagemQuery.in("colaborador_id", ["__no_match__"]);
-      } else {
-        hospedagemQuery = hospedagemQuery.in("colaborador_id", colabIds);
-      }
+      hospedagemQuery = hospedagemQuery.in("colaborador_id", colabIds);
     }
 
     // Query de turnos (da tabela colaboradores)
     let turnoQuery = db.from("colaboradores").select("turno_trabalho, id");
     if (colabIds !== null) {
-      if (colabIds.length === 0) {
-        turnoQuery = turnoQuery.in("id", ["__no_match__"]);
-      } else {
-        turnoQuery = turnoQuery.in("id", colabIds);
-      }
+      turnoQuery = turnoQuery.in("id", colabIds);
     }
 
     const [

@@ -508,6 +508,7 @@ export interface EtapaConfig {
   /** Persiste no banco — marcada pelo usuário na aba Cronograma */
   concluida?: boolean;
   grupoId?: number | null;
+  responsavel?: string | null;
 }
 
 export interface GrupoEtapa {
