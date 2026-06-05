@@ -281,6 +281,7 @@ export const ColaboradorSchema = z.object({
   CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
   ESCOLARIDADE: z.preprocess(emptyStringToUndefined, z.enum(ESCOLARIDADE_VALUES).optional().catch(undefined)),
   EXPERIENCIA_FUNCAO: z.preprocess(emptyStringToUndefined, z.enum(EXPERIENCIA_FUNCAO_VALUES).optional().catch(undefined)),
+  FRETADO: z.preprocess(emptyStringToUndefined, z.enum(["Sim", "Não", "Não aplica"] as const).optional().catch(undefined)),
 });
 
 /**
@@ -364,6 +365,7 @@ export const ColaboradorUpdateSchema = z.object({
   CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
   ESCOLARIDADE: safeEnum(ESCOLARIDADE_VALUES),
   EXPERIENCIA_FUNCAO: safeEnum(EXPERIENCIA_FUNCAO_VALUES),
+  FRETADO: safeEnum(["Sim", "Não", "Não aplica"] as const),
 });
 
 // ============================================================================
