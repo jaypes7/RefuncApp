@@ -91,6 +91,7 @@ export interface Colaborador {
   DT_NASCIMENTO?: string | null;
   CPF: string;
   VR?: string | null;
+  FRETADO?: string | null;
   TERMINO?: string | null;
   PRORROGACAO?: string | null;
   DEMISSAO?: string | null;

@@ -138,6 +138,7 @@ const EMPTY: FormData = {
   CRACHA: "",
   PONTO: "",
   VR: "",
+  FRETADO: "",
   TERMINO: "",
   PRORROGACAO: "",
   DEMISSAO: "",
@@ -167,6 +168,7 @@ const O_CONTRATO = ["CLT", "PJ", "Temporário", "Estagiário"];
 const O_TIPO_CONTRATO = ["Determinado", "Indeterminado"];
 const O_PONTO = ["Cadastrado", "Pendente"];
 const O_TREINAMENTO = ["Concluído", "Em Andamento", "Pendente"];
+const O_FRETADO = ["Sim", "Não", "Não aplica"];
 const O_PESSOA = ["Masculino", "Feminino"];
 const O_PRE_ADMISSAO = ["Sim", "Não", "Pendente"];
 const O_ESCOLARIDADE = [...ESCOLARIDADE_OPTIONS];
@@ -751,6 +753,12 @@ export default function EditarColaboradorPage() {
                   value={form.VR === "Ativo" ? "Sim" : form.VR === "Pendente" ? "Não" : undefined}
                   onChange={(v) => set("VR", v === "Sim" ? "Ativo" : "Pendente")}
                   options={["Sim", "Não"]}
+                />
+                <S
+                  label="Fretado"
+                  value={form.FRETADO}
+                  onChange={s("FRETADO")}
+                  options={O_FRETADO}
                 />
                 <F
                   label="INDICAÇÃO"

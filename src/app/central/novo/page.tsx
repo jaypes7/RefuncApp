@@ -96,6 +96,7 @@ const fullSchema = z.object({
   cracha: z.enum(["Emitido", "Pendente"]).optional(),
   ponto: z.enum(["Cadastrado", "Pendente"]).optional(),
   vr: z.enum(["Ativo", "Pendente"]).optional(),
+  fretado: z.enum(["Sim", "Não", "Não aplica"]).optional(),
   mob: z.enum(["Sim", "Não", "Pendente"]).optional(),
   op: z.string().optional(),
   req: z.string().optional(),
@@ -220,6 +221,7 @@ export default function OnboardingPage() {
       DT_NASCIMENTO: data.dtNascimento,
       CPF: data.cpf.replace(/\D/g, ""),
       VR: data.vr,
+      FRETADO: data.fretado,
       TERMINO: data.termino || null,
       PRORROGACAO: data.prorrogacao || null,
       DEMISSAO: data.demissao || null,
@@ -384,6 +386,7 @@ export default function OnboardingPage() {
       cracha: "Pendente",
       ponto: "Pendente",
       vr: "Pendente",
+      fretado: undefined,
       mob: "Pendente",
       op: "",
       req: "",
@@ -411,6 +414,7 @@ export default function OnboardingPage() {
   const crachaValue = watch("cracha");
   const pontoValue = watch("ponto");
   const vrValue = watch("vr");
+  const fretadoValue = watch("fretado");
   const mobValue = watch("mob");
   const colabPendValue = watch("colabPend");
   const portalValue = watch("portal");
@@ -913,6 +917,21 @@ export default function OnboardingPage() {
                         <SelectContent>
                           <SelectItem value="Sim">Sim</SelectItem>
                           <SelectItem value="Não">Não</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Fretado</label>
+                      <Select
+                        value={fretadoValue || undefined}
+                        onValueChange={(value: "Sim" | "Não" | "Não aplica") => setValue("fretado", value, { shouldValidate: true })}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Sim">Sim</SelectItem>
+                          <SelectItem value="Não">Não</SelectItem>
+                          <SelectItem value="Não aplica">Não aplica</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

@@ -169,7 +169,7 @@ export function GanttCronograma({
       zIndex: 10,
     });
 
-    const borderB = "border-b border-border/50";
+    const borderB = "border-b border-border";
 
     return (
       <Fragment key={etapa.id}>
@@ -230,8 +230,8 @@ export function GanttCronograma({
               return (
                 <td
                   key={day}
-                  className={`border-b border-border/30 ${isToday ? "ring-inset ring-1 ring-primary/50 bg-primary/5" : ""}`}
-                  style={{ width: W_DAY, minWidth: W_DAY, height: 20, padding: 0 }}
+                  className={`border-b border-l border-border/60 ${isToday ? "ring-inset ring-1 ring-primary/50 bg-primary/5" : ""}`}
+                  style={{ width: W_DAY, minWidth: W_DAY, height: 26, padding: 0 }}
                 />
               );
             }
@@ -239,16 +239,16 @@ export function GanttCronograma({
             return (
               <td
                 key={day}
-                className={`border-b border-border/30 text-center ${isToday ? "ring-inset ring-1 ring-primary/50" : ""}`}
+                className={`border-b border-l border-border/60 text-center ${isToday ? "ring-inset ring-1 ring-primary/50" : ""}`}
                 style={{
                   width: W_DAY,
                   minWidth: W_DAY,
-                  height: 20,
+                  height: 26,
                   padding: 0,
                   backgroundColor: `rgba(59,130,246,${0.15 + (entry.previsto / 100) * 0.65})`,
                 }}
               >
-                <span className="text-[8px] font-mono leading-none text-blue-900 dark:text-blue-100 select-none">
+                <span className="text-[11px] font-mono leading-none text-black-100 dark:text-white select-none">
                   {pVal}%
                 </span>
               </td>
@@ -276,27 +276,28 @@ export function GanttCronograma({
           </td>
           {/* Day cells — R */}
           {allDays.map((day) => {
-            const entry   = evolMap.get(day);
-            const isToday = day === hoje;
-            if (!entry) {
+            const entry    = evolMap.get(day);
+            const isToday  = day === hoje;
+            const isFuture = day > hoje;
+            if (!entry || isFuture) {
               return (
                 <td
                   key={day}
-                  className={`border-b border-border/50 ${isToday ? "ring-inset ring-1 ring-primary/50 bg-primary/5" : ""}`}
-                  style={{ width: W_DAY, minWidth: W_DAY, height: 20, padding: 0 }}
+                  className={`border-b border-l border-border ${isToday ? "ring-inset ring-1 ring-primary/50 bg-primary/5" : ""}`}
+                  style={{ width: W_DAY, minWidth: W_DAY, height: 26, padding: 0 }}
                 />
               );
             }
-            const rVal       = Math.round(entry.realizado);
+            const rVal        = Math.round(entry.realizado);
             const hasProgress = entry.realizado > 0;
             return (
               <td
                 key={day}
-                className={`border-b border-border/50 text-center ${isToday ? "ring-inset ring-1 ring-primary/50" : ""}`}
+                className={`border-b border-l border-border text-center ${isToday ? "ring-inset ring-1 ring-primary/50" : ""}`}
                 style={{
                   width: W_DAY,
                   minWidth: W_DAY,
-                  height: 20,
+                  height: 26,
                   padding: 0,
                   backgroundColor: hasProgress
                     ? `rgba(218,41,27,${0.15 + (entry.realizado / 100) * 0.65})`
@@ -304,8 +305,7 @@ export function GanttCronograma({
                 }}
               >
                 <span
-                  className="text-[8px] font-mono leading-none select-none"
-                  style={{ color: hasProgress ? "#7f1d1d" : "#9ca3af" }}
+                  className="text-[11px] font-mono leading-none select-none text-black-100 dark:text-white-100"
                 >
                   {rVal}%
                 </span>
@@ -471,7 +471,7 @@ export function GanttCronograma({
                     background: isToday ? "color-mix(in srgb, hsl(var(--primary)) 20%, hsl(var(--muted)) 80%)" : BG_MUTED,
                   }}
                 >
-                  <span className="text-[8px] font-mono leading-none block">
+                  <span className="text-[11px] font-mono leading-none block">
                     {fmtDayNum(day)}
                   </span>
                 </th>

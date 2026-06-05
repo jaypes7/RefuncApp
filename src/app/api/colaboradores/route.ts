@@ -70,6 +70,7 @@ function mapRow(row: Record<string, any>): Colaborador {
     DT_NASCIMENTO:        row.dt_nascimento     ?? null,
     CPF:                  row.cpf               ?? "",
     VR:                   row.vr                ?? null,
+    FRETADO:              row.fretado           ?? null,
     TERMINO:              row.termino           ?? null,
     PRORROGACAO:          row.prorrogacao       ?? null,
     DEMISSAO:             row.demissao          ?? null,
@@ -127,6 +128,7 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
   row.cpf = data.CPF;
   if (data.id                !== undefined) row.id                 = data.id;
   if (data.VR                !== undefined) row.vr                 = data.VR;
+  if (data.FRETADO           !== undefined) row.fretado            = data.FRETADO;
   if (data.TERMINO           !== undefined) row.termino            = data.TERMINO;
   if (data.PRORROGACAO       !== undefined) row.prorrogacao        = data.PRORROGACAO;
   if (data.DEMISSAO          !== undefined) row.demissao           = data.DEMISSAO;
