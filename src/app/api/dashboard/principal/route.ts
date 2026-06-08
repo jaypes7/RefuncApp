@@ -630,16 +630,21 @@ export async function GET(request: NextRequest) {
     let progressoQuery = db.from("etapas_progresso_diario").select("centro_custo,etapa_id,data,percentual");
     if (centroCusto?.length) progressoQuery = progressoQuery.in("centro_custo", centroCusto) as typeof progressoQuery;
 
+    let atrasosQuery = db.from("etapas_atraso").select("centro_custo,etapa_id,dias_extras,motivo");
+    if (centroCusto?.length) atrasosQuery = atrasosQuery.in("centro_custo", centroCusto) as typeof atrasosQuery;
+
     const [
       { data: colabData, error: colabErr },
       configResult,
       { data: etapasRows, error: etapasErr },
       { data: progressoRows },
+      { data: atrasosRows },
     ] = await Promise.all([
       colabQuery,
       configQuery,
       etapasQuery,
       progressoQuery,
+      atrasosQuery,
     ]);
 
     if (colabErr) throw new Error(`Falha ao buscar colaboradores: ${colabErr.message}`);
@@ -860,6 +865,17 @@ export async function GET(request: NextRequest) {
       ? (progressoPorProjeto.get(ccAtivo) ?? [])
       : [];
 
+    // Lookup de atraso por etapa_id para o CC ativo
+    const atrasosMapDoCc = new Map<number, { diasExtras: number; motivo: string | null }>();
+    for (const a of (atrasosRows ?? []) as Array<{ centro_custo?: string; etapa_id?: number; dias_extras?: number; motivo?: string | null }>) {
+      if (a.centro_custo === ccAtivo) {
+        atrasosMapDoCc.set(Number(a.etapa_id ?? 0), {
+          diasExtras: Number(a.dias_extras ?? 0),
+          motivo: a.motivo ?? null,
+        });
+      }
+    }
+
     // Dias trabalhados do CC atual (para filtrar finais de semana/feriados na evolucaoDiaria)
     const diasTrabalhadosDoCc: Set<string> = (() => {
       if (!ccAtivo) return new Set<string>();
@@ -931,6 +947,8 @@ export async function GET(request: NextRequest) {
           dataFim: e.dataFim,
           evolucaoDiaria,
           temRegistros,
+          diasExtras: atrasosMapDoCc.get(e.id)?.diasExtras ?? 0,
+          motivoAtraso: atrasosMapDoCc.get(e.id)?.motivo ?? null,
         };
       }),
       pendencias: pendencias.slice(0, 10),
@@ -944,14 +962,23 @@ export async function GET(request: NextRequest) {
         distribuicaoFuncoes: agruparPorFuncao(colaboradores),
         distribuicaoMob: agruparPorMob(colaboradores),
         terminoDetalhado: colaboradores
-          .filter((c) => c.TERMINO && String(c.TERMINO).trim() !== "")
-          .map((c) => ({
-            nome: String(c.NOME ?? "").trim(),
-            funcao_clt: c.FUNCAO_CLT ? String(c.FUNCAO_CLT).trim() : null,
-            termino: String(c.TERMINO).split("T")[0],
-            status: c.STATUS ? String(c.STATUS).trim() : null,
-            uf: c.UF ? String(c.UF).trim().toUpperCase() : null,
-          }))
+          .filter((c) => {
+            const dataEfetiva = c.PRORROGACAO || c.TERMINO;
+            return dataEfetiva && String(dataEfetiva).trim() !== "";
+          })
+          .map((c) => {
+            const prorrogacao = c.PRORROGACAO ? String(c.PRORROGACAO).trim() : null;
+            const termino     = c.TERMINO     ? String(c.TERMINO).trim()     : null;
+            const dataEfetiva = (prorrogacao || termino)!;
+            return {
+              nome:       String(c.NOME ?? "").trim(),
+              funcao_clt: c.FUNCAO_CLT ? String(c.FUNCAO_CLT).trim() : null,
+              termino:    dataEfetiva.split("T")[0], // normaliza para YYYY-MM-DD
+              prorrogado: !!prorrogacao,              // flag para exibição visual
+              status:     c.STATUS ? String(c.STATUS).trim() : null,
+              uf:         c.UF     ? String(c.UF).trim().toUpperCase() : null,
+            };
+          })
           .sort((a, b) => {
             const fnCmp = (a.funcao_clt ?? "").localeCompare(b.funcao_clt ?? "", "pt-BR");
             if (fnCmp !== 0) return fnCmp;

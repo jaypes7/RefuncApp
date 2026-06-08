@@ -203,9 +203,24 @@ export function resolveCentroCusto(
   ccParam?: string | null,
 ): string[] | undefined {
   if (currentUser.perfil === "admin") {
-    if (!ccParam) return undefined;
-    return ccParam.split(",").filter(Boolean);
+    const adminCcs = normalizeCentroCusto(currentUser.centro_custo);
+
+    if (adminCcs.length === 0) {
+      // Admin irrestrito: aceita qualquer ccParam ou retorna undefined (tudo)
+      if (!ccParam) return undefined;
+      return ccParam.split(",").filter(Boolean);
+    }
+
+    // Admin com centros restritos: valida o ccParam dentro dos centros permitidos
+    if (ccParam) {
+      const solicitado = ccParam.split(",").filter(Boolean);
+      const permitidos = solicitado.filter((c) => adminCcs.includes(c));
+      return permitidos.length > 0 ? permitidos : adminCcs;
+    }
+
+    return adminCcs;
   }
+
   const autorizados = normalizeCentroCusto(currentUser.centro_custo);
   if (autorizados.length === 0) return undefined;
 

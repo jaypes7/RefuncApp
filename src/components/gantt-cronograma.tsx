@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo } from "react";
-import { ChevronDown, FolderOpen, AlertTriangle } from "lucide-react";
+import { ChevronDown, FolderOpen, AlertTriangle, Clock } from "lucide-react";
 import type { DashboardPrincipalData, ConfigData, GrupoEtapa } from "@/lib/axios";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -193,9 +193,20 @@ export function GanttCronograma({
               {atrasada && (
                 <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" />
               )}
-              <span className="text-xs font-medium leading-tight line-clamp-2">
-                {etapa.nome}
-              </span>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-xs font-medium leading-tight line-clamp-2">
+                  {etapa.nome}
+                </span>
+                {etapa.diasExtras != null && etapa.diasExtras > 0 && (
+                  <span
+                    title={etapa.motivoAtraso ?? undefined}
+                    className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.5 leading-none w-fit cursor-default"
+                  >
+                    <Clock className="w-2 h-2 shrink-0" />
+                    +{etapa.diasExtras}d atraso
+                  </span>
+                )}
+              </div>
             </div>
           </td>
           {/* Resp — rowSpan 2 */}

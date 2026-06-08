@@ -34,12 +34,17 @@ export async function GET() {
       .select("centro_custo, nome_cliente, data_inicio_projeto, data_fim_projeto")
       .order("centro_custo", { ascending: true });
 
-    // Users e guests só veem os projetos dos seus centros de custo vinculados
+    const ccs = normalizeCentroCusto(currentUser.centro_custo);
+
     if (currentUser.perfil !== "admin") {
-      const ccs = normalizeCentroCusto(currentUser.centro_custo);
+      // Users e guests só veem os projetos dos seus centros de custo vinculados
       if (ccs.length === 0) return NextResponse.json({ data: [] });
       query = query.in("centro_custo", ccs);
+    } else if (ccs.length > 0) {
+      // Admin com acesso restrito: filtra apenas pelos centros autorizados no token
+      query = query.in("centro_custo", ccs);
     }
+    // Admin sem centro_custo no token = acesso irrestrito (vê todos)
 
     const { data, error } = await query;
 

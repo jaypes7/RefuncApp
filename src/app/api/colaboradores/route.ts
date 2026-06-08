@@ -55,6 +55,7 @@ function mapRow(row: Record<string, any>): Colaborador {
     MOB:                  row.mob               ?? null,
     OP:                   row.op                ?? null,
     DATA_ADMISSAO:        row.data_admissao     ?? null,
+    TIPO_CONTRATO:        row.tipo_contrato     ?? null,
     CONTRATO:             row.contrato          ?? null,
     PORTAL:               row.portal            ?? null,
     CRACHA:               row.cracha            ?? null,

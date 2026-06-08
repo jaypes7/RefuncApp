@@ -37,6 +37,7 @@ import {
   Trash2,
   FolderOpen,
   Copy,
+  Clock,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -45,6 +46,13 @@ import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 
 // --- Types ---
+type AtrasoEntry = {
+  etapa_id: number;
+  dias_extras: number;
+  motivo: string | null;
+  data_inicio_atraso: string | null;
+};
+
 type EtapaCronograma = {
   id: number;
   nome: string;
@@ -163,6 +171,15 @@ export default function CronogramaPage() {
   const [selectedEtapas, setSelectedEtapas] = useState<Set<number>>(new Set());
   const [showBulkRemoveModal, setShowBulkRemoveModal] = useState(false);
 
+  // Estado para modal de atraso
+  const [showAtrasoModal, setShowAtrasoModal] = useState(false);
+  const [atrasoModalEtapaId, setAtrasoModalEtapaId] = useState<number | null>(null);
+  const [atrasoForm, setAtrasoForm] = useState<{
+    diasExtras: number;
+    motivo: string;
+    dataInicioAtraso: string;
+  }>({ diasExtras: 1, motivo: "", dataInicioAtraso: "" });
+
   const { data: projetoQueryData } = useQuery<ApiConfigResponse>({
     queryKey: ["config", "projeto", centroCusto],
     queryFn: async () => {
@@ -219,6 +236,28 @@ export default function CronogramaPage() {
     },
     enabled: filterReady && !!centroCusto,
   });
+
+  // Buscar registros de atraso das etapas
+  const { data: atrasosData } = useQuery<AtrasoEntry[]>({
+    queryKey: ["etapas-atraso", centroCusto],
+    queryFn: async () => {
+      const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+      const res = await fetch(`/api/etapas/atraso${params}`);
+      if (!res.ok) throw new Error("Falha ao carregar atrasos");
+      const json = await res.json();
+      return json.data as AtrasoEntry[];
+    },
+    enabled: filterReady && !!centroCusto,
+  });
+
+  // Mapa: etapa_id → AtrasoEntry
+  const atrasosMap = useMemo<Record<number, AtrasoEntry>>(() => {
+    if (!atrasosData) return {};
+    return atrasosData.reduce<Record<number, AtrasoEntry>>((acc, a) => {
+      acc[a.etapa_id] = a;
+      return acc;
+    }, {});
+  }, [atrasosData]);
 
   // Mutation para salvar progresso de um dia específico
   const progressoMutation = useMutation({
@@ -434,6 +473,79 @@ export default function CronogramaPage() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+
+  // --- Mutations de atraso ---
+  const salvarAtrasoMutation = useMutation({
+    mutationFn: async (payload: {
+      etapa_id: number;
+      dias_extras: number;
+      motivo: string | null;
+      data_inicio_atraso: string | null;
+    }) => {
+      const res = await fetch("/api/etapas/atraso", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centro_custo: centroCusto, ...payload }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar atraso");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["etapas-atraso"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      setShowAtrasoModal(false);
+      toast.success("Atraso registrado com sucesso!");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const excluirAtrasoMutation = useMutation({
+    mutationFn: async (etapaId: number) => {
+      const res = await fetch("/api/etapas/atraso", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centro_custo: centroCusto, etapa_id: etapaId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao remover atraso");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["etapas-atraso"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      toast.success("Atraso removido.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const abrirAtrasoModal = (etapa: EtapaCronograma) => {
+    const existing = atrasosMap[etapa.id];
+    const defaultDataInicio = etapa.data_fim
+      ? formatDateISO(addWorkingDays(etapa.data_fim, 1))
+      : "";
+    setAtrasoForm({
+      diasExtras: existing?.dias_extras ?? 1,
+      motivo: existing?.motivo ?? "",
+      dataInicioAtraso: existing?.data_inicio_atraso ?? defaultDataInicio,
+    });
+    setAtrasoModalEtapaId(etapa.id);
+    setShowAtrasoModal(true);
+  };
+
+  const salvarAtraso = () => {
+    if (!atrasoModalEtapaId) return;
+    salvarAtrasoMutation.mutate({
+      etapa_id: atrasoModalEtapaId,
+      dias_extras: Math.max(1, atrasoForm.diasExtras),
+      motivo: atrasoForm.motivo.trim() || null,
+      data_inicio_atraso: atrasoForm.dataInicioAtraso || null,
+    });
+  };
 
   // Helpers para avanço diário
   const toggleExpanded = (id: number) => {
@@ -1075,6 +1187,59 @@ export default function CronogramaPage() {
         )}
       </div>
 
+      {/* Bloco de atraso */}
+      {etapa.id > 0 && etapa.data_fim && (
+        <div className="ml-12 pt-2 border-t border-border/30">
+          {atrasosMap[etapa.id] ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-amber-500">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                +{atrasosMap[etapa.id].dias_extras} dias em atraso
+                {atrasosMap[etapa.id].data_inicio_atraso && (
+                  <span className="text-muted-foreground font-normal">
+                    a partir de {new Date(atrasosMap[etapa.id].data_inicio_atraso! + "T00:00:00").toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                  </span>
+                )}
+              </span>
+              {atrasosMap[etapa.id].motivo && (
+                <span className="text-xs text-muted-foreground italic truncate max-w-[200px]">
+                  — {atrasosMap[etapa.id].motivo}
+                </span>
+              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-muted-foreground hover:text-primary"
+                onClick={() => abrirAtrasoModal(etapa)}
+                title="Editar atraso"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                onClick={() => excluirAtrasoMutation.mutate(etapa.id)}
+                disabled={excluirAtrasoMutation.isPending}
+                title="Remover atraso"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground hover:text-amber-500 text-xs h-7 px-2"
+              onClick={() => abrirAtrasoModal(etapa)}
+            >
+              <Clock className="w-3 h-3" />
+              Registrar Atraso
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Botão Avanço por dia */}
       {etapa.id > 0 && etapa.data_inicio && etapa.data_fim && (
         <div className="ml-12 pt-1">
@@ -1548,6 +1713,82 @@ export default function CronogramaPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Modal de registro de atraso */}
+          <Dialog open={showAtrasoModal} onOpenChange={setShowAtrasoModal}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-amber-500" />
+                  Registrar Atraso
+                </DialogTitle>
+                <DialogDescription>
+                  {(() => {
+                    const etapa = cronograma.etapas.find((e) => e.id === atrasoModalEtapaId);
+                    return etapa
+                      ? `Etapa: ${etapa.nome}`
+                      : "Registre os dias em atraso desta etapa.";
+                  })()}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Dias Extras em Atraso</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={atrasoForm.diasExtras}
+                    onChange={(e) =>
+                      setAtrasoForm((prev) => ({
+                        ...prev,
+                        diasExtras: parseInt(e.target.value) || 1,
+                      }))
+                    }
+                    className="glass-input"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Motivo do Atraso</label>
+                  <Input
+                    type="text"
+                    placeholder="Ex: Pendência de ASO, atraso no fornecedor..."
+                    value={atrasoForm.motivo}
+                    onChange={(e) =>
+                      setAtrasoForm((prev) => ({ ...prev, motivo: e.target.value }))
+                    }
+                    className="glass-input"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Data de Início do Atraso</label>
+                  <Input
+                    type="date"
+                    value={atrasoForm.dataInicioAtraso}
+                    onChange={(e) =>
+                      setAtrasoForm((prev) => ({
+                        ...prev,
+                        dataInicioAtraso: e.target.value,
+                      }))
+                    }
+                    className="glass-input"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAtrasoModal(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={salvarAtraso}
+                  disabled={salvarAtrasoMutation.isPending}
+                  className="gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {salvarAtrasoMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Modal de confirmação ao remover etapa */}
           <Dialog open={showRemoveModal} onOpenChange={setShowRemoveModal}>

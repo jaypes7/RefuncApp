@@ -840,7 +840,12 @@ export default function DashboardRhPage() {
                                     <span className="text-sm 2xl:text-base font-medium truncate max-w-[60%]" title={m.nome}>
                                       {m.nome}
                                     </span>
-                                    <span className={`text-xs 2xl:text-sm font-medium tabular-nums ${corTextoTermino(urg)}`}>
+                                    <span className={`flex items-center gap-1.5 text-xs 2xl:text-sm font-medium tabular-nums ${corTextoTermino(urg)}`}>
+                                      {m.prorrogado && (
+                                        <span className="rounded px-1 py-0.5 text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                                          Prorrog.
+                                        </span>
+                                      )}
                                       {formatarData(m.termino)}
                                     </span>
                                   </div>

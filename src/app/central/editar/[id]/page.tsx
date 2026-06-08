@@ -404,6 +404,7 @@ export default function EditarColaboradorPage() {
     try {
       await colaboradoresApi.atualizar(id, form);
       toast.success("Dados salvos com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["dashboard-rh"], type: "all" });
       setSaved(true);
@@ -602,7 +603,8 @@ export default function EditarColaboradorPage() {
                 <F
                   label="Nº Pessoa"
                   value={form.NUMERO_ORACLE}
-                  onChange={t("NUMERO_ORACLE")}
+                  onChange={(v) => set("NUMERO_ORACLE", v ? parseInt(v, 10) : null)}
+                  type="number"
                   placeholder="Número Oracle"
                 />
               </div>
@@ -689,7 +691,11 @@ export default function EditarColaboradorPage() {
                 <F
                   label="Prorrogação"
                   value={form.PRORROGACAO}
-                  onChange={t("PRORROGACAO")}
+                  onChange={(v) => {
+                    // Ao preencher prorrogação, limpa o término original
+                    set("PRORROGACAO", v || null);
+                    if (v) set("TERMINO", null);
+                  }}
                   type="date"
                 />
                 <F

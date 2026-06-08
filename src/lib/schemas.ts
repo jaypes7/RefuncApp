@@ -49,6 +49,18 @@ const emptyStringToUndefined = (val: unknown) => {
   return val;
 };
 
+/**
+ * Para o schema de UPDATE: converte string vazia em null (em vez de undefined).
+ * Isso permite que o toDbRow inclua o null no UPDATE, limpando a coluna no banco.
+ * Valores null e undefined recebidos do cliente também viram null.
+ */
+const emptyStringToNull = (val: unknown) => {
+  if (val === undefined) return undefined; // campo não enviado → não toca no banco
+  if (val === null) return null;           // null explícito → limpa coluna
+  if (typeof val === "string" && val.trim() === "") return null; // "" → limpa coluna
+  return val;
+};
+
 // Valores válidos para cada enum (usado no safeEnum)
 const STATUS_VALUES = ["Ativo", "Pendente", "Inativo", "Desligado"] as const;
 const SIM_NAO_PENDENTE_VALUES = ["Sim", "Não", "Pendente"] as const;
@@ -304,29 +316,29 @@ export const ColaboradorUpdateSchema = z.object({
   id: z.string().uuid().optional(),
 
   // Colunas 1-5
-  IND: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  IND: z.preprocess(emptyStringToNull, z.string().nullish()),
   STATUS: safeEnum(STATUS_VALUES),
   ENVIADO_RH: safeEnum(SIM_NAO_PENDENTE_VALUES),
   PESSOA: safeEnum(PESSOA_VALUES),
   SEXO: safeEnum(["Masculino", "Feminino"] as const),
-  REQ: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  REQ: z.preprocess(emptyStringToNull, z.string().nullish()),
 
   // Colunas 6-10
-  VINCULADO: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  VINCULADO: z.preprocess(emptyStringToNull, z.string().nullish()),
   CARTA_OFERTA: safeEnum(SIM_NAO_PENDENTE_VALUES),
   COLAB_PEND: safeEnum(SIM_NAO_VALUES),
   EXAME: safeEnum(EXAME_VALUES),
-  CLINICA: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  CLINICA: z.preprocess(emptyStringToNull, z.string().nullish()),
 
   // Colunas 11-15
   DOCS: safeEnum(DOCS_VALUES),
   ASO: safeEnum(ASO_VALUES),
-  RPV: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  RPV: z.preprocess(emptyStringToNull, z.string().nullish()),
   PRE_ADMISSAO: safeEnum(SIM_NAO_PENDENTE_VALUES),
-  MOB: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  MOB: z.preprocess(emptyStringToNull, z.string().nullish()),
 
   // Colunas 16-20
-  OP: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  OP: z.preprocess(emptyStringToNull, z.string().nullish()),
   DATA_ADMISSAO: DateSchema,
   TIPO_CONTRATO: safeEnum(["Determinado", "Indeterminado"] as const),
   CONTRATO: safeEnum(CONTRATO_VALUES),
@@ -337,14 +349,14 @@ export const ColaboradorUpdateSchema = z.object({
   PONTO: safeEnum(PONTO_VALUES),
   TREINAMENTO: safeEnum(TREINAMENTO_VALUES),
   REALIZAR_TREINAMENTO: safeEnum(SIM_NAO_PENDENTE_VALUES),
-  LOCAL_TREINAMENTO: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  RE: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  LOCAL_TREINAMENTO: z.preprocess(emptyStringToNull, z.string().nullish()),
+  RE: z.preprocess(emptyStringToNull, z.string().nullish()),
 
   // Colunas 26-30
   NOME: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").optional(),
-  FUNCAO_CLT: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  HISTOGRAMA: z.preprocess(emptyStringToUndefined, z.string().optional()),
-  IDADE: z.preprocess(emptyStringToUndefined, z.coerce.number().min(16).max(99).optional().nullable()),
+  FUNCAO_CLT: z.preprocess(emptyStringToNull, z.string().nullish()),
+  HISTOGRAMA: z.preprocess(emptyStringToNull, z.string().nullish()),
+  IDADE: z.preprocess(emptyStringToNull, z.coerce.number().min(16).max(99).optional().nullable()),
   DT_NASCIMENTO: DateSchema,
 
   // Colunas 31-35
@@ -355,14 +367,14 @@ export const ColaboradorUpdateSchema = z.object({
   DEMISSAO: DateSchema,
 
   // Colunas 36-38
-  MUNICIPIO: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  MUNICIPIO: z.preprocess(emptyStringToNull, z.string().nullish()),
   UF: safeEnum(UF_VALUES),
   TELEFONE: TelefoneSchema,
 
   // ── Campos extras (DB)
   turno_trabalho: z.preprocess(preprocessTurno, z.string().optional()),
-  NUMERO_ORACLE: z.preprocess(emptyStringToUndefined, z.coerce.number().optional().nullable()),
-  CENTRO_CUSTO: z.preprocess(emptyStringToUndefined, z.string().optional().nullable()),
+  NUMERO_ORACLE: z.preprocess(emptyStringToNull, z.coerce.number().optional().nullable()),
+  CENTRO_CUSTO: z.preprocess(emptyStringToNull, z.string().nullish()),
   ESCOLARIDADE: safeEnum(ESCOLARIDADE_VALUES),
   EXPERIENCIA_FUNCAO: safeEnum(EXPERIENCIA_FUNCAO_VALUES),
   FRETADO: safeEnum(["Sim", "Não", "Não aplica"] as const),

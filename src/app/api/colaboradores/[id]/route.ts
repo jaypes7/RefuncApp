@@ -61,6 +61,7 @@ function mapRow(row: Record<string, any>): Colaborador {
     DT_NASCIMENTO:        row.dt_nascimento     ?? null,
     CPF:                  row.cpf               ?? "",
     VR:                   row.vr                ?? null,
+    FRETADO:              row.fretado           ?? null,
     TERMINO:              row.termino           ?? null,
     PRORROGACAO:          row.prorrogacao       ?? null,
     DEMISSAO:             row.demissao          ?? null,
@@ -79,7 +80,8 @@ function mapRow(row: Record<string, any>): Colaborador {
 // MAPEAMENTO Colaborador → Supabase (UPPERCASE → snake_case)
 // ============================================================================
 
-function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toDbRow(data: Record<string, any>): Record<string, unknown> {
   const row: Record<string, unknown> = {};
 
   if (data.IND               !== undefined) row.ind                = data.IND;
@@ -115,6 +117,7 @@ function toDbRow(data: Partial<Colaborador>): Record<string, unknown> {
   if (data.IDADE             !== undefined) row.idade              = data.IDADE;
   if (data.DT_NASCIMENTO     !== undefined) row.dt_nascimento      = data.DT_NASCIMENTO;
   if (data.VR                !== undefined) row.vr                 = data.VR;
+  if (data.FRETADO           !== undefined) row.fretado            = data.FRETADO;
   if (data.TERMINO           !== undefined) row.termino            = data.TERMINO;
   if (data.PRORROGACAO       !== undefined) row.prorrogacao        = data.PRORROGACAO;
   if (data.DEMISSAO          !== undefined) row.demissao           = data.DEMISSAO;

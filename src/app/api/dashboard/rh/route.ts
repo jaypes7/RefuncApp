@@ -127,17 +127,26 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.total - a.total);
 
     // ── Término detalhado — linhas brutas para tabela agrupada ───────────────
-    // SELECT nome, funcao_clt, termino WHERE termino IS NOT NULL
-    // ORDER BY funcao_clt ASC, termino ASC
+    // Usa prorrogacao se existir; senão usa termino.
+    // Exclui registros que não têm nenhuma das duas datas.
     const terminoDetalhado = comId
-      .filter((r) => r["termino"] && String(r["termino"]).trim() !== "")
-      .map((r) => ({
-        nome:       String(r["nome"] ?? "").trim(),
-        funcao_clt: r["funcao_clt"] ? String(r["funcao_clt"]).trim() : null,
-        termino:    String(r["termino"]).split("T")[0], // normaliza para YYYY-MM-DD
-        status:     r["status"] ? String(r["status"]).trim() : null,
-        uf:         r["uf"]     ? String(r["uf"]).trim().toUpperCase() : null,
-      }))
+      .filter((r) => {
+        const dataEfetiva = r["prorrogacao"] || r["termino"];
+        return dataEfetiva && String(dataEfetiva).trim() !== "";
+      })
+      .map((r) => {
+        const prorrogacao = r["prorrogacao"] ? String(r["prorrogacao"]).trim() : null;
+        const termino     = r["termino"]     ? String(r["termino"]).trim()     : null;
+        const dataEfetiva = (prorrogacao || termino)!;
+        return {
+          nome:        String(r["nome"] ?? "").trim(),
+          funcao_clt:  r["funcao_clt"] ? String(r["funcao_clt"]).trim() : null,
+          termino:     dataEfetiva.split("T")[0], // normaliza para YYYY-MM-DD
+          prorrogado:  !!prorrogacao,              // flag para exibição visual
+          status:      r["status"] ? String(r["status"]).trim() : null,
+          uf:          r["uf"]     ? String(r["uf"]).trim().toUpperCase() : null,
+        };
+      })
       .sort((a, b) => {
         const fnCmp = (a.funcao_clt ?? "").localeCompare(b.funcao_clt ?? "", "pt-BR");
         if (fnCmp !== 0) return fnCmp;
