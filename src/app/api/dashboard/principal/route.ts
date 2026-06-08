@@ -46,6 +46,7 @@ function mapColab(row: Record<string, unknown>) {
     TREINAMENTO: toStr(row["treinamento"]),
     PRE_ADMISSAO: toStr(row["pre_admissao"]),
     TERMINO: toStr(row["termino"])?.split("T")[0] ?? null,
+    PRORROGACAO: toStr(row["prorrogacao"])?.split("T")[0] ?? null,
     UF: toStr(row["uf"]),
   };
 }
@@ -618,7 +619,7 @@ export async function GET(request: NextRequest) {
 
     let colabQuery = db
       .from("colaboradores")
-      .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao,termino,uf");
+      .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao,termino,prorrogacao,uf");
     if (centroCusto?.length) colabQuery = colabQuery.in("centro_custo", centroCusto);
 
     let configQuery = db.from("configuracoes").select("*");
