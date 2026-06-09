@@ -65,8 +65,8 @@ const chartConfigStatus = {
     label: "Ativo",
     color: MANSERV_CHART.primary,
   },
-  inativo: {
-    label: "Inativo",
+  desistente: {
+    label: "Desistente",
     color: MANSERV_CHART.gray,
   },
   pendente: {
@@ -76,6 +76,10 @@ const chartConfigStatus = {
   desligado: {
     label: "Desligado",
     color: MANSERV_STATUS.danger,
+  },
+  restricaoCliente: {
+    label: "Restrição Cliente",
+    color: "#8B5CF6",
   },
 };
 
@@ -734,13 +738,15 @@ export default function DashboardPage() {
   const dadosStatus = useMemo(() => {
     if (!dashboardData?.graficos?.statusCount) return [];
 
-    const { Ativo, Inativo, Pendente, Desligado } = dashboardData.graficos.statusCount;
+    const { Ativo, Desistente, Pendente, Desligado } = dashboardData.graficos.statusCount;
+    const restricaoCliente = dashboardData.graficos.statusCount["Restrição Cliente"];
 
     return [
       { name: "Ativo", value: Ativo || 0, color: "#ff460a" },
-      { name: "Inativo", value: Inativo || 0, color: "#e2e2e2" },
+      { name: "Desistente", value: Desistente || 0, color: "#e2e2e2" },
       { name: "Pendente", value: Pendente || 0, color: "#E5CF61" },
       { name: "Desligado", value: Desligado || 0, color: "#DA291B" },
+      { name: "Restrição Cliente", value: restricaoCliente || 0, color: "#8B5CF6" },
     ];
   }, [dashboardData]);
 

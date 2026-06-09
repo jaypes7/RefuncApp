@@ -800,8 +800,11 @@ export async function GET(request: NextRequest) {
     const statusCount = {
       Ativo: colaboradores.filter((c) => c.STATUS === "Ativo").length,
       Pendente: colaboradores.filter((c) => c.STATUS === "Pendente").length,
-      Inativo: colaboradores.filter((c) => c.STATUS === "Inativo").length,
+      Desistente: colaboradores.filter((c) => c.STATUS === "Desistente").length,
       Desligado: colaboradores.filter((c) => c.STATUS === "Desligado").length,
+      "Restrição Cliente": colaboradores.filter(
+        (c) => c.STATUS === "Restrição Cliente",
+      ).length,
     };
 
     // ── Atraso físico por etapa ──────────────────────────────────────────────

@@ -239,8 +239,9 @@ export interface DashboardData {
     statusCount: {
       Ativo: number;
       Pendente: number;
-      Inativo: number;
+      Desistente: number;
       Desligado: number;
+      "Restrição Cliente": number;
     };
   };
   /** Atraso físico por etapa do cronograma (máx. 10) */
