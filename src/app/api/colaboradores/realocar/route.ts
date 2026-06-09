@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     // 4. Inativa o registro no centro de custo antigo
     const { error: updateError } = await supabase
       .from("colaboradores")
-      .update({ status: "Inativo" })
+      .update({ status: "Desligado" })
       .eq("id", origem.id);
 
     if (updateError) {

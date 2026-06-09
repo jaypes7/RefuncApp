@@ -154,7 +154,7 @@ const EMPTY: FormData = {
 // OPÇÕES DE SELECT (nenhuma string vazia — regra do Radix UI)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const O_STATUS = ["Ativo", "Pendente", "Inativo", "Desligado"];
+const O_STATUS = ["Ativo", "Pendente", "Desistente", "Desligado", "Restrição Cliente"];
 const O_SIM_NAO = ["Sim", "Não"];
 const O_SIM_NAO_PENDENTE = ["Sim", "Não", "Pendente"];
 const O_APTO = ["Apto", "Inapto", "Pendente"];

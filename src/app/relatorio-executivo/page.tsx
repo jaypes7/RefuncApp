@@ -76,6 +76,7 @@ export default function RelatorioExecutivoPage() {
   const [dataRelatorioAtual, setDataRelatorioAtual] = useState<string | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
   const gerarRequestId = useRef(0);
+  const prevCentroCustoRef = useRef<string | null | undefined>(undefined);
 
   // Converte Markdown (da IA) em HTML para inicializar o editor
   const htmlDaIA = useMemo(() => {
@@ -91,6 +92,25 @@ export default function RelatorioExecutivoPage() {
       setEditorKey(`editor-${Date.now()}`);
     }
   }, [htmlDaIA]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Zera o relatório exibido ao trocar de centro de custo
+  useEffect(() => {
+    if (!filterReady) return;
+    if (prevCentroCustoRef.current === undefined) {
+      prevCentroCustoRef.current = centroCusto;
+      return;
+    }
+    if (prevCentroCustoRef.current !== centroCusto) {
+      prevCentroCustoRef.current = centroCusto;
+      setRelatorioMarkdown("");
+      setRelatorioHtmlEditado("");
+      setEditorInitialContent("");
+      setEditorKey(`editor-empty-${Date.now()}`);
+      setCurvaSData(null);
+      setCurvaSValoresHoje(null);
+      setDataRelatorioAtual(null);
+    }
+  }, [centroCusto, filterReady]);
 
   // Carrega relatórios salvos quando o centro de custo muda
   const carregarRelatoriosSalvos = useCallback(async () => {
@@ -427,9 +447,26 @@ export default function RelatorioExecutivoPage() {
             >
               {relatorioHtmlEditado ? (
                 (() => {
-                  const partes = relatorioHtmlEditado.split('<div data-grafico="curva"></div>');
+                  // O TipTap remove <div data-grafico>, então usamos "Status Geral"
+                  // (parágrafo em negrito preservado pelo editor) como ponto de corte.
+                  // Tentamos primeiro o marcador original (caso esteja na prévia direta),
+                  // depois caímos para a heurística do "Status Geral".
+                  const reMarcador = /<div\s+data-grafico="curva"\s*><\/div>\n?/;
+                  const reStatusGeral = /(<p[^>]*>\s*<strong>\s*Status Geral\s*<\/strong>\s*<\/p>)/i;
+                  let partes: string[] | null = null;
+                  if (reMarcador.test(relatorioHtmlEditado)) {
+                    partes = relatorioHtmlEditado.split(reMarcador);
+                  } else {
+                    const m = relatorioHtmlEditado.match(reStatusGeral);
+                    if (m && m.index !== undefined) {
+                      partes = [
+                        relatorioHtmlEditado.slice(0, m.index),
+                        relatorioHtmlEditado.slice(m.index),
+                      ];
+                    }
+                  }
                   const temGrafico = curvaSData && curvaSData.labels.length > 0;
-                  if (partes.length === 2 && temGrafico) {
+                  if (partes && partes.length === 2 && temGrafico) {
                     return (
                       <>
                         <div dangerouslySetInnerHTML={{ __html: partes[0] }} />

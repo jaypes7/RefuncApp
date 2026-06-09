@@ -101,6 +101,23 @@ function sanitizarRelatorio(texto: string): string {
 }
 
 /**
+ * Garante que o marcador do gráfico fique antes de "Status Geral",
+ * independente do que a IA fez com ele.
+ */
+function injetarMarcadorGrafico(texto: string): string {
+  // Remove qualquer marcador que a IA possa ter mantido/movido
+  const sem = texto.replace(/<div data-grafico="curva"><\/div>\n*/g, "");
+  // Injeta imediatamente antes de **Status Geral**
+  const com = sem.replace(/(\*\*Status Geral\*\*)/, '<div data-grafico="curva"></div>\n\n$1');
+  if (com !== sem) return com;
+  // Fallback: injeta logo após o título da seção 1
+  return sem.replace(
+    /(\*\*1\s*[-–]\s*Curva de Avan[çc]o\*\*)/,
+    '$1\n\n<div data-grafico="curva"></div>',
+  );
+}
+
+/**
  * Calcula o planejado de uma etapa na data-base por interpolação linear.
  * Usa DIAS ÚTEIS quando disponível (via diasTrabalhados configurados ou
  * cálculo automático seg-sex sem feriados), senão usa dias corridos.
@@ -432,8 +449,6 @@ SPI: ${spi} (${positivoStr})
 
 O projeto encontra-se ${adiantadoStr} em relação ao cronograma.
 
-<div data-grafico="curva"></div>
-
 **2 - Leitura e Performance**
 
 [COMPLETAR: 4 bullets curtos sobre o desempenho observado nas etapas abaixo]
@@ -512,7 +527,7 @@ Complete todas as marcações [COMPLETAR] e devolva o relatório final. Nada mai
       temperature,
     });
 
-    const relatorio = sanitizarRelatorio(relatorioBruto);
+    const relatorio = injetarMarcadorGrafico(sanitizarRelatorio(relatorioBruto));
     console.log("[Relatorio/gerar] Output length:", relatorio.length, "chars");
 
     return NextResponse.json({ relatorio, data_base: dataBase });

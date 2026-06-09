@@ -47,7 +47,8 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   data_exame: ["DATA EXAME", "DATA DO EXAME", "DT EXAME", "EXAME DATA", "EXAME"],
   aso_status: ["ASO", "STATUS ASO", "ASO STATUS", "APTIDÃO", "APTIDAO", "RESULTADO ASO"],
   data_admissao: ["DATA ADMISSÃO", "DATA ADMISSAO", "DATA DE ADMISSÃO", "DT ADMISSAO", "DT ADMISSÃO", "ADMISSÃO"],
-  contrato_tipo: ["CONTRATO", "TIPO CONTRATO", "TIPO DE CONTRATO"],
+  contrato_tipo: ["CONTRATO"],
+  tipo_contrato: ["TIPO CONTRATO", "TIPO DE CONTRATO"],
   treinamento: ["TREINAMENTO", "STATUS TREINAMENTO", "TREIN", "TREINAMENTOS NORMATIVOS"],
   ponto_batida: ["PONTO", "CARTÃO PONTO", "CARTAO PONTO", "BIOMETRIA"],
   cracha: ["CRACHA", "CRACHÁ", "STATUS CRACHÁ", "LIBERAÇÃO CRACHÁ", "LIBERACAO CRACHA"],
@@ -93,6 +94,9 @@ export const HEADER_ALIASES: Record<string, string[]> = {
   check_in: ["CHECK IN", "CHECK-IN", "DATA CHECK IN", "DATA CHECK-IN"],
   tipo_demissao: ["TIPODEMISSAO"],
   motivo_demissao: ["MOTIVODEMISSAO"],
+  escolaridade: ["ESCOLARIDADE"],
+  experiencia_funcao: ["EXPERIÊNCIA NA FUNÇÃO", "EXPERIENCIA NA FUNCAO", "EXPERIENCIA FUNCAO", "EXP. FUNCAO", "EXP FUNCAO"],
+  fretado: ["FRETADO"],
 };
 
 // ── Mapeamento schemaId → chave da API (coluna na planilha) ─────────────────
@@ -103,7 +107,7 @@ export const SCHEMA_TO_API: Record<string, string | null> = {
   cpf: "CPF",
   funcao: "FUNCAO_CLT",
   dt_nasc: "DT_NASCIMENTO",
-  sexo: null,
+  sexo: "SEXO",
   telefone: "TELEFONE",
   municipio: "MUNICIPIO",
   uf: "UF",
@@ -162,6 +166,10 @@ export const SCHEMA_TO_API: Record<string, string | null> = {
   prorrogacao: "PRORROGACAO",
   tipo_demissao: "tipo_demissao",
   motivo_demissao: "motivo_demissao",
+  tipo_contrato: "TIPO_CONTRATO",
+  escolaridade: "ESCOLARIDADE",
+  experiencia_funcao: "EXPERIENCIA_FUNCAO",
+  fretado: "FRETADO",
 };
 
 // ── Sanitização ──────────────────────────────────────────────────────────────
@@ -271,7 +279,9 @@ export function mapStrictEnums(schemaId: string, rawValue: string | null): strin
     case "status_adm":
       if (v.includes("ATIVO")) return "Ativo";
       if (v.includes("DESLIGADO") || v.includes("DEMITIDO")) return "Desligado";
-      if (v.includes("INATIVO") || v.includes("DESIST") || v.includes("RETIRADO")) return "Inativo";
+      if (v.includes("DESIST") || v.includes("RETIRADO")) return "Desistente";
+      if (v.includes("INATIVO")) return "Desistente";
+      if (v.includes("RESTRICAO") || v.includes("RESTRIÇÃO") || v.includes("RESTRI")) return "Restrição Cliente";
       return "Pendente";
     case "docs":
       if (v === "OK" || v.includes("COMPLETO") || v === "SIM") return "Completo";

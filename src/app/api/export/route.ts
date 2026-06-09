@@ -22,6 +22,7 @@ interface ColaboradorExport {
   STATUS: string | null;
   ENVIADO_RH: string | null;
   PESSOA: string | null;
+  SEXO: string | null;
   REQ: string | null;
   VINCULADO: string | null;
   CARTA_OFERTA: string | null;
@@ -36,6 +37,7 @@ interface ColaboradorExport {
   OP: string | null;
   DATA_ADMISSAO: string | null;
   CONTRATO: string | null;
+  TIPO_CONTRATO: string | null;
   PORTAL: string | null;
   CRACHA: string | null;
   PONTO: string | null;
@@ -48,6 +50,8 @@ interface ColaboradorExport {
   HISTOGRAMA: string | null;
   IDADE: number | null;
   DT_NASCIMENTO: string | null;
+  ESCOLARIDADE: string | null;
+  EXPERIENCIA_FUNCAO: string | null;
   CPF: string;
   VR: string | null;
   TERMINO: string | null;
@@ -57,6 +61,7 @@ interface ColaboradorExport {
   UF: string | null;
   TELEFONE: string | null;
   TURNO_TRABALHO: string | null;
+  FRETADO: string | null;
   CHECK_IN: string | null;
   HOTEL: string | null;
   DATA_VIAGEM: string | null;
@@ -85,6 +90,7 @@ function mapRow(row: Record<string, unknown>): ColaboradorExport {
     STATUS: toStr(row["status"]),
     ENVIADO_RH: toStr(row["enviado_rh"]),
     PESSOA: toStr(row["pessoa"]),
+    SEXO: toStr(row["sexo"]),
     REQ: toStr(row["req"]),
     VINCULADO: toStr(row["vinculado"]),
     CARTA_OFERTA: toStr(row["carta_oferta"]),
@@ -99,6 +105,7 @@ function mapRow(row: Record<string, unknown>): ColaboradorExport {
     OP: toStr(row["op"]),
     DATA_ADMISSAO: toStr(row["data_admissao"]),
     CONTRATO: toStr(row["contrato"]),
+    TIPO_CONTRATO: toStr(row["tipo_contrato"]),
     PORTAL: toStr(row["portal"]),
     CRACHA: toStr(row["cracha"]),
     PONTO: toStr(row["ponto"]),
@@ -111,6 +118,8 @@ function mapRow(row: Record<string, unknown>): ColaboradorExport {
     HISTOGRAMA: toStr(row["histograma"]),
     IDADE: row["idade"] != null ? Number(row["idade"]) || null : null,
     DT_NASCIMENTO: toStr(row["dt_nascimento"]),
+    ESCOLARIDADE: toStr(row["escolaridade"]),
+    EXPERIENCIA_FUNCAO: toStr(row["experiencia_funcao"]),
     CPF: row["cpf"]
       ? String(row["cpf"]).replace(/\D/g, "").padStart(11, "0")
       : "",
@@ -122,6 +131,7 @@ function mapRow(row: Record<string, unknown>): ColaboradorExport {
     UF: toStr(row["uf"]),
     TELEFONE: toStr(row["telefone"]),
     TURNO_TRABALHO: toStr(row["turno_trabalho"]),
+    FRETADO: toStr(row["fretado"]),
     CHECK_IN: toStr(row["check_in"]),
     HOTEL: toStr(row["hotel"]),
     DATA_VIAGEM: toStr(row["data_viagem"]),

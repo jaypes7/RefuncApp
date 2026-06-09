@@ -85,7 +85,7 @@ const fullSchema = z.object({
   cartaOferta: z.enum(["Sim", "Não", "Pendente"]).optional(),
   tipoContrato: z.enum(["Determinado", "Indeterminado"]).optional(),
   contrato: z.enum(["CLT", "PJ", "Temporário", "Estagiário"]).optional(),
-  status: z.enum(["Ativo", "Pendente", "Inativo", "Desligado"]).optional(),
+  status: z.enum(["Ativo", "Pendente", "Desistente", "Desligado", "Restrição Cliente"]).optional(),
   enviadoRh: z.enum(["Sim", "Não", "Pendente"]).optional(),
   vinculado: z.string().optional(),
   termino: z.string().optional(),
@@ -762,13 +762,14 @@ export default function OnboardingPage() {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Status</label>
-                      <Select value={statusValue || undefined} onValueChange={(value: "Ativo" | "Pendente" | "Inativo" | "Desligado") => setValue("status", value, { shouldValidate: true })}>
+                      <Select value={statusValue || undefined} onValueChange={(value: "Ativo" | "Pendente" | "Desistente" | "Desligado" | "Restrição Cliente") => setValue("status", value, { shouldValidate: true })}>
                         <SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Ativo">Ativo</SelectItem>
                           <SelectItem value="Pendente">Pendente</SelectItem>
-                          <SelectItem value="Inativo">Inativo</SelectItem>
+                          <SelectItem value="Desistente">Desistente</SelectItem>
                           <SelectItem value="Desligado">Desligado</SelectItem>
+                          <SelectItem value="Restrição Cliente">Restrição Cliente</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

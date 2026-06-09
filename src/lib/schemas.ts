@@ -14,7 +14,7 @@ import { ESCOLARIDADE_OPTIONS, EXPERIENCIA_FUNCAO_OPTIONS } from "@/constants/rh
 // ENUMS E TIPOS
 // ============================================================================
 
-export const StatusEnum = z.enum(["Ativo", "Pendente", "Inativo", "Desligado"]);
+export const StatusEnum = z.enum(["Ativo", "Pendente", "Desistente", "Desligado", "Restrição Cliente"]);
 export const SimNaoPendenteEnum = z.enum(["Sim", "Não", "Pendente"]);
 export const SimNaoEnum = z.enum(["Sim", "Não"]);
 export const PessoaEnum = z.enum(["Física", "Jurídica"]);
@@ -62,7 +62,7 @@ const emptyStringToNull = (val: unknown) => {
 };
 
 // Valores válidos para cada enum (usado no safeEnum)
-const STATUS_VALUES = ["Ativo", "Pendente", "Inativo", "Desligado"] as const;
+const STATUS_VALUES = ["Ativo", "Pendente", "Desistente", "Desligado", "Restrição Cliente"] as const;
 const SIM_NAO_PENDENTE_VALUES = ["Sim", "Não", "Pendente"] as const;
 const SIM_NAO_VALUES = ["Sim", "Não"] as const;
 const PESSOA_VALUES = ["Física", "Jurídica"] as const;

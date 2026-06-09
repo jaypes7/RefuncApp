@@ -53,7 +53,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Status = "Ativo" | "Pendente" | "Inativo" | "Desligado";
+type Status = "Ativo" | "Pendente" | "Desistente" | "Desligado" | "Restrição Cliente";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -71,15 +71,20 @@ const STATUS_CONFIG: Record<
     pill: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
     label: "Pendente",
   },
-  Inativo: {
-    dot: "bg-slate-400",
-    pill: "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
-    label: "Inativo",
+  Desistente: {
+    dot: "bg-orange-400",
+    pill: "bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20",
+    label: "Desistente",
   },
   Desligado: {
     dot: "bg-red-500",
     pill: "bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
     label: "Desligado",
+  },
+  "Restrição Cliente": {
+    dot: "bg-purple-500",
+    pill: "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20",
+    label: "Restrição Cliente",
   },
 };
 
@@ -272,6 +277,7 @@ export default function CentralPage() {
         "STATUS",
         "ENVIADO RH",
         "PESSOA",
+        "SEXO",
         "REQ",
         "VINCULADO",
         "CARTA OFERTA",
@@ -286,6 +292,7 @@ export default function CentralPage() {
         "OP",
         "DATA ADMISSÃO",
         "CONTRATO",
+        "TIPO CONTRATO",
         "PORTAL",
         "CRACHA",
         "PONTO",
@@ -298,6 +305,8 @@ export default function CentralPage() {
         "HISTOGRAMA",
         "IDADE",
         "DT NASC",
+        "ESCOLARIDADE",
+        "EXPERIÊNCIA NA FUNÇÃO",
         "CPF",
         "VR",
         "TERMINO",
@@ -307,6 +316,7 @@ export default function CentralPage() {
         "UF",
         "TELEFONE",
         "TURNO TRABALHO",
+        "FRETADO",
         "CHECK IN",
         "HOTEL",
         "DATA VIAGEM",
@@ -321,6 +331,7 @@ export default function CentralPage() {
         c.STATUS || "",
         c.ENVIADO_RH || "",
         c.PESSOA || "",
+        c.SEXO || "",
         c.REQ || "",
         c.VINCULADO || "",
         c.CARTA_OFERTA || "",
@@ -335,6 +346,7 @@ export default function CentralPage() {
         c.OP || "",
         c.DATA_ADMISSAO || "",
         c.CONTRATO || "",
+        c.TIPO_CONTRATO || "",
         c.PORTAL || "",
         c.CRACHA || "",
         c.PONTO || "",
@@ -347,6 +359,8 @@ export default function CentralPage() {
         c.HISTOGRAMA || "",
         c.IDADE || "",
         c.DT_NASCIMENTO || "",
+        c.ESCOLARIDADE || "",
+        c.EXPERIENCIA_FUNCAO || "",
         c.CPF || "",
         c.VR || "",
         c.TERMINO || "",
@@ -356,6 +370,7 @@ export default function CentralPage() {
         c.UF || "",
         formatTelefone(c.TELEFONE) || "",
         c.TURNO_TRABALHO || "",
+        c.FRETADO || "",
         c.CHECK_IN || "",
         c.HOTEL || "",
         c.DATA_VIAGEM || "",

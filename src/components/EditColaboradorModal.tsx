@@ -121,7 +121,7 @@ const editSchema = z.object({
     .optional()
     .nullable(),
   STATUS: z
-    .enum(["Ativo", "Pendente", "Inativo", "Desligado"])
+    .enum(["Ativo", "Pendente", "Desistente", "Desligado", "Restrição Cliente"])
     .optional()
     .nullable(),
   VINCULADO: z.string().optional().nullable(),
@@ -269,7 +269,7 @@ export function EditColaboradorModal({
         HISTOGRAMA: colaborador.HISTOGRAMA || "",
         NUMERO_ORACLE: colaborador.NUMERO_ORACLE ?? null,
         CONTRATO: safeEnum(colaborador.CONTRATO, ["CLT", "PJ", "Temporário", "Estagiário"] as const),
-        STATUS: safeEnum(colaborador.STATUS, ["Ativo", "Pendente", "Inativo", "Desligado"] as const),
+        STATUS: safeEnum(colaborador.STATUS, ["Ativo", "Pendente", "Desistente", "Desligado", "Restrição Cliente"] as const),
         VINCULADO: colaborador.VINCULADO || "",
         PORTAL: safeEnum(colaborador.PORTAL, ["Liberado", "Pendente", "Bloqueado"] as const),
         CRACHA: safeEnum(colaborador.CRACHA, ["Emitido", "Pendente"] as const),
@@ -493,8 +493,9 @@ export function EditColaboradorModal({
                     <SelectContent>
                       <SelectItem value="Ativo">Ativo</SelectItem>
                       <SelectItem value="Pendente">Pendente</SelectItem>
-                      <SelectItem value="Inativo">Inativo</SelectItem>
+                      <SelectItem value="Desistente">Desistente</SelectItem>
                       <SelectItem value="Desligado">Desligado</SelectItem>
+                      <SelectItem value="Restrição Cliente">Restrição Cliente</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
