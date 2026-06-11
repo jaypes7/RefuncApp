@@ -347,6 +347,7 @@ export type DashboardPrincipalData = {
     temRegistros?: boolean;
     diasExtras?: number;
     motivoAtraso?: string | null;
+    datasAtraso?: string[];
   }>;
   agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes" | "distribuicaoMob"> & {
     terminoDetalhado: Array<{

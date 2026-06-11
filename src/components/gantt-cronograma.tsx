@@ -93,11 +93,12 @@ export function GanttCronograma({
 }: Props) {
   const hoje = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  // Collect every working day across all etapas
+  // Collect every planned day plus manually selected delay days across all etapas.
   const allDays = useMemo<string[]>(() => {
     const s = new Set<string>();
     for (const e of etapas) {
       for (const d of e.evolucaoDiaria ?? []) s.add(d.data);
+      for (const d of e.datasAtraso ?? []) s.add(d);
     }
     return [...s].sort();
   }, [etapas]);
@@ -155,6 +156,7 @@ export function GanttCronograma({
     const evolMap = new Map<string, EvolEntry>(
       (etapa.evolucaoDiaria ?? []).map((d) => [d.data, d])
     );
+    const atrasoDaysSet = new Set(etapa.datasAtraso ?? []);
     const { previsto: pToday, realizado: rToday } = calcTodayPR(etapa);
     const resp     = respMap.get(etapa.id) ?? "—";
     const atrasada = isEtapaAtrasada(etapa, hoje);
@@ -290,12 +292,22 @@ export function GanttCronograma({
             const entry    = evolMap.get(day);
             const isToday  = day === hoje;
             const isFuture = day > hoje;
+            const isDelayDay = atrasoDaysSet.has(day);
             if (!entry || isFuture) {
               return (
                 <td
                   key={day}
-                  className={`border-b border-l border-border ${isToday ? "ring-inset ring-1 ring-primary/50 bg-primary/5" : ""}`}
-                  style={{ width: W_DAY, minWidth: W_DAY, height: 26, padding: 0 }}
+                  className={`border-b border-l ${
+                    isDelayDay ? "border-amber-500/40" : "border-border"
+                  } ${isToday && !isDelayDay ? "ring-inset ring-1 ring-primary/50 bg-primary/5" : ""}`}
+                  style={{
+                    width: W_DAY,
+                    minWidth: W_DAY,
+                    height: 26,
+                    padding: 0,
+                    backgroundColor: isDelayDay ? "rgba(245,158,11,0.24)" : undefined,
+                  }}
+                  title={isDelayDay ? "Dia extra de atraso" : undefined}
                 />
               );
             }
@@ -310,10 +322,13 @@ export function GanttCronograma({
                   minWidth: W_DAY,
                   height: 26,
                   padding: 0,
-                  backgroundColor: hasProgress
+                  backgroundColor: isDelayDay
+                    ? "rgba(245,158,11,0.24)"
+                    : hasProgress
                     ? `rgba(218,41,27,${0.15 + (entry.realizado / 100) * 0.65})`
                     : "rgba(0,0,0,0.03)",
                 }}
+                title={isDelayDay ? "Dia extra de atraso" : undefined}
               >
                 <span
                   className="text-[11px] font-mono leading-none select-none text-black-100 dark:text-white-100"

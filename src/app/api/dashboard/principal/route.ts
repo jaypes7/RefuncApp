@@ -631,7 +631,7 @@ export async function GET(request: NextRequest) {
     let progressoQuery = db.from("etapas_progresso_diario").select("centro_custo,etapa_id,data,percentual");
     if (centroCusto?.length) progressoQuery = progressoQuery.in("centro_custo", centroCusto) as typeof progressoQuery;
 
-    let atrasosQuery = db.from("etapas_atraso").select("centro_custo,etapa_id,dias_extras,motivo");
+    let atrasosQuery = db.from("etapas_atraso").select("centro_custo,etapa_id,dias_extras,motivo,datas_atraso");
     if (centroCusto?.length) atrasosQuery = atrasosQuery.in("centro_custo", centroCusto) as typeof atrasosQuery;
 
     const [
@@ -870,12 +870,14 @@ export async function GET(request: NextRequest) {
       : [];
 
     // Lookup de atraso por etapa_id para o CC ativo
-    const atrasosMapDoCc = new Map<number, { diasExtras: number; motivo: string | null }>();
-    for (const a of (atrasosRows ?? []) as Array<{ centro_custo?: string; etapa_id?: number; dias_extras?: number; motivo?: string | null }>) {
+    const atrasosMapDoCc = new Map<number, { diasExtras: number; motivo: string | null; datasAtraso: string[] }>();
+    for (const a of (atrasosRows ?? []) as Array<{ centro_custo?: string; etapa_id?: number; dias_extras?: number; motivo?: string | null; datas_atraso?: string[] | null }>) {
       if (a.centro_custo === ccAtivo) {
+        const datasAtraso = Array.isArray(a.datas_atraso) ? a.datas_atraso : [];
         atrasosMapDoCc.set(Number(a.etapa_id ?? 0), {
-          diasExtras: Number(a.dias_extras ?? 0),
+          diasExtras: datasAtraso.length > 0 ? datasAtraso.length : Number(a.dias_extras ?? 0),
           motivo: a.motivo ?? null,
+          datasAtraso,
         });
       }
     }
@@ -953,6 +955,7 @@ export async function GET(request: NextRequest) {
           temRegistros,
           diasExtras: atrasosMapDoCc.get(e.id)?.diasExtras ?? 0,
           motivoAtraso: atrasosMapDoCc.get(e.id)?.motivo ?? null,
+          datasAtraso: atrasosMapDoCc.get(e.id)?.datasAtraso ?? [],
         };
       }),
       pendencias: pendencias.slice(0, 10),
