@@ -348,6 +348,9 @@ export type DashboardPrincipalData = {
     diasExtras?: number;
     motivoAtraso?: string | null;
     datasAtraso?: string[];
+    diasAdiantados?: number;
+    motivoAdiantamento?: string | null;
+    datasAdiantamento?: string[];
   }>;
   agregacoes: Pick<DashboardData["agregacoes"], "distribuicaoFuncoes" | "distribuicaoMob"> & {
     terminoDetalhado: Array<{

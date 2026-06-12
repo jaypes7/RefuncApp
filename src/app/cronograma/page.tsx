@@ -56,6 +56,14 @@ type AtrasoEntry = {
   datas_atraso: string[];
 };
 
+type AdiantamentoEntry = {
+  etapa_id: number;
+  dias_adiantados: number;
+  motivo: string | null;
+  data_inicio_adiantamento: string | null;
+  datas_adiantamento: string[];
+};
+
 type EtapaCronograma = {
   id: number;
   nome: string;
@@ -137,6 +145,11 @@ function legacyAtrasoDates(dataInicio: string | null | undefined, diasExtras: nu
   return Array.from({ length: diasExtras }, (_, index) => addCalendarDays(dataInicio, index));
 }
 
+function legacyAdiantamentoDates(dataInicio: string | null | undefined, diasAdiantados: number): string[] {
+  if (!dataInicio || diasAdiantados <= 0) return [];
+  return Array.from({ length: diasAdiantados }, (_, index) => addCalendarDays(dataInicio, index));
+}
+
 // Retorna todos os dias corridos entre duas datas (inclusive), formato YYYY-MM-DD
 function getDaysInRange(startDate: string, endDate: string): string[] {
   const days: string[] = [];
@@ -210,6 +223,16 @@ export default function CronogramaPage() {
   const [atrasoCalendarYear, setAtrasoCalendarYear] = useState(new Date().getFullYear());
   const [atrasoCalendarMonth, setAtrasoCalendarMonth] = useState(new Date().getMonth());
 
+  // Estado para modal de adiantamento
+  const [showAdiantamentoModal, setShowAdiantamentoModal] = useState(false);
+  const [adiantamentoModalEtapaId, setAdiantamentoModalEtapaId] = useState<number | null>(null);
+  const [adiantamentoForm, setAdiantamentoForm] = useState<{
+    motivo: string;
+    datasAdiantamento: string[];
+  }>({ motivo: "", datasAdiantamento: [] });
+  const [adiantamentoCalendarYear, setAdiantamentoCalendarYear] = useState(new Date().getFullYear());
+  const [adiantamentoCalendarMonth, setAdiantamentoCalendarMonth] = useState(new Date().getMonth());
+
   const { data: projetoQueryData } = useQuery<ApiConfigResponse>({
     queryKey: ["config", "projeto", centroCusto],
     queryFn: async () => {
@@ -281,6 +304,18 @@ export default function CronogramaPage() {
   });
 
   // Mapa: etapa_id → AtrasoEntry
+  const { data: adiantamentosData } = useQuery<AdiantamentoEntry[]>({
+    queryKey: ["etapas-adiantamento", centroCusto],
+    queryFn: async () => {
+      const params = centroCusto ? `?centro_custo=${encodeURIComponent(centroCusto)}` : "";
+      const res = await fetch(`/api/etapas/adiantamento${params}`);
+      if (!res.ok) throw new Error("Falha ao carregar adiantamentos");
+      const json = await res.json();
+      return json.data as AdiantamentoEntry[];
+    },
+    enabled: filterReady && !!centroCusto,
+  });
+
   const atrasosMap = useMemo<Record<number, AtrasoEntry>>(() => {
     if (!atrasosData) return {};
     return atrasosData.reduce<Record<number, AtrasoEntry>>((acc, a) => {
@@ -288,6 +323,14 @@ export default function CronogramaPage() {
       return acc;
     }, {});
   }, [atrasosData]);
+
+  const adiantamentosMap = useMemo<Record<number, AdiantamentoEntry>>(() => {
+    if (!adiantamentosData) return {};
+    return adiantamentosData.reduce<Record<number, AdiantamentoEntry>>((acc, a) => {
+      acc[a.etapa_id] = a;
+      return acc;
+    }, {});
+  }, [adiantamentosData]);
 
   // Mutation para salvar progresso de um dia específico
   const progressoMutation = useMutation({
@@ -552,6 +595,53 @@ export default function CronogramaPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const salvarAdiantamentoMutation = useMutation({
+    mutationFn: async (payload: {
+      etapa_id: number;
+      datas_adiantamento: string[];
+      motivo: string | null;
+    }) => {
+      const res = await fetch("/api/etapas/adiantamento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centro_custo: centroCusto, ...payload }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao salvar adiantamento");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["etapas-adiantamento"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      setShowAdiantamentoModal(false);
+      toast.success("Adiantamento registrado com sucesso!");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const excluirAdiantamentoMutation = useMutation({
+    mutationFn: async (etapaId: number) => {
+      const res = await fetch("/api/etapas/adiantamento", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centro_custo: centroCusto, etapa_id: etapaId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Falha ao remover adiantamento");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["etapas-adiantamento"], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
+      toast.success("Adiantamento removido.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const abrirAtrasoModal = (etapa: EtapaCronograma) => {
     const existing = atrasosMap[etapa.id];
     const datasAtraso = sortUniqueDates(
@@ -571,6 +661,25 @@ export default function CronogramaPage() {
     setShowAtrasoModal(true);
   };
 
+  const abrirAdiantamentoModal = (etapa: EtapaCronograma) => {
+    const existing = adiantamentosMap[etapa.id];
+    const datasAdiantamento = sortUniqueDates(
+      existing?.datas_adiantamento?.length
+        ? existing.datas_adiantamento
+        : legacyAdiantamentoDates(existing?.data_inicio_adiantamento, existing?.dias_adiantados ?? 0),
+    );
+    const dataReferencia = datasAdiantamento[0] ?? (etapa.data_inicio ? addCalendarDays(etapa.data_inicio, -1) : formatDateISO(new Date()));
+    const calendarDate = new Date(dataReferencia + "T00:00:00Z");
+    setAdiantamentoForm({
+      motivo: existing?.motivo ?? "",
+      datasAdiantamento,
+    });
+    setAdiantamentoCalendarYear(calendarDate.getUTCFullYear());
+    setAdiantamentoCalendarMonth(calendarDate.getUTCMonth());
+    setAdiantamentoModalEtapaId(etapa.id);
+    setShowAdiantamentoModal(true);
+  };
+
   const salvarAtraso = () => {
     if (!atrasoModalEtapaId) return;
     const datasAtraso = sortUniqueDates(atrasoForm.datasAtraso);
@@ -585,18 +694,46 @@ export default function CronogramaPage() {
     });
   };
 
+  const salvarAdiantamento = () => {
+    if (!adiantamentoModalEtapaId) return;
+    const datasAdiantamento = sortUniqueDates(adiantamentoForm.datasAdiantamento);
+    if (datasAdiantamento.length === 0) {
+      toast.error("Selecione ao menos um dia de adiantamento.");
+      return;
+    }
+    salvarAdiantamentoMutation.mutate({
+      etapa_id: adiantamentoModalEtapaId,
+      datas_adiantamento: datasAdiantamento,
+      motivo: adiantamentoForm.motivo.trim() || null,
+    });
+  };
+
   const atrasoModalEtapa = useMemo(
     () => cronograma.etapas.find((e) => e.id === atrasoModalEtapaId) ?? null,
     [cronograma.etapas, atrasoModalEtapaId],
+  );
+
+  const adiantamentoModalEtapa = useMemo(
+    () => cronograma.etapas.find((e) => e.id === adiantamentoModalEtapaId) ?? null,
+    [cronograma.etapas, adiantamentoModalEtapaId],
   );
 
   const atrasoMinDate = atrasoModalEtapa?.data_fim
     ? addCalendarDays(atrasoModalEtapa.data_fim, 1)
     : null;
 
+  const adiantamentoMaxDate = adiantamentoModalEtapa?.data_inicio
+    ? addCalendarDays(adiantamentoModalEtapa.data_inicio, -1)
+    : null;
+
   const atrasoDatasOrdenadas = useMemo(
     () => sortUniqueDates(atrasoForm.datasAtraso),
     [atrasoForm.datasAtraso],
+  );
+
+  const adiantamentoDatasOrdenadas = useMemo(
+    () => sortUniqueDates(adiantamentoForm.datasAdiantamento),
+    [adiantamentoForm.datasAdiantamento],
   );
 
   const atrasoCalendarDays = useMemo(() => {
@@ -636,6 +773,43 @@ export default function CronogramaPage() {
     return days;
   }, [atrasoCalendarMonth, atrasoCalendarYear, atrasoMinDate]);
 
+  const adiantamentoCalendarDays = useMemo(() => {
+    const firstDayOfMonth = new Date(Date.UTC(adiantamentoCalendarYear, adiantamentoCalendarMonth, 1));
+    const lastDayOfMonth = new Date(Date.UTC(adiantamentoCalendarYear, adiantamentoCalendarMonth + 1, 0));
+    const startWeekday = firstDayOfMonth.getUTCDay();
+    const days: Array<{
+      date: string;
+      dayOfMonth: number;
+      isWeekend: boolean;
+      isOutsideMonth: boolean;
+      isDisabled: boolean;
+    }> = [];
+
+    for (let i = 0; i < startWeekday; i++) {
+      days.push({
+        date: "",
+        dayOfMonth: 0,
+        isWeekend: false,
+        isOutsideMonth: true,
+        isDisabled: true,
+      });
+    }
+
+    for (let day = 1; day <= lastDayOfMonth.getUTCDate(); day++) {
+      const date = `${adiantamentoCalendarYear}-${String(adiantamentoCalendarMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const dateObj = new Date(date + "T00:00:00Z");
+      days.push({
+        date,
+        dayOfMonth: day,
+        isWeekend: dateObj.getUTCDay() === 0 || dateObj.getUTCDay() === 6,
+        isOutsideMonth: false,
+        isDisabled: !!adiantamentoMaxDate && date > adiantamentoMaxDate,
+      });
+    }
+
+    return days;
+  }, [adiantamentoCalendarMonth, adiantamentoCalendarYear, adiantamentoMaxDate]);
+
   const toggleAtrasoDate = (date: string) => {
     if (atrasoMinDate && date < atrasoMinDate) return;
     setAtrasoForm((prev) => {
@@ -643,6 +817,16 @@ export default function CronogramaPage() {
       if (selected.has(date)) selected.delete(date);
       else selected.add(date);
       return { ...prev, datasAtraso: sortUniqueDates([...selected]) };
+    });
+  };
+
+  const toggleAdiantamentoDate = (date: string) => {
+    if (adiantamentoMaxDate && date > adiantamentoMaxDate) return;
+    setAdiantamentoForm((prev) => {
+      const selected = new Set(prev.datasAdiantamento);
+      if (selected.has(date)) selected.delete(date);
+      else selected.add(date);
+      return { ...prev, datasAdiantamento: sortUniqueDates([...selected]) };
     });
   };
 
@@ -655,6 +839,21 @@ export default function CronogramaPage() {
       }
       if (next > 11) {
         setAtrasoCalendarYear((year) => year + 1);
+        return 0;
+      }
+      return next;
+    });
+  };
+
+  const navegarMesAdiantamento = (direction: -1 | 1) => {
+    setAdiantamentoCalendarMonth((prev) => {
+      const next = prev + direction;
+      if (next < 0) {
+        setAdiantamentoCalendarYear((year) => year - 1);
+        return 11;
+      }
+      if (next > 11) {
+        setAdiantamentoCalendarYear((year) => year + 1);
         return 0;
       }
       return next;
@@ -1301,6 +1500,71 @@ export default function CronogramaPage() {
         )}
       </div>
 
+      {/* Bloco de adiantamento */}
+      {etapa.id > 0 && etapa.data_inicio && (
+        <div className="ml-12 pt-2 border-t border-border/30">
+          {adiantamentosMap[etapa.id] ? (() => {
+            const adiantamento = adiantamentosMap[etapa.id];
+            const datasAdiantamento = sortUniqueDates(
+              adiantamento.datas_adiantamento?.length
+                ? adiantamento.datas_adiantamento
+                : legacyAdiantamentoDates(adiantamento.data_inicio_adiantamento, adiantamento.dias_adiantados),
+            );
+            const totalAdiantamento = datasAdiantamento.length || adiantamento.dias_adiantados;
+            const datasResumo = datasAdiantamento.slice(0, 3).map(formatDatePtBr).join(", ");
+            const datasTooltip = datasAdiantamento.map(formatDatePtBr).join(", ");
+
+            return (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-[#337246]">
+                <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                +{totalAdiantamento} dias de adiantamento
+                {datasAdiantamento[0] && (
+                  <span className="text-muted-foreground font-normal" title={datasTooltip}>
+                    em {datasResumo}{datasAdiantamento.length > 3 ? ` +${datasAdiantamento.length - 3}` : ""}
+                  </span>
+                )}
+              </span>
+              {adiantamento.motivo && (
+                <span className="text-xs text-muted-foreground italic truncate max-w-[200px]">
+                  - {adiantamento.motivo}
+                </span>
+              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-muted-foreground hover:text-primary"
+                onClick={() => abrirAdiantamentoModal(etapa)}
+                title="Editar adiantamento"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                onClick={() => excluirAdiantamentoMutation.mutate(etapa.id)}
+                disabled={excluirAdiantamentoMutation.isPending}
+                title="Remover adiantamento"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+            );
+          })() : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground hover:text-[#337246] text-xs h-7 px-2"
+              onClick={() => abrirAdiantamentoModal(etapa)}
+            >
+              <TrendingUp className="w-3 h-3" />
+              Registrar Adiantamento
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Bloco de atraso */}
       {etapa.id > 0 && etapa.data_fim && (
         <div className="ml-12 pt-2 border-t border-border/30">
@@ -1395,10 +1659,23 @@ export default function CronogramaPage() {
       {/* Painel de avanço diário */}
       {etapa.data_inicio && etapa.data_fim && expandedStages.has(etapa.id) && (() => {
         const diasTrabalhadosSet = new Set(diasTrabalhadosData ?? []);
-        const dias = getDaysInRange(etapa.data_inicio!, etapa.data_fim!).filter(
+        const diasPlanejados = getDaysInRange(etapa.data_inicio!, etapa.data_fim!).filter(
           (dia) => diasTrabalhadosSet.has(dia),
         );
-        const totalDias = dias.length;
+        const diasPlanejadosSet = new Set(diasPlanejados);
+        const diasAtraso = sortUniqueDates(atrasosMap[etapa.id]?.datas_atraso ?? []).filter(
+          (dia) => !diasPlanejadosSet.has(dia),
+        );
+        const diasAtrasoSet = new Set(diasAtraso);
+        const diasAdiantamento = sortUniqueDates(adiantamentosMap[etapa.id]?.datas_adiantamento ?? []).filter(
+          (dia) => !diasPlanejadosSet.has(dia) && !diasAtrasoSet.has(dia),
+        );
+        const dias = [
+          ...diasPlanejados.map((dia) => ({ data: dia, tipo: "planejado" as const })),
+          ...diasAdiantamento.map((dia) => ({ data: dia, tipo: "adiantamento" as const })),
+          ...diasAtraso.map((dia) => ({ data: dia, tipo: "atraso" as const })),
+        ].sort((a, b) => a.data.localeCompare(b.data));
+        const totalDiasPlanejados = diasPlanejados.length || 1;
         const etapaProgresso = progressoDiario[etapa.id] ?? {};
         let acumulado = 0;
         return (
@@ -1410,12 +1687,19 @@ export default function CronogramaPage() {
               <span className="text-center">Acumulado</span>
               <span className="text-center">Delta</span>
             </div>
-            {dias.map((dia, idx) => {
-              const planejado = Math.round(((idx + 1) / totalDias) * 100);
+            {dias.map(({ data: dia, tipo }) => {
+              const isAtraso = tipo === "atraso";
+              const isAdiantamento = tipo === "adiantamento";
+              const plannedIndex = diasPlanejados.indexOf(dia);
+              const planejado = tipo !== "planejado" || plannedIndex === -1
+                ? null
+                : Math.round(((plannedIndex + 1) / totalDiasPlanejados) * 100);
               const incremento = etapaProgresso[dia];
               if (incremento != null) acumulado += incremento;
               const realizadoCumulativo = incremento != null ? Math.min(100, acumulado) : undefined;
-              const delta = realizadoCumulativo != null ? realizadoCumulativo - planejado : undefined;
+              const delta = realizadoCumulativo != null && planejado != null
+                ? realizadoCumulativo - planejado
+                : undefined;
               const diaSemana = new Date(dia + "T00:00:00").toLocaleDateString("pt-BR", {
                 weekday: "short",
                 timeZone: "UTC",
@@ -1428,14 +1712,30 @@ export default function CronogramaPage() {
               return (
                 <div
                   key={dia}
-                  className="grid grid-cols-5 items-center px-3 py-1.5 text-xs border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors"
+                  className={`grid grid-cols-5 items-center px-3 py-1.5 text-xs border-b border-border/20 last:border-b-0 transition-colors ${
+                    isAdiantamento
+                      ? "bg-[#337246]/5 hover:bg-[#337246]/10"
+                      : isAtraso
+                      ? "bg-amber-500/5 hover:bg-amber-500/10"
+                      : "hover:bg-muted/20"
+                  }`}
                 >
                   <span className="text-muted-foreground tabular-nums">
                     {diaMes}{" "}
                     <span className="text-muted-foreground/60 capitalize">{diaSemana}</span>
+                    {isAdiantamento && (
+                      <span className="ml-2 rounded border border-[#337246]/30 bg-[#337246]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#337246]">
+                        Adiantamento
+                      </span>
+                    )}
+                    {isAtraso && (
+                      <span className="ml-2 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                        Atraso
+                      </span>
+                    )}
                   </span>
                   <span className="text-center tabular-nums text-muted-foreground">
-                    {planejado}%
+                    {planejado != null ? `${planejado}%` : <span className="text-muted-foreground/40">—</span>}
                   </span>
                   <div className="flex justify-center">
                     <Input
@@ -1839,6 +2139,152 @@ export default function CronogramaPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Modal de registro de adiantamento */}
+          <Dialog open={showAdiantamentoModal} onOpenChange={setShowAdiantamentoModal}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-[#337246]" />
+                  Registrar Adiantamento
+                </DialogTitle>
+                <DialogDescription>
+                  {adiantamentoModalEtapa
+                    ? `Etapa: ${adiantamentoModalEtapa.nome}`
+                    : "Registre os dias de adiantamento desta etapa."}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="flex flex-col gap-3">
+                  <label className="text-sm font-medium">Motivo do Adiantamento</label>
+                  <Input
+                    type="text"
+                    placeholder="Ex: Execucao antecipada, equipe liberada antes..."
+                    value={adiantamentoForm.motivo}
+                    onChange={(e) =>
+                      setAdiantamentoForm((prev) => ({ ...prev, motivo: e.target.value }))
+                    }
+                    className="glass-input"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-sm font-medium">Dias de adiantamento</label>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Selecione os dias especificos antes do inicio planejado da etapa.
+                      </p>
+                    </div>
+                    <div className="text-sm font-semibold text-[#337246] tabular-nums">
+                      {adiantamentoDatasOrdenadas.length} selecionado(s)
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-border/50 bg-card/50 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => navegarMesAdiantamento(-1)}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <h3 className="min-w-[150px] text-center text-sm font-semibold">
+                        {MESES[adiantamentoCalendarMonth]} {adiantamentoCalendarYear}
+                      </h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => navegarMesAdiantamento(1)}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="mb-2 grid grid-cols-7 gap-1">
+                      {DIAS_SEMANA.map((dia) => (
+                        <div
+                          key={dia}
+                          className="py-1 text-center text-[11px] font-medium text-muted-foreground"
+                        >
+                          {dia}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {adiantamentoCalendarDays.map((dayInfo, index) => {
+                        if (dayInfo.isOutsideMonth) {
+                          return <div key={`adiantamento-empty-${index}`} className="h-10" />;
+                        }
+
+                        const isSelected = adiantamentoDatasOrdenadas.includes(dayInfo.date);
+                        const isToday = dayInfo.date === new Date().toISOString().split("T")[0];
+
+                        return (
+                          <button
+                            key={dayInfo.date}
+                            type="button"
+                            disabled={dayInfo.isDisabled}
+                            onClick={() => toggleAdiantamentoDate(dayInfo.date)}
+                            className={`h-10 rounded-md text-sm font-medium transition-all ${
+                              dayInfo.isDisabled
+                                ? "cursor-not-allowed opacity-30"
+                                : "cursor-pointer hover:scale-105 hover:bg-[#337246]/10"
+                            } ${
+                              isSelected
+                                ? "bg-[#337246] text-white shadow-sm"
+                                : dayInfo.isWeekend
+                                ? "bg-accent/50 text-foreground"
+                                : "bg-transparent text-foreground"
+                            } ${isToday && !isSelected ? "border-2 border-primary/50" : ""}`}
+                            title={
+                              dayInfo.isDisabled
+                                ? "Disponivel apenas antes da data de inicio da etapa"
+                                : isSelected
+                                ? "Clique para remover"
+                                : "Clique para marcar adiantamento"
+                            }
+                          >
+                            {dayInfo.dayOfMonth}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-[#337246]/20 bg-[#337246]/10 px-3 py-2 text-xs text-[#337246]">
+                    {adiantamentoDatasOrdenadas.length > 0 ? (
+                      <span>
+                        Datas selecionadas: {adiantamentoDatasOrdenadas.map(formatDatePtBr).join(", ")}
+                      </span>
+                    ) : (
+                      <span>
+                        Nenhum dia selecionado. Marque pelo menos uma data para salvar o adiantamento.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAdiantamentoModal(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={salvarAdiantamento}
+                  disabled={salvarAdiantamentoMutation.isPending || adiantamentoDatasOrdenadas.length === 0}
+                  className="gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {salvarAdiantamentoMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Modal de registro de atraso */}
           <Dialog open={showAtrasoModal} onOpenChange={setShowAtrasoModal}>

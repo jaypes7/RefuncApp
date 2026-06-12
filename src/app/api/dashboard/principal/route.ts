@@ -206,8 +206,13 @@ function calcularRealizadoNaData(
 
     // Soma de TODOS os incrementos diários desta etapa até dateStr
     // (cada entrada representa o progresso daquele dia, não o total)
-    const registros = progressoDiario
-      .filter((r) => r.etapa_id === etapa.id && r.data <= dateStr && r.data >= (etapa.dataInicio ?? ""));
+    const registros = progressoDiario.filter(
+      (r) =>
+        r.etapa_id === etapa.id &&
+        r.data <= dateStr &&
+        r.data >= (etapa.dataInicio ?? "") &&
+        (!etapa.dataFim || r.data <= etapa.dataFim),
+    );
 
     if (registros.length > 0) {
       const soma = registros.reduce((s, r) => s + r.percentual, 0);
@@ -242,7 +247,9 @@ function calcularRealizadoSuavizadoNaData(
 
     if (!ini || !fim) continue;
 
-    const registros = progressoDiario.filter((r) => r.etapa_id === etapa.id && r.data <= dateStr && r.data >= ini);
+    const registros = progressoDiario.filter(
+      (r) => r.etapa_id === etapa.id && r.data <= dateStr && r.data >= ini && r.data <= fim,
+    );
     const pctRealAteAgora = Math.min(100, registros.reduce((s, r) => s + r.percentual, 0));
     if (registros.length > 0) temAlgumDado = true;
 
@@ -409,7 +416,13 @@ function gerarCurvaSEtapas(
     }
 
     function calcularRealizadoEtapa(etapa: EtapaConfig, data: string): number {
-      const registros = progressoDiario.filter((r) => r.etapa_id === etapa.id && r.data <= data);
+      const registros = progressoDiario.filter(
+        (r) =>
+          r.etapa_id === etapa.id &&
+          r.data <= data &&
+          r.data >= (etapa.dataInicio ?? "") &&
+          (!etapa.dataFim || r.data <= etapa.dataFim),
+      );
       return Math.min(100, Math.round(registros.reduce((s, r) => s + r.percentual, 0) * 10) / 10);
     }
 
@@ -634,18 +647,23 @@ export async function GET(request: NextRequest) {
     let atrasosQuery = db.from("etapas_atraso").select("centro_custo,etapa_id,dias_extras,motivo,datas_atraso");
     if (centroCusto?.length) atrasosQuery = atrasosQuery.in("centro_custo", centroCusto) as typeof atrasosQuery;
 
+    let adiantamentosQuery = db.from("etapas_adiantamento").select("centro_custo,etapa_id,dias_adiantados,motivo,datas_adiantamento");
+    if (centroCusto?.length) adiantamentosQuery = adiantamentosQuery.in("centro_custo", centroCusto) as typeof adiantamentosQuery;
+
     const [
       { data: colabData, error: colabErr },
       configResult,
       { data: etapasRows, error: etapasErr },
       { data: progressoRows },
       { data: atrasosRows },
+      { data: adiantamentosRows },
     ] = await Promise.all([
       colabQuery,
       configQuery,
       etapasQuery,
       progressoQuery,
       atrasosQuery,
+      adiantamentosQuery,
     ]);
 
     if (colabErr) throw new Error(`Falha ao buscar colaboradores: ${colabErr.message}`);
@@ -882,6 +900,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const adiantamentosMapDoCc = new Map<number, { diasAdiantados: number; motivo: string | null; datasAdiantamento: string[] }>();
+    for (const a of (adiantamentosRows ?? []) as Array<{ centro_custo?: string; etapa_id?: number; dias_adiantados?: number; motivo?: string | null; datas_adiantamento?: string[] | null }>) {
+      if (a.centro_custo === ccAtivo) {
+        const datasAdiantamento = Array.isArray(a.datas_adiantamento) ? a.datas_adiantamento : [];
+        adiantamentosMapDoCc.set(Number(a.etapa_id ?? 0), {
+          diasAdiantados: datasAdiantamento.length > 0 ? datasAdiantamento.length : Number(a.dias_adiantados ?? 0),
+          motivo: a.motivo ?? null,
+          datasAdiantamento,
+        });
+      }
+    }
+
     // Dias trabalhados do CC atual (para filtrar finais de semana/feriados na evolucaoDiaria)
     const diasTrabalhadosDoCc: Set<string> = (() => {
       if (!ccAtivo) return new Set<string>();
@@ -956,6 +986,9 @@ export async function GET(request: NextRequest) {
           diasExtras: atrasosMapDoCc.get(e.id)?.diasExtras ?? 0,
           motivoAtraso: atrasosMapDoCc.get(e.id)?.motivo ?? null,
           datasAtraso: atrasosMapDoCc.get(e.id)?.datasAtraso ?? [],
+          diasAdiantados: adiantamentosMapDoCc.get(e.id)?.diasAdiantados ?? 0,
+          motivoAdiantamento: adiantamentosMapDoCc.get(e.id)?.motivo ?? null,
+          datasAdiantamento: adiantamentosMapDoCc.get(e.id)?.datasAdiantamento ?? [],
         };
       }),
       pendencias: pendencias.slice(0, 10),
