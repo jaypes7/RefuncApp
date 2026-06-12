@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo } from "react";
-import { ChevronDown, FolderOpen, AlertTriangle, Clock } from "lucide-react";
+import { ChevronDown, FolderOpen, AlertTriangle, Clock, TrendingUp } from "lucide-react";
 import type { DashboardPrincipalData, ConfigData, GrupoEtapa } from "@/lib/axios";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -98,6 +98,7 @@ export function GanttCronograma({
     const s = new Set<string>();
     for (const e of etapas) {
       for (const d of e.evolucaoDiaria ?? []) s.add(d.data);
+      for (const d of e.datasAdiantamento ?? []) s.add(d);
       for (const d of e.datasAtraso ?? []) s.add(d);
     }
     return [...s].sort();
@@ -156,6 +157,7 @@ export function GanttCronograma({
     const evolMap = new Map<string, EvolEntry>(
       (etapa.evolucaoDiaria ?? []).map((d) => [d.data, d])
     );
+    const adiantamentoDaysSet = new Set(etapa.datasAdiantamento ?? []);
     const atrasoDaysSet = new Set(etapa.datasAtraso ?? []);
     const { previsto: pToday, realizado: rToday } = calcTodayPR(etapa);
     const resp     = respMap.get(etapa.id) ?? "—";
@@ -206,6 +208,15 @@ export function GanttCronograma({
                   >
                     <Clock className="w-2 h-2 shrink-0" />
                     +{etapa.diasExtras}d atraso
+                  </span>
+                )}
+                {etapa.diasAdiantados != null && etapa.diasAdiantados > 0 && (
+                  <span
+                    title={etapa.motivoAdiantamento ?? undefined}
+                    className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-[#337246] bg-[#337246]/10 border border-[#337246]/30 rounded px-1 py-0.5 leading-none w-fit cursor-default"
+                  >
+                    <TrendingUp className="w-2 h-2 shrink-0" />
+                    +{etapa.diasAdiantados}d adiant.
                   </span>
                 )}
               </div>
@@ -292,22 +303,31 @@ export function GanttCronograma({
             const entry    = evolMap.get(day);
             const isToday  = day === hoje;
             const isFuture = day > hoje;
+            const isEarlyDay = adiantamentoDaysSet.has(day);
             const isDelayDay = atrasoDaysSet.has(day);
             if (!entry || isFuture) {
               return (
                 <td
                   key={day}
                   className={`border-b border-l ${
-                    isDelayDay ? "border-amber-500/40" : "border-border"
-                  } ${isToday && !isDelayDay ? "ring-inset ring-1 ring-primary/50 bg-primary/5" : ""}`}
+                    isEarlyDay
+                      ? "border-[#337246]/40"
+                      : isDelayDay
+                      ? "border-amber-500/40"
+                      : "border-border"
+                  } ${isToday && !isDelayDay && !isEarlyDay ? "ring-inset ring-1 ring-primary/50 bg-primary/5" : ""}`}
                   style={{
                     width: W_DAY,
                     minWidth: W_DAY,
                     height: 26,
                     padding: 0,
-                    backgroundColor: isDelayDay ? "rgba(245,158,11,0.24)" : undefined,
+                    backgroundColor: isEarlyDay
+                      ? "rgba(51,114,70,0.24)"
+                      : isDelayDay
+                      ? "rgba(245,158,11,0.24)"
+                      : undefined,
                   }}
-                  title={isDelayDay ? "Dia extra de atraso" : undefined}
+                  title={isEarlyDay ? "Dia de adiantamento" : isDelayDay ? "Dia extra de atraso" : undefined}
                 />
               );
             }
@@ -322,13 +342,15 @@ export function GanttCronograma({
                   minWidth: W_DAY,
                   height: 26,
                   padding: 0,
-                  backgroundColor: isDelayDay
+                  backgroundColor: isEarlyDay
+                    ? "rgba(51,114,70,0.24)"
+                    : isDelayDay
                     ? "rgba(245,158,11,0.24)"
                     : hasProgress
                     ? `rgba(218,41,27,${0.15 + (entry.realizado / 100) * 0.65})`
                     : "rgba(0,0,0,0.03)",
                 }}
-                title={isDelayDay ? "Dia extra de atraso" : undefined}
+                title={isEarlyDay ? "Dia de adiantamento" : isDelayDay ? "Dia extra de atraso" : undefined}
               >
                 <span
                   className="text-[11px] font-mono leading-none select-none text-black-100 dark:text-white-100"
