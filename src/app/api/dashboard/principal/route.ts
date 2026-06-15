@@ -207,11 +207,7 @@ function calcularRealizadoNaData(
     // Soma de TODOS os incrementos diários desta etapa até dateStr
     // (cada entrada representa o progresso daquele dia, não o total)
     const registros = progressoDiario.filter(
-      (r) =>
-        r.etapa_id === etapa.id &&
-        r.data <= dateStr &&
-        r.data >= (etapa.dataInicio ?? "") &&
-        (!etapa.dataFim || r.data <= etapa.dataFim),
+      (r) => r.etapa_id === etapa.id && r.data <= dateStr,
     );
 
     if (registros.length > 0) {
@@ -248,7 +244,7 @@ function calcularRealizadoSuavizadoNaData(
     if (!ini || !fim) continue;
 
     const registros = progressoDiario.filter(
-      (r) => r.etapa_id === etapa.id && r.data <= dateStr && r.data >= ini && r.data <= fim,
+      (r) => r.etapa_id === etapa.id && r.data <= dateStr,
     );
     const pctRealAteAgora = Math.min(100, registros.reduce((s, r) => s + r.percentual, 0));
     if (registros.length > 0) temAlgumDado = true;
@@ -323,6 +319,7 @@ function gerarCurvaSEtapas(
   hojeStr: string,
   progressoDiario: ProgressoDiarioRow[],
   diasTrabalhados: string[] = [],
+  datasExtrasPorEtapa: Map<number, { datasAtraso: string[]; datasAdiantamento: string[] }> = new Map(),
 ): CurvaSResult {
   const totalDias = etapas.reduce((s, e) => s + (e.duracaoDias || 0), 0);
   if (!dataInicio || totalDias === 0 || etapas.length === 0) {
@@ -348,6 +345,14 @@ function gerarCurvaSEtapas(
   } else {
     diasPlot = gerarDiasTrabalhadosFallback(dataInicio, fim);
   }
+
+  // Incluir dias de atraso/adiantamento no plot
+  const diasPlotSet = new Set(diasPlot);
+  datasExtrasPorEtapa.forEach((extras) => {
+    for (const d of extras.datasAtraso) if (!diasPlotSet.has(d)) { diasPlotSet.add(d); diasPlot.push(d); }
+    for (const d of extras.datasAdiantamento) if (!diasPlotSet.has(d)) { diasPlotSet.add(d); diasPlot.push(d); }
+  });
+  diasPlot.sort((a, b) => a.localeCompare(b));
 
   if (diasPlot.length === 0) {
     return { labels: [], planejado: [], realizado: [], detalhes: [], valoresHoje: null };
@@ -417,11 +422,7 @@ function gerarCurvaSEtapas(
 
     function calcularRealizadoEtapa(etapa: EtapaConfig, data: string): number {
       const registros = progressoDiario.filter(
-        (r) =>
-          r.etapa_id === etapa.id &&
-          r.data <= data &&
-          r.data >= (etapa.dataInicio ?? "") &&
-          (!etapa.dataFim || r.data <= etapa.dataFim),
+        (r) => r.etapa_id === etapa.id && r.data <= data,
       );
       return Math.min(100, Math.round(registros.reduce((s, r) => s + r.percentual, 0) * 10) / 10);
     }
@@ -714,6 +715,25 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // ── Agrupar atraso/adiantamento por centro_custo → etapa_id ────────────
+    const datasExtrasPorCc = new Map<string, Map<number, { datasAtraso: string[]; datasAdiantamento: string[] }>>();
+    for (const a of (atrasosRows ?? []) as Array<{ centro_custo?: string; etapa_id?: number; datas_atraso?: string[] | null }>) {
+      const cc = String(a.centro_custo ?? "");
+      if (!datasExtrasPorCc.has(cc)) datasExtrasPorCc.set(cc, new Map());
+      const map = datasExtrasPorCc.get(cc)!;
+      const eid = Number(a.etapa_id ?? 0);
+      if (!map.has(eid)) map.set(eid, { datasAtraso: [], datasAdiantamento: [] });
+      map.get(eid)!.datasAtraso = Array.isArray(a.datas_atraso) ? a.datas_atraso : [];
+    }
+    for (const a of (adiantamentosRows ?? []) as Array<{ centro_custo?: string; etapa_id?: number; datas_adiantamento?: string[] | null }>) {
+      const cc = String(a.centro_custo ?? "");
+      if (!datasExtrasPorCc.has(cc)) datasExtrasPorCc.set(cc, new Map());
+      const map = datasExtrasPorCc.get(cc)!;
+      const eid = Number(a.etapa_id ?? 0);
+      if (!map.has(eid)) map.set(eid, { datasAtraso: [], datasAdiantamento: [] });
+      map.get(eid)!.datasAdiantamento = Array.isArray(a.datas_adiantamento) ? a.datas_adiantamento : [];
+    }
+
     // ── Curva S ──────────────────────────────────────────────────────────────
     let curvaS: CurvaSResult | null = null;
     let statusProjeto: { atrasado: boolean; diasAtraso: number; percentualAtraso: number } | null = null;
@@ -732,6 +752,7 @@ export async function GET(request: NextRequest) {
             hoje,
             progresso,
             (cfg.dias_trabalhados as string[] | undefined) ?? [],
+            datasExtrasPorCc.get(cc) ?? new Map(),
           );
           if (c.labels.length) curvasIndividuais.push(c);
         }
@@ -940,21 +961,36 @@ export async function GET(request: NextRequest) {
       etapas: etapasExibicao.map((e) => {
         const evolucaoDiaria: Array<{ data: string; previsto: number; realizado: number }> = [];
         if (e.dataInicio && e.dataFim) {
-          const dias: string[] = [];
+          // Dias planejados (dataInicio → dataFim)
+          const diasPlanejados: string[] = [];
           const cur = new Date(e.dataInicio + "T00:00:00Z");
           const fim = new Date(e.dataFim + "T00:00:00Z");
           while (cur <= fim) {
             const iso = cur.toISOString().split("T")[0];
-            // Inclui apenas dias marcados como trabalhados (ou, se o set estiver vazio, todos os dias)
             if (diasTrabalhadosDoCc.size === 0 || diasTrabalhadosDoCc.has(iso)) {
-              dias.push(iso);
+              diasPlanejados.push(iso);
             }
             cur.setUTCDate(cur.getUTCDate() + 1);
           }
+
+          // Dias extras de atraso e adiantamento
+          const extrasEtapa = datasExtrasPorCc.get(ccAtivo!)?.get(e.id);
+          const datasAdiantamento = (extrasEtapa?.datasAdiantamento ?? []).filter(d => d < e.dataInicio!).sort();
+          const datasAtraso = (extrasEtapa?.datasAtraso ?? []).filter(d => d > e.dataFim!).sort();
+
+          // Timeline completa: adiantamento + planejados + atraso
+          const todosOsDias = [...datasAdiantamento, ...diasPlanejados, ...datasAtraso];
           let acum = 0;
-          for (let i = 0; i < dias.length; i++) {
-            const data = dias[i];
-            const previsto = Math.round(((i + 1) / dias.length) * 100);
+          for (const data of todosOsDias) {
+            let previsto: number;
+            if (datasAdiantamento.includes(data)) {
+              previsto = 0;
+            } else if (datasAtraso.includes(data)) {
+              previsto = 100;
+            } else {
+              const idx = diasPlanejados.indexOf(data);
+              previsto = Math.round(((idx + 1) / diasPlanejados.length) * 100);
+            }
             const incrementos = progressoDoCc.filter(
               (p) => p.etapa_id === e.id && p.data === data,
             );
@@ -969,8 +1005,14 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        const datasAtrasoEtapa = atrasosMapDoCc.get(e.id)?.datasAtraso ?? [];
+        const datasAdiantEtapa = adiantamentosMapDoCc.get(e.id)?.datasAdiantamento ?? [];
         const temRegistros = progressoDoCc.some(
-          (p) => p.etapa_id === e.id && p.data >= (e.dataInicio ?? "") && p.data <= (e.dataFim ?? "")
+          (p) => p.etapa_id === e.id && (
+            (p.data >= (e.dataInicio ?? "") && p.data <= (e.dataFim ?? "")) ||
+            datasAtrasoEtapa.includes(p.data) ||
+            datasAdiantEtapa.includes(p.data)
+          )
         );
 
         return {
