@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { Loader2, GraduationCap, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, GraduationCap, Plus, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { treinamentosApi, type Treinamento } from "@/lib/axios";
 
 export interface TreinamentoSelecionado {
-  treinamento_id: string;
+  /** Ausente em treinamentos personalizados ("Outros") ainda não criados no catálogo. */
+  treinamento_id?: string;
+  /** Nome do treinamento personalizado (usado quando não há treinamento_id). */
+  nome?: string;
   data_realizacao?: string;
   data_validade?: string;
 }
@@ -20,7 +22,6 @@ interface TreinamentosSelecaoProps {
 }
 
 export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
-  const queryClient = useQueryClient();
   const [selecionados, setSelecionados] = useState<Record<string, TreinamentoSelecionado>>({});
   const [nomeOutros, setNomeOutros] = useState("");
 
@@ -55,27 +56,23 @@ export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
     });
   };
 
-  const criarMutation = useMutation({
-    mutationFn: async (nome: string) => {
-      const res = await treinamentosApi.criar(nome);
-      return res.data.data;
-    },
-    onSuccess: (novoTreinamento) => {
-      queryClient.invalidateQueries({ queryKey: ["treinamentos-catalogo"] });
-      setSelecionados((prev) => ({
-        ...prev,
-        [novoTreinamento.id!]: { treinamento_id: novoTreinamento.id! },
-      }));
-      setNomeOutros("");
-      toast.success(`"${novoTreinamento.nome}" adicionado à lista.`);
-    },
-    onError: () => toast.error("Erro ao criar treinamento."),
-  });
-
+  // Adiciona um treinamento personalizado apenas localmente. Ele só é criado no
+  // catálogo e vinculado ao colaborador no momento de salvar (evita treinamentos
+  // órfãos no catálogo caso o formulário seja abandonado).
   const handleAdicionarOutros = () => {
     const nome = nomeOutros.trim();
     if (!nome) return;
-    criarMutation.mutate(nome);
+    const key = `outros:${crypto.randomUUID()}`;
+    setSelecionados((prev) => ({ ...prev, [key]: { nome } }));
+    setNomeOutros("");
+  };
+
+  const removerOutros = (key: string) => {
+    setSelecionados((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
 
   const updateData = (treinamentoId: string, field: "data_realizacao" | "data_validade", value: string) => {
@@ -96,6 +93,9 @@ export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
       </div>
     );
   }
+
+  // Treinamentos personalizados ("Outros") ainda sem treinamento_id no catálogo.
+  const personalizados = Object.entries(selecionados).filter(([, v]) => !v.treinamento_id);
 
   return (
     <div className="space-y-4">
@@ -169,7 +169,7 @@ export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
       <div className="rounded-lg border border-dashed border-border p-4 space-y-3">
         <p className="text-sm font-medium">Outros treinamentos</p>
         <p className="text-xs text-muted-foreground">
-          Adicione um treinamento que não consta na lista acima. Ele será salvo no catálogo e vinculado a este colaborador.
+          Adicione um treinamento que não consta na lista acima. Ele será criado no catálogo e vinculado a este colaborador quando você salvar.
         </p>
         <div className="flex gap-2">
           <Input
@@ -184,17 +184,60 @@ export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
             size="sm"
             variant="outline"
             onClick={handleAdicionarOutros}
-            disabled={!nomeOutros.trim() || criarMutation.isPending}
+            disabled={!nomeOutros.trim()}
             className="shrink-0 gap-1"
           >
-            {criarMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
+            <Plus className="h-4 w-4" />
             Adicionar
           </Button>
         </div>
+
+        {/* Personalizados adicionados (ainda não criados no catálogo) */}
+        {personalizados.length > 0 && (
+          <div className="space-y-3 pt-1">
+            {personalizados.map(([key, item]) => (
+              <div key={key} className="rounded-lg border border-border p-3 bg-muted/20">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium">{item.nome}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removerOutros(key)}
+                    className="h-7 w-7 shrink-0 p-0"
+                    title="Remover"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Data de Realização
+                    </label>
+                    <Input
+                      type="date"
+                      value={item.data_realizacao ?? ""}
+                      onChange={(e) => updateData(key, "data_realizacao", e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Data de Validade
+                    </label>
+                    <Input
+                      type="date"
+                      value={item.data_validade ?? ""}
+                      onChange={(e) => updateData(key, "data_validade", e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

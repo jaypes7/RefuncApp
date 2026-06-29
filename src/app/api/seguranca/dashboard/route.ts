@@ -39,6 +39,8 @@ interface TreinamentoStatusRow {
   aVencer: number;
   vencido: number;
   pendente: number;
+  realizados: number;     // possui data_realizacao
+  naoRealizados: number;  // sem data_realizacao
   membros: TreinamentoMembro[];
 }
 
@@ -48,6 +50,8 @@ interface KpiCatalogo {
   aVencer: number;
   vencido: number;
   pendente: number;
+  realizados: number;
+  naoRealizados: number;
 }
 
 interface SegurancaDashboard {
@@ -60,6 +64,30 @@ interface SegurancaDashboard {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Busca todas as linhas paginando em blocos de 1000 (limite padrão do PostgREST).
+ * Evita que o dashboard subconte silenciosamente quando o volume cresce.
+ */
+async function fetchAllRows(
+  makeQuery: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<unknown[]> {
+  const pageSize = 1000;
+  const all: unknown[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await makeQuery(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = data ?? [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
 
 function contagem(
   rows: Record<string, unknown>[],
@@ -90,19 +118,11 @@ export async function GET(request: NextRequest) {
 
     const db = createServerClient();
 
-    let query = db
-      .from("colaboradores")
-      .select("portal, rpv, treinamento");
-
-    if (centroCusto?.length) {
-      query = query.in("centro_custo", centroCusto);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw new Error(error.message);
-
-    const rows = (data ?? []) as Record<string, unknown>[];
+    const rows = (await fetchAllRows((from, to) => {
+      let q = db.from("colaboradores").select("portal, rpv, treinamento").range(from, to);
+      if (centroCusto?.length) q = q.in("centro_custo", centroCusto);
+      return q;
+    })) as Record<string, unknown>[];
     const total = rows.length;
 
     const distribuicaoStatusPortal = contagem(rows, "portal", "Pendente");
@@ -113,25 +133,21 @@ export async function GET(request: NextRequest) {
     // Junta colaborador_treinamentos → treinamentos (nome) e → colaboradores
     // (nome + centro_custo, para respeitar o filtro). Só considera vínculos
     // aplicáveis a cada colaborador.
-    let treinoQuery = db
-      .from("colaborador_treinamentos")
-      .select(`
-        status,
-        data_realizacao,
-        data_validade,
-        treinamentos!inner ( nome ),
-        colaboradores!inner ( nome, centro_custo )
-      `)
-      .eq("aplicavel", true);
-
-    if (centroCusto?.length) {
-      treinoQuery = treinoQuery.in("colaboradores.centro_custo", centroCusto);
-    }
-
-    const { data: treinoData, error: treinoError } = await treinoQuery;
-    if (treinoError) throw new Error(treinoError.message);
-
-    const treinoRows = (treinoData ?? []) as unknown as Array<{
+    const treinoRows = (await fetchAllRows((from, to) => {
+      let q = db
+        .from("colaborador_treinamentos")
+        .select(`
+          status,
+          data_realizacao,
+          data_validade,
+          treinamentos!inner ( nome ),
+          colaboradores!inner ( nome, centro_custo )
+        `)
+        .eq("aplicavel", true)
+        .range(from, to);
+      if (centroCusto?.length) q = q.in("colaboradores.centro_custo", centroCusto);
+      return q;
+    })) as unknown as Array<{
       status: string | null;
       data_realizacao: string | null;
       data_validade: string | null;
@@ -144,7 +160,7 @@ export async function GET(request: NextRequest) {
       const nome = r.treinamentos?.nome?.trim() || "Sem nome";
       let entry = treinoMap.get(nome);
       if (!entry) {
-        entry = { nome, total: 0, ok: 0, aVencer: 0, vencido: 0, pendente: 0, membros: [] };
+        entry = { nome, total: 0, ok: 0, aVencer: 0, vencido: 0, pendente: 0, realizados: 0, naoRealizados: 0, membros: [] };
         treinoMap.set(nome, entry);
       }
       const status = (r.status ?? "Pendente").trim() || "Pendente";
@@ -153,6 +169,9 @@ export async function GET(request: NextRequest) {
       else if (status === "A Vencer") entry.aVencer += 1;
       else if (status === "Vencido") entry.vencido += 1;
       else entry.pendente += 1;
+      // Realizado = tem data_realizacao; senão, pendente de realização.
+      if (r.data_realizacao) entry.realizados += 1;
+      else entry.naoRealizados += 1;
       entry.membros.push({
         nome: r.colaboradores?.nome?.trim() || "—",
         status,
@@ -170,14 +189,16 @@ export async function GET(request: NextRequest) {
 
     const kpiTreinamentoCatalogo = treinamentosPorCurso.reduce(
       (acc, t) => {
-        acc.totalVinculos += t.total;
-        acc.ok           += t.ok;
-        acc.aVencer      += t.aVencer;
-        acc.vencido      += t.vencido;
-        acc.pendente     += t.pendente;
+        acc.totalVinculos  += t.total;
+        acc.ok             += t.ok;
+        acc.aVencer        += t.aVencer;
+        acc.vencido        += t.vencido;
+        acc.pendente       += t.pendente;
+        acc.realizados     += t.realizados;
+        acc.naoRealizados  += t.naoRealizados;
         return acc;
       },
-      { totalVinculos: 0, ok: 0, aVencer: 0, vencido: 0, pendente: 0 },
+      { totalVinculos: 0, ok: 0, aVencer: 0, vencido: 0, pendente: 0, realizados: 0, naoRealizados: 0 },
     );
 
     const response: SegurancaDashboard = {

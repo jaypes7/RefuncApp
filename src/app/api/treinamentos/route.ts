@@ -21,6 +21,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
     }
 
+    // Deduplicação: se já existe um treinamento com o mesmo nome (case-insensitive),
+    // reaproveita o existente em vez de criar duplicata no catálogo.
+    const padrao = nome.replace(/[%_\\]/g, (c: string) => `\\${c}`);
+    const { data: existente, error: buscaError } = await supabase
+      .from("treinamentos")
+      .select("*")
+      .ilike("nome", padrao)
+      .limit(1)
+      .maybeSingle();
+
+    if (buscaError) throw new Error(buscaError.message);
+    if (existente) {
+      return NextResponse.json({ data: existente }, { status: 200 });
+    }
+
     const { data, error } = await supabase
       .from("treinamentos")
       .insert({ nome, obrigatorio: false })
@@ -38,7 +53,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     await requireAuth("user");
     const supabase = createServerClient();

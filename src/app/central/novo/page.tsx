@@ -293,12 +293,19 @@ export default function OnboardingPage() {
     }) => {
       if (selecionados.length === 0) return;
       await Promise.all(
-        selecionados.map((t) =>
-          treinamentosApi.adicionarAoColaborador(colaboradorId, t.treinamento_id, {
+        selecionados.map(async (t) => {
+          // Personalizado ("Outros"): cria no catálogo agora (com dedup no backend).
+          let treinamentoId = t.treinamento_id;
+          if (!treinamentoId && t.nome) {
+            const criado = await treinamentosApi.criar(t.nome);
+            treinamentoId = criado.data.data.id!;
+          }
+          if (!treinamentoId) return;
+          return treinamentosApi.adicionarAoColaborador(colaboradorId, treinamentoId, {
             data_realizacao: t.data_realizacao || null,
             data_validade: t.data_validade || null,
-          })
-        )
+          });
+        })
       );
     },
     onError: () => {

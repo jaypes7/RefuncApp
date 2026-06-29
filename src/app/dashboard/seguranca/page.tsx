@@ -33,7 +33,6 @@ import {
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { useFilter } from "@/contexts/FilterContext";
-import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
 
 // ============================================================================
 // TIPOS
@@ -49,13 +48,15 @@ interface TreinamentoMembro {
 }
 
 interface TreinamentoStatusRow {
-  nome:     string;
-  total:    number;
-  ok:       number;
-  aVencer:  number;
-  vencido:  number;
-  pendente: number;
-  membros:  TreinamentoMembro[];
+  nome:          string;
+  total:         number;
+  ok:            number;
+  aVencer:       number;
+  vencido:       number;
+  pendente:      number;
+  realizados:    number;
+  naoRealizados: number;
+  membros:       TreinamentoMembro[];
 }
 
 interface KpiTreinamentoCatalogo {
@@ -64,6 +65,8 @@ interface KpiTreinamentoCatalogo {
   aVencer:       number;
   vencido:       number;
   pendente:      number;
+  realizados:    number;
+  naoRealizados: number;
 }
 
 interface SegurancaDashboardData {
@@ -150,8 +153,8 @@ function TreinamentosStatusCard({ treinamentos }: { treinamentos: TreinamentoSta
       treinamentos.reduce(
         (acc, t) => {
           acc.total += t.total;
-          acc.realizados += t.ok + t.aVencer + t.vencido;
-          acc.pendente += t.pendente;
+          acc.realizados += t.realizados;
+          acc.pendente += t.naoRealizados;
           return acc;
         },
         { total: 0, realizados: 0, pendente: 0 },
@@ -206,7 +209,7 @@ function TreinamentosStatusCard({ treinamentos }: { treinamentos: TreinamentoSta
               ) : (
                 lista.map((t) => {
                   const aberto = expandidos.has(t.nome);
-                  const realizados = t.ok + t.aVencer + t.vencido;
+                  const realizados = t.realizados;
                   return (
                     <div
                       key={t.nome}
@@ -229,7 +232,7 @@ function TreinamentosStatusCard({ treinamentos }: { treinamentos: TreinamentoSta
                           </span>
                           <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                             <span className="text-[#337246] font-medium">{realizados}</span> realizados ·{" "}
-                            <span className="font-medium">{t.pendente}</span> pendentes
+                            <span className="font-medium">{t.naoRealizados}</span> pendentes
                           </span>
                         </div>
 
@@ -571,7 +574,7 @@ export default function DashboardSegurancaPage() {
                           paddingAngle={3}
                           dataKey="value"
                           nameKey="name"
-                          label={({ name, percent }) =>
+                          label={({ percent }) =>
                             percent > 0.04 ? `${(percent * 100).toFixed(0)}%` : ""
                           }
                           labelLine={false}
