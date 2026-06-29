@@ -11,6 +11,8 @@
  *   distribuicaoStatusPortal → distribuição do campo `portal`
  *   distribuicaoRpv          → distribuição do campo `rpv`
  *   distribuicaoTreinamento  → distribuição do campo `treinamento`
+ *   treinamentosPorCurso     → status por treinamento do catálogo (OK / A Vencer /
+ *                              Vencido / Pendente), com a lista de colaboradores
  */
 
 export const dynamic = "force-dynamic";
@@ -23,11 +25,38 @@ import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 
 interface DistRow { label: string; value: number; }
 
+interface TreinamentoMembro {
+  nome: string;
+  status: string;
+  data_realizacao: string | null;
+  data_validade: string | null;
+}
+
+interface TreinamentoStatusRow {
+  nome: string;
+  total: number;
+  ok: number;
+  aVencer: number;
+  vencido: number;
+  pendente: number;
+  membros: TreinamentoMembro[];
+}
+
+interface KpiCatalogo {
+  totalVinculos: number;
+  ok: number;
+  aVencer: number;
+  vencido: number;
+  pendente: number;
+}
+
 interface SegurancaDashboard {
   total: number;
   distribuicaoStatusPortal: DistRow[];
   distribuicaoRpv: DistRow[];
   distribuicaoTreinamento: DistRow[];
+  treinamentosPorCurso: TreinamentoStatusRow[];
+  kpiTreinamentoCatalogo: KpiCatalogo;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -80,11 +109,84 @@ export async function GET(request: NextRequest) {
     const distribuicaoRpv = contagem(rows, "rpv", "Pendente");
     const distribuicaoTreinamento = contagem(rows, "treinamento", "Pendente");
 
+    // ── Status por treinamento do catálogo ───────────────────────────────────
+    // Junta colaborador_treinamentos → treinamentos (nome) e → colaboradores
+    // (nome + centro_custo, para respeitar o filtro). Só considera vínculos
+    // aplicáveis a cada colaborador.
+    let treinoQuery = db
+      .from("colaborador_treinamentos")
+      .select(`
+        status,
+        data_realizacao,
+        data_validade,
+        treinamentos!inner ( nome ),
+        colaboradores!inner ( nome, centro_custo )
+      `)
+      .eq("aplicavel", true);
+
+    if (centroCusto?.length) {
+      treinoQuery = treinoQuery.in("colaboradores.centro_custo", centroCusto);
+    }
+
+    const { data: treinoData, error: treinoError } = await treinoQuery;
+    if (treinoError) throw new Error(treinoError.message);
+
+    const treinoRows = (treinoData ?? []) as unknown as Array<{
+      status: string | null;
+      data_realizacao: string | null;
+      data_validade: string | null;
+      treinamentos: { nome: string } | null;
+      colaboradores: { nome: string | null } | null;
+    }>;
+
+    const treinoMap = new Map<string, TreinamentoStatusRow>();
+    for (const r of treinoRows) {
+      const nome = r.treinamentos?.nome?.trim() || "Sem nome";
+      let entry = treinoMap.get(nome);
+      if (!entry) {
+        entry = { nome, total: 0, ok: 0, aVencer: 0, vencido: 0, pendente: 0, membros: [] };
+        treinoMap.set(nome, entry);
+      }
+      const status = (r.status ?? "Pendente").trim() || "Pendente";
+      entry.total += 1;
+      if (status === "OK") entry.ok += 1;
+      else if (status === "A Vencer") entry.aVencer += 1;
+      else if (status === "Vencido") entry.vencido += 1;
+      else entry.pendente += 1;
+      entry.membros.push({
+        nome: r.colaboradores?.nome?.trim() || "—",
+        status,
+        data_realizacao: r.data_realizacao ?? null,
+        data_validade: r.data_validade ?? null,
+      });
+    }
+
+    const treinamentosPorCurso = Array.from(treinoMap.values())
+      .map((t) => ({
+        ...t,
+        membros: t.membros.sort((a, b) => a.nome.localeCompare(b.nome)),
+      }))
+      .sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome));
+
+    const kpiTreinamentoCatalogo = treinamentosPorCurso.reduce(
+      (acc, t) => {
+        acc.totalVinculos += t.total;
+        acc.ok           += t.ok;
+        acc.aVencer      += t.aVencer;
+        acc.vencido      += t.vencido;
+        acc.pendente     += t.pendente;
+        return acc;
+      },
+      { totalVinculos: 0, ok: 0, aVencer: 0, vencido: 0, pendente: 0 },
+    );
+
     const response: SegurancaDashboard = {
       total,
       distribuicaoStatusPortal,
       distribuicaoRpv,
       distribuicaoTreinamento,
+      treinamentosPorCurso,
+      kpiTreinamentoCatalogo,
     };
 
     return NextResponse.json(response);

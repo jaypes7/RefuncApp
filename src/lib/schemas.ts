@@ -1009,6 +1009,7 @@ export const ColaboradorTreinamentoUpdateSchema = z.object({
     z.null(),
   ]).optional(),
   observacoes: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  aplicavel: z.boolean().optional(),
 });
 
 export type PassagemTrecho = z.infer<typeof PassagemTrechoSchema>;

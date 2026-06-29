@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -8,6 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   ChartContainer,
   ChartTooltip,
@@ -24,6 +26,9 @@ import {
   AlertCircle,
   RefreshCw,
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Search,
 } from "lucide-react";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
@@ -36,11 +41,38 @@ import { MANSERV_CHART, MANSERV_STATUS, MANSERV_PIE_COLORS, CHART_GRID_COLOR, CH
 
 interface DistRow { label: string; value: number; }
 
+interface TreinamentoMembro {
+  nome:            string;
+  status:          string;
+  data_realizacao: string | null;
+  data_validade:   string | null;
+}
+
+interface TreinamentoStatusRow {
+  nome:     string;
+  total:    number;
+  ok:       number;
+  aVencer:  number;
+  vencido:  number;
+  pendente: number;
+  membros:  TreinamentoMembro[];
+}
+
+interface KpiTreinamentoCatalogo {
+  totalVinculos: number;
+  ok:            number;
+  aVencer:       number;
+  vencido:       number;
+  pendente:      number;
+}
+
 interface SegurancaDashboardData {
-  total:                    number;
-  distribuicaoRpv:          DistRow[];
-  distribuicaoTreinamento:  DistRow[];
-  distribuicaoStatusPortal: DistRow[];
+  total:                      number;
+  distribuicaoRpv:            DistRow[];
+  distribuicaoTreinamento:    DistRow[];
+  distribuicaoStatusPortal:   DistRow[];
+  treinamentosPorCurso:       TreinamentoStatusRow[];
+  kpiTreinamentoCatalogo:     KpiTreinamentoCatalogo;
 }
 
 // ============================================================================
@@ -59,16 +91,222 @@ const PORTAL_COLORS: Record<string, string> = {
   "Aprovado - DEMITIDO":"#e2e2e2",
 };
 
-const TREIN_COLORS: Record<string, string> = {
-  "Concluído":    "#337246",
-  "Em Andamento": "#ff460a",
-  "Pendente":     "#E5CF61",
-};
-
 const FALLBACK_COLORS = ["#ff460a", "#19365b", "#416e7d", "#9c3022", "#ffa78b", "#9e708b"];
 
 function colorFor(label: string, map: Record<string, string>, idx: number): string {
   return map[label] ?? FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+}
+
+// ============================================================================
+// STATUS DE TREINAMENTOS — metadados de status + helpers
+// ============================================================================
+
+type TreinoStatusKey = "ok" | "aVencer" | "vencido" | "pendente";
+
+const TREINO_STATUS_META: Array<{
+  key:   TreinoStatusKey;
+  label: string;
+  dot:   string;
+  text:  string;
+  bar:   string;
+}> = [
+  { key: "ok",       label: "OK",       dot: "bg-[#337246]", text: "text-[#337246]",                     bar: "#337246" },
+  { key: "aVencer",  label: "A Vencer", dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", bar: "#E5CF61" },
+  { key: "vencido",  label: "Vencido",  dot: "bg-red-500",   text: "text-red-600 dark:text-red-400",     bar: "#DA291B" },
+  { key: "pendente", label: "Pendente", dot: "bg-slate-400", text: "text-muted-foreground",              bar: "#cbd5e1" },
+];
+
+const STATUS_PILL: Record<string, string> = {
+  "OK":       "bg-[#337246]/10 text-[#337246]",
+  "A Vencer": "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  "Vencido":  "bg-red-500/10 text-red-600 dark:text-red-400",
+  "Pendente": "bg-slate-500/10 text-muted-foreground",
+};
+
+/** Formata YYYY-MM-DD em DD/MM/AAAA; retorna "—" se vazio. */
+function formatarDataTreino(data: string | null): string {
+  if (!data) return "—";
+  const [ano, mes, dia] = data.split("-");
+  if (!ano || !mes || !dia) return data;
+  return `${dia}/${mes}/${ano}`;
+}
+
+// ============================================================================
+// CARD: STATUS DE TREINAMENTOS (por curso do catálogo)
+// ============================================================================
+
+function TreinamentosStatusCard({ treinamentos }: { treinamentos: TreinamentoStatusRow[] }) {
+  const [filtro, setFiltro] = useState("");
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+
+  const lista = useMemo(() => {
+    const q = filtro.trim().toLowerCase();
+    if (!q) return treinamentos;
+    return treinamentos.filter((t) => t.nome.toLowerCase().includes(q));
+  }, [treinamentos, filtro]);
+
+  const totais = useMemo(
+    () =>
+      treinamentos.reduce(
+        (acc, t) => {
+          acc.total += t.total;
+          acc.realizados += t.ok + t.aVencer + t.vencido;
+          acc.pendente += t.pendente;
+          return acc;
+        },
+        { total: 0, realizados: 0, pendente: 0 },
+      ),
+    [treinamentos],
+  );
+
+  const toggle = (nome: string) => {
+    setExpandidos((prev) => {
+      const next = new Set(prev);
+      if (next.has(nome)) next.delete(nome);
+      else next.add(nome);
+      return next;
+    });
+  };
+
+  return (
+    <Card data-cardtv-id="seguranca-status-treinamento" className="glass-card">
+      <CardHeader className="flex flex-row items-center gap-2 pb-2 flex-wrap">
+        <GraduationCap className="h-4 w-4 text-primary" />
+        <CardTitle>Status de Treinamentos</CardTitle>
+        {treinamentos.length > 0 && (
+          <span className="text-sm font-normal text-muted-foreground">
+            ({treinamentos.length} {treinamentos.length === 1 ? "treinamento" : "treinamentos"} ·{" "}
+            <span className="text-[#337246] font-medium">{totais.realizados} realizados</span> ·{" "}
+            <span className="font-medium">{totais.pendente} pendentes</span>)
+          </span>
+        )}
+      </CardHeader>
+      <CardContent>
+        {treinamentos.length === 0 ? (
+          <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
+            Sem treinamentos cadastrados para os colaboradores
+          </div>
+        ) : (
+          <>
+            <div className="relative mb-4 max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Filtrar por treinamento..."
+                value={filtro}
+                onChange={(e) => setFiltro(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            <div className="space-y-3 max-h-[640px] overflow-y-auto pr-1">
+              {lista.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nenhum treinamento encontrado para o filtro.
+                </p>
+              ) : (
+                lista.map((t) => {
+                  const aberto = expandidos.has(t.nome);
+                  const realizados = t.ok + t.aVencer + t.vencido;
+                  return (
+                    <div
+                      key={t.nome}
+                      className="rounded-lg border border-border bg-card/40 overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggle(t.nome)}
+                        className="w-full px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                      >
+                        <div className="flex items-center gap-2">
+                          {aberto ? (
+                            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          )}
+                          <span className="font-semibold text-foreground truncate">{t.nome}</span>
+                          <span className="shrink-0 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                            {t.total} {t.total === 1 ? "colaborador" : "colaboradores"}
+                          </span>
+                          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                            <span className="text-[#337246] font-medium">{realizados}</span> realizados ·{" "}
+                            <span className="font-medium">{t.pendente}</span> pendentes
+                          </span>
+                        </div>
+
+                        {/* Barra empilhada por status */}
+                        <div className="mt-2.5 flex h-2 w-full overflow-hidden rounded-full bg-muted">
+                          {TREINO_STATUS_META.map((m) =>
+                            t[m.key] > 0 && t.total > 0 ? (
+                              <div
+                                key={m.key}
+                                style={{ width: `${(t[m.key] / t.total) * 100}%`, backgroundColor: m.bar }}
+                              />
+                            ) : null,
+                          )}
+                        </div>
+
+                        {/* Contagem por status */}
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                          {TREINO_STATUS_META.map((m) => (
+                            <span key={m.key} className="flex items-center gap-1.5 text-xs">
+                              <span className={cn("h-2 w-2 rounded-full", m.dot)} />
+                              <span className="text-muted-foreground">{m.label}</span>
+                              <span className={cn("font-semibold tabular-nums", m.text)}>{t[m.key]}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </button>
+
+                      {aberto && (
+                        <div className="border-t border-border bg-background/40 p-3 space-y-1">
+                          {t.membros.length === 0 ? (
+                            <p className="py-2 text-center text-xs text-muted-foreground">
+                              Nenhum colaborador vinculado.
+                            </p>
+                          ) : (
+                            t.membros.map((mb, i) => (
+                              <div
+                                key={`${t.nome}-${mb.nome}-${i}`}
+                                className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-card/60 px-3 py-2"
+                              >
+                                <span className="text-sm text-foreground/90 truncate" title={mb.nome}>
+                                  {mb.nome}
+                                </span>
+                                <div className="flex shrink-0 items-center gap-3">
+                                  {mb.data_realizacao && (
+                                    <span className="hidden sm:inline text-xs text-muted-foreground tabular-nums">
+                                      Realizado: {formatarDataTreino(mb.data_realizacao)}
+                                    </span>
+                                  )}
+                                  {mb.data_validade && (
+                                    <span className="hidden sm:inline text-xs text-muted-foreground tabular-nums">
+                                      Validade: {formatarDataTreino(mb.data_validade)}
+                                    </span>
+                                  )}
+                                  <span
+                                    className={cn(
+                                      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                      STATUS_PILL[mb.status] ?? STATUS_PILL["Pendente"],
+                                    )}
+                                  >
+                                    {mb.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 // ============================================================================
@@ -145,9 +383,11 @@ export default function DashboardSegurancaPage() {
 
   const kpis = useMemo(() => {
     if (!data) return null;
-    const concl     = data.distribuicaoTreinamento.find((r) => r.label === "Concluído")?.value ?? 0;
+    const cat       = data.kpiTreinamentoCatalogo;
+    const concl     = cat?.ok ?? 0;
+    const totalCat  = cat?.totalVinculos ?? 0;
     const aprovados = data.distribuicaoStatusPortal.find((r) => r.label === "Aprovado")?.value ?? 0;
-    return { total: data.total, concl, aprovados };
+    return { total: data.total, concl, totalCat, aprovados };
   }, [data]);
 
   // ── Dados do gráfico de rosca — Status Portal ─────────────────────────────
@@ -170,18 +410,6 @@ export default function DashboardSegurancaPage() {
         name:  d.label,
         value: d.value,
         fill:  colorFor(d.label, RPV_COLORS, i),
-      })),
-    [data],
-  );
-
-  // ── Dados do gráfico — Treinamentos ──────────────────────────────────────
-
-  const dadosTrein = useMemo(
-    () =>
-      (data?.distribuicaoTreinamento ?? []).map((d, i) => ({
-        name:  d.label,
-        value: d.value,
-        fill:  colorFor(d.label, TREIN_COLORS, i),
       })),
     [data],
   );
@@ -273,7 +501,7 @@ export default function DashboardSegurancaPage() {
             <Card data-cardtv-id="seguranca-treinamentos-concluidos" className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm 2xl:text-base font-medium text-muted-foreground">
-                  Treinamentos Concluídos
+                  Treinamentos OK
                 </CardTitle>
                 <GraduationCap className="h-4 w-4 text-[#19365b]" />
               </CardHeader>
@@ -282,9 +510,9 @@ export default function DashboardSegurancaPage() {
                   {kpis?.concl ?? "—"}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {kpis && kpis.total > 0
-                    ? `${Math.round((kpis.concl / kpis.total) * 100)}% do total`
-                    : "Sem dados"}
+                  {kpis && kpis.totalCat > 0
+                    ? `${Math.round((kpis.concl / kpis.totalCat) * 100)}% dos vínculos do catálogo`
+                    : "Sem vínculos no catálogo"}
                 </p>
               </CardContent>
             </Card>
@@ -463,72 +691,8 @@ export default function DashboardSegurancaPage() {
             </Card>
           </div>
 
-          {/* Gráfico — Treinamentos */}
-          {dadosTrein.length > 0 && (
-            <Card data-cardtv-id="seguranca-status-treinamento" className="glass-card">
-              <CardHeader className="flex flex-row items-center gap-2 pb-2">
-                <GraduationCap className="h-4 w-4 text-primary" />
-                <CardTitle>Status de Treinamento</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={{
-                    Concluído: { label: "Concluído", color: "#337246" },
-                    "Em Andamento": { label: "Em Andamento", color: "#ff460a" },
-                    Pendente: { label: "Pendente", color: "#E5CF61" },
-                  }}
-                  className="h-[220px] 2xl:h-[280px] w-full"
-                >
-                  <BarChart data={dadosTrein} margin={{ top: 16, right: 40, left: 10, bottom: 10 }}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e2e2e2"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="name"
-                      stroke="#e2e2e2"
-                      tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      stroke="#e2e2e2"
-                      tick={{ fontSize: 10, fontFamily: "IBM Plex Sans", fontWeight: 300, fill: "#737373" }}
-                      tickLine={false}
-                      axisLine={false}
-                      allowDecimals={false}
-                    />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <ChartLegend content={<ChartLegendContent />} />
-                    <Bar dataKey="value" name="Colaboradores" radius={[6, 6, 0, 0]}>
-                      {dadosTrein.map((entry, i) => (
-                        <Cell key={`trein-${i}`} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ChartContainer>
-
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {dadosTrein.map((d) => (
-                    <div
-                      key={d.name}
-                      className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/5 px-3 py-2"
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: d.fill }}
-                      />
-                      <span className="text-sm font-medium">{d.name}</span>
-                      <span className="text-sm font-bold" style={{ color: d.fill }}>
-                        {d.value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Status de Treinamentos — por curso do catálogo */}
+          <TreinamentosStatusCard treinamentos={data.treinamentosPorCurso ?? []} />
 
           </div>
         </div>

@@ -12,6 +12,8 @@ import {
   ShieldAlert,
   Plus,
   X,
+  PenLine,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,14 +63,31 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
   const queryClient = useQueryClient();
   const [editando, setEditando] = useState<Record<string, { data_realizacao?: string; data_validade?: string }>>({});
   const [mostrarIncluir, setMostrarIncluir] = useState(false);
+  const [nomeOutros, setNomeOutros] = useState("");
+  const [mostrarOutros, setMostrarOutros] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  // Treinamentos vinculados ao colaborador
+  const { data: doColaborador, isLoading } = useQuery({
     queryKey: ["treinamentos", colaboradorId],
     queryFn: async () => {
       const response = await treinamentosApi.listarDoColaborador(colaboradorId);
       return response.data.data ?? [];
     },
   });
+
+  // Catálogo completo (para o seletor "Incluir Treinamento")
+  const { data: catalogo } = useQuery({
+    queryKey: ["treinamentos-catalogo"],
+    queryFn: async () => {
+      const response = await treinamentosApi.listarCatalogo();
+      return response.data.data ?? [];
+    },
+  });
+
+  const invalidar = () => {
+    queryClient.invalidateQueries({ queryKey: ["treinamentos", colaboradorId] });
+    queryClient.invalidateQueries({ queryKey: ["treinamentos-catalogo"] });
+  };
 
   const atualizarMutation = useMutation({
     mutationFn: async ({
@@ -90,6 +109,47 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
     },
   });
 
+  // Inclui (vincula) um treinamento do catálogo ao colaborador
+  const incluirMutation = useMutation({
+    mutationFn: async (treinamentoId: string) => {
+      return treinamentosApi.adicionarAoColaborador(colaboradorId, treinamentoId);
+    },
+    onSuccess: () => {
+      toast.success("Treinamento incluído!");
+      invalidar();
+    },
+    onError: () => toast.error("Erro ao incluir treinamento."),
+  });
+
+  // Remove o vínculo do treinamento com o colaborador
+  const removerMutation = useMutation({
+    mutationFn: async (item: ColaboradorTreinamento) => {
+      return treinamentosApi.removerDoColaborador(colaboradorId, item.id!);
+    },
+    onSuccess: () => {
+      toast.success("Treinamento removido do colaborador.");
+      invalidar();
+    },
+    onError: () => toast.error("Erro ao remover treinamento."),
+  });
+
+  // Cria um treinamento personalizado e o inclui no colaborador
+  const outrosMutation = useMutation({
+    mutationFn: async (nome: string) => {
+      const criado = await treinamentosApi.criar(nome);
+      const novo = criado.data.data;
+      await treinamentosApi.adicionarAoColaborador(colaboradorId, novo.id!);
+      return novo;
+    },
+    onSuccess: (novo) => {
+      toast.success(`"${novo.nome}" adicionado ao colaborador.`);
+      invalidar();
+      setNomeOutros("");
+      setMostrarOutros(false);
+    },
+    onError: () => toast.error("Erro ao adicionar treinamento."),
+  });
+
   const handleDataChange = (id: string, field: "data_realizacao" | "data_validade", value: string) => {
     setEditando((prev) => ({
       ...prev,
@@ -107,21 +167,13 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
     if (edicao.data_validade !== undefined) {
       body.data_validade = edicao.data_validade || null;
     }
-    atualizarMutation.mutate({
-      treinamentoId: item.id!,
-      body,
-    });
+    atualizarMutation.mutate({ treinamentoId: item.id!, body });
   };
 
-  const handleAtivar = (item: ColaboradorTreinamento) => {
-    // Ativa um treinamento que estava sem data_validade, definindo como Pendente (data_validade = null mas agora "configurado")
-    // Na prática, basta fazer um update qualquer para marcar que ele foi configurado.
-    // Como não temos campo 'aplicavel', usamos a convenção: se o usuário clicou em "Incluir",
-    // definimos data_validade como null explicitamente (o trigger já fez isso, mas agora o usuário o "ativou")
-    atualizarMutation.mutate({
-      treinamentoId: item.id!,
-      body: { data_validade: null },
-    });
+  const handleAdicionarOutros = () => {
+    const nome = nomeOutros.trim();
+    if (!nome) return;
+    outrosMutation.mutate(nome);
   };
 
   if (isLoading) {
@@ -132,33 +184,42 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
     );
   }
 
-  const todos = data ?? [];
-  const configurados = todos.filter((t) => t.data_validade !== null || t.data_realizacao !== null);
-  const disponiveis = todos.filter((t) => t.data_validade === null && t.data_realizacao === null);
+  const vinculados = doColaborador ?? [];
+
+  // Incluídos = aplicáveis a este colaborador (independe de datas)
+  const incluidos = [...vinculados]
+    .filter((t) => t.aplicavel)
+    .sort((a, b) => (a.treinamento?.nome ?? "").localeCompare(b.treinamento?.nome ?? ""));
+
+  // Disponíveis para incluir = catálogo que ainda não está incluído
+  const idsIncluidos = new Set(incluidos.map((t) => t.treinamento_id));
+  const disponiveis = [...(catalogo ?? [])]
+    .filter((t) => !idsIncluidos.has(t.id!))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
     <div className="space-y-4">
-      {/* Tabela de treinamentos configurados */}
+      {/* Tabela de treinamentos incluídos */}
       <div className="rounded-lg border border-border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead className="w-[40%]">Curso / Treinamento</TableHead>
+              <TableHead className="w-[38%]">Curso / Treinamento</TableHead>
               <TableHead>Realização</TableHead>
               <TableHead>Validade</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[80px]"></TableHead>
+              <TableHead className="w-[90px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {configurados.length === 0 && (
+            {incluidos.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
-                  Nenhum treinamento configurado. Clique em "Incluir Treinamento" para adicionar.
+                  Nenhum treinamento incluído. Clique em &quot;Incluir Treinamento&quot; para adicionar.
                 </TableCell>
               </TableRow>
             )}
-            {configurados.map((item) => {
+            {incluidos.map((item) => {
               const status = item.status ?? "Pendente";
               const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG["Pendente"];
               const isObrigatorio = item.treinamento?.obrigatorio ?? true;
@@ -212,19 +273,32 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleSalvar(item)}
-                      disabled={atualizarMutation.isPending || edicao === undefined}
-                    >
-                      {atualizarMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        title="Salvar datas"
+                        onClick={() => handleSalvar(item)}
+                        disabled={atualizarMutation.isPending || edicao === undefined}
+                      >
+                        {atualizarMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                        title="Remover do colaborador"
+                        onClick={() => removerMutation.mutate(item)}
+                        disabled={removerMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -233,21 +307,34 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
         </Table>
       </div>
 
-      {/* Botão Incluir Treinamento */}
-      {!mostrarIncluir && disponiveis.length > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setMostrarIncluir(true)}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Incluir Treinamento
-        </Button>
-      )}
+      {/* Ações: Incluir Treinamento + Outros */}
+      <div className="flex flex-wrap gap-2">
+        {!mostrarIncluir && disponiveis.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMostrarIncluir(true)}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Incluir Treinamento
+          </Button>
+        )}
+        {!mostrarOutros && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMostrarOutros(true)}
+            className="gap-2"
+          >
+            <PenLine className="h-4 w-4" />
+            Outros treinamentos
+          </Button>
+        )}
+      </div>
 
-      {/* Lista de treinamentos disponíveis para ativar */}
-      {mostrarIncluir && disponiveis.length > 0 && (
+      {/* Lista de treinamentos disponíveis para incluir */}
+      {mostrarIncluir && (
         <div className="rounded-lg border border-border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium">Treinamentos disponíveis</h4>
@@ -260,29 +347,77 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {disponiveis.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
-              >
-                <span className="text-sm">{item.treinamento?.nome}</span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleAtivar(item)}
-                  disabled={atualizarMutation.isPending}
-                  className="h-7 text-xs"
+          {disponiveis.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Todos os treinamentos do catálogo já foram incluídos.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {disponiveis.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex items-center justify-between rounded-md border border-border px-3 py-2"
                 >
-                  {atualizarMutation.isPending ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Plus className="h-3 w-3 mr-1" />
-                  )}
-                  Ativar
-                </Button>
-              </div>
-            ))}
+                  <span className="text-sm">{t.nome}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => incluirMutation.mutate(t.id!)}
+                    disabled={incluirMutation.isPending}
+                    className="h-7 text-xs"
+                  >
+                    {incluirMutation.isPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Plus className="h-3 w-3 mr-1" />
+                    )}
+                    Incluir
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Outros — adicionar treinamento personalizado */}
+      {mostrarOutros && (
+        <div className="rounded-lg border border-dashed border-border p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Outros treinamentos</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setMostrarOutros(false); setNomeOutros(""); }}
+              className="h-7 w-7 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Digite o nome do treinamento. Ele será criado no catálogo e incluído neste colaborador. Depois informe as datas na tabela acima.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Nome do treinamento..."
+              value={nomeOutros}
+              onChange={(e) => setNomeOutros(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAdicionarOutros()}
+              className="h-9 text-sm"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleAdicionarOutros}
+              disabled={!nomeOutros.trim() || outrosMutation.isPending}
+              className="shrink-0 gap-1"
+            >
+              {outrosMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Adicionar
+            </Button>
           </div>
         </div>
       )}

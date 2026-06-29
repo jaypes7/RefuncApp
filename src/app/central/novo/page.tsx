@@ -281,7 +281,8 @@ export default function OnboardingPage() {
     },
   });
 
-  // Mutação para atualizar treinamentos após criação
+  // Mutação para incluir os treinamentos selecionados após criação.
+  // Apenas os selecionados são marcados como aplicáveis ao colaborador (com upsert).
   const atualizarTreinamentosMutation = useMutation({
     mutationFn: async ({
       colaboradorId,
@@ -290,15 +291,15 @@ export default function OnboardingPage() {
       colaboradorId: string;
       selecionados: TreinamentoSelecionado[];
     }) => {
-      const results = await Promise.all(
+      if (selecionados.length === 0) return;
+      await Promise.all(
         selecionados.map((t) =>
-          treinamentosApi.atualizar(colaboradorId, t.treinamento_id, {
+          treinamentosApi.adicionarAoColaborador(colaboradorId, t.treinamento_id, {
             data_realizacao: t.data_realizacao || null,
             data_validade: t.data_validade || null,
           })
         )
       );
-      return results;
     },
     onError: () => {
       toast.error("Erro ao salvar treinamentos. Edite o colaborador para configurar.");

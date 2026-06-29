@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Loader2, GraduationCap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Loader2, GraduationCap, Plus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { treinamentosApi, type Treinamento } from "@/lib/axios";
 
 export interface TreinamentoSelecionado {
@@ -18,7 +20,9 @@ interface TreinamentosSelecaoProps {
 }
 
 export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
+  const queryClient = useQueryClient();
   const [selecionados, setSelecionados] = useState<Record<string, TreinamentoSelecionado>>({});
+  const [nomeOutros, setNomeOutros] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["treinamentos-catalogo"],
@@ -30,6 +34,13 @@ export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
 
   const catalogo = data ?? [];
 
+  // Propaga as seleções para o pai sempre que mudarem (evita setState do pai
+  // durante o render de outro componente — anti-padrão do React).
+  useEffect(() => {
+    onChange(Object.values(selecionados));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selecionados]);
+
   const toggleTreinamento = (treinamento: Treinamento, checked: boolean) => {
     setSelecionados((prev) => {
       const next = { ...prev };
@@ -40,21 +51,41 @@ export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
       } else {
         delete next[treinamento.id!];
       }
-      onChange(Object.values(next));
       return next;
     });
+  };
+
+  const criarMutation = useMutation({
+    mutationFn: async (nome: string) => {
+      const res = await treinamentosApi.criar(nome);
+      return res.data.data;
+    },
+    onSuccess: (novoTreinamento) => {
+      queryClient.invalidateQueries({ queryKey: ["treinamentos-catalogo"] });
+      setSelecionados((prev) => ({
+        ...prev,
+        [novoTreinamento.id!]: { treinamento_id: novoTreinamento.id! },
+      }));
+      setNomeOutros("");
+      toast.success(`"${novoTreinamento.nome}" adicionado à lista.`);
+    },
+    onError: () => toast.error("Erro ao criar treinamento."),
+  });
+
+  const handleAdicionarOutros = () => {
+    const nome = nomeOutros.trim();
+    if (!nome) return;
+    criarMutation.mutate(nome);
   };
 
   const updateData = (treinamentoId: string, field: "data_realizacao" | "data_validade", value: string) => {
     setSelecionados((prev) => {
       const item = prev[treinamentoId];
       if (!item) return prev;
-      const next = {
+      return {
         ...prev,
         [treinamentoId]: { ...item, [field]: value || undefined },
       };
-      onChange(Object.values(next));
-      return next;
     });
   };
 
@@ -132,6 +163,38 @@ export function TreinamentosSelecao({ onChange }: TreinamentosSelecaoProps) {
             </div>
           );
         })}
+      </div>
+
+      {/* Seção Outros */}
+      <div className="rounded-lg border border-dashed border-border p-4 space-y-3">
+        <p className="text-sm font-medium">Outros treinamentos</p>
+        <p className="text-xs text-muted-foreground">
+          Adicione um treinamento que não consta na lista acima. Ele será salvo no catálogo e vinculado a este colaborador.
+        </p>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Nome do treinamento..."
+            value={nomeOutros}
+            onChange={(e) => setNomeOutros(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdicionarOutros()}
+            className="h-9 text-sm"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleAdicionarOutros}
+            disabled={!nomeOutros.trim() || criarMutation.isPending}
+            className="shrink-0 gap-1"
+          >
+            {criarMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            Adicionar
+          </Button>
+        </div>
       </div>
     </div>
   );
