@@ -21,7 +21,7 @@
  *   quando o campo está vazio, sem precisar de um item vazio na lista.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -63,7 +63,7 @@ import { CargoCombobox } from "@/components/CargoCombobox";
 import { PassagemForm } from "@/components/PassagemForm";
 import { HospedagemForm } from "@/components/HospedagemForm";
 import { AlimentacaoForm } from "@/components/AlimentacaoForm";
-import { TreinamentosTable } from "@/components/TreinamentosTable";
+import { TreinamentosTable, type TreinamentosTableHandle } from "@/components/TreinamentosTable";
 import { ESCOLARIDADE_OPTIONS, EXPERIENCIA_FUNCAO_OPTIONS } from "@/constants/rh-profile";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -330,6 +330,8 @@ export default function EditarColaboradorPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Permite que "Salvar alterações" também persista as datas digitadas na tabela de treinamentos.
+  const treinamentosRef = useRef<TreinamentosTableHandle>(null);
 
   const { data: clinicas = [], isLoading: isLoadingClinicas } = useQuery({
     queryKey: ["clinicas"],
@@ -402,7 +404,10 @@ export default function EditarColaboradorPage() {
     }
     setSaving(true);
     try {
-      await colaboradoresApi.atualizar(id, form);
+      await Promise.all([
+        colaboradoresApi.atualizar(id, form),
+        treinamentosRef.current?.flushPendingDates() ?? Promise.resolve(),
+      ]);
       toast.success("Dados salvos com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["colaboradores"], type: "all" });
       queryClient.invalidateQueries({ queryKey: ["dashboard-principal"], type: "all" });
@@ -838,7 +843,7 @@ export default function EditarColaboradorPage() {
                 title="Treinamentos Normativos"
                 description="Controle dos treinamentos obrigatórios com datas de realização e validade"
               />
-              <TreinamentosTable colaboradorId={id} />
+              <TreinamentosTable ref={treinamentosRef} colaboradorId={id} />
             </TabsContent>
 
             {/* ════════════════════════════════════════════════════════════

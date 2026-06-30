@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
-  Save,
   ShieldAlert,
   Plus,
   X,
@@ -30,6 +29,11 @@ import { cn } from "@/lib/utils";
 
 interface TreinamentosTableProps {
   colaboradorId: string;
+}
+
+export interface TreinamentosTableHandle {
+  /** Persiste no banco todas as datas editadas inline ainda não salvas. */
+  flushPendingDates: () => Promise<void>;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
@@ -59,7 +63,8 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; colo
   },
 };
 
-export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
+export const TreinamentosTable = forwardRef<TreinamentosTableHandle, TreinamentosTableProps>(
+  function TreinamentosTable({ colaboradorId }, ref) {
   const queryClient = useQueryClient();
   const [editando, setEditando] = useState<Record<string, { data_realizacao?: string; data_validade?: string }>>({});
   const [mostrarIncluir, setMostrarIncluir] = useState(false);
@@ -89,25 +94,24 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
     queryClient.invalidateQueries({ queryKey: ["treinamentos-catalogo"] });
   };
 
-  const atualizarMutation = useMutation({
-    mutationFn: async ({
-      treinamentoId,
-      body,
-    }: {
-      treinamentoId: string;
-      body: { data_realizacao?: string | null; data_validade?: string | null };
-    }) => {
-      return treinamentosApi.atualizar(colaboradorId, treinamentoId, body);
-    },
-    onSuccess: () => {
-      toast.success("Treinamento atualizado!");
-      queryClient.invalidateQueries({ queryKey: ["treinamentos", colaboradorId] });
-      setEditando({});
-    },
-    onError: () => {
-      toast.error("Erro ao atualizar treinamento");
-    },
-  });
+  // Persiste todas as datas editadas inline. Não há botão de salvar próprio:
+  // é chamado pelo "Salvar alterações" da página de edição (via ref).
+  const flushPendingDates = useCallback(async () => {
+    const entries = Object.entries(editando);
+    if (entries.length === 0) return;
+    await Promise.all(
+      entries.map(([itemId, edicao]) => {
+        const body: { data_realizacao?: string | null; data_validade?: string | null } = {};
+        if (edicao.data_realizacao !== undefined) body.data_realizacao = edicao.data_realizacao || null;
+        if (edicao.data_validade !== undefined) body.data_validade = edicao.data_validade || null;
+        return treinamentosApi.atualizar(colaboradorId, itemId, body);
+      }),
+    );
+    await queryClient.invalidateQueries({ queryKey: ["treinamentos", colaboradorId] });
+    setEditando({});
+  }, [editando, colaboradorId, queryClient]);
+
+  useImperativeHandle(ref, () => ({ flushPendingDates }), [flushPendingDates]);
 
   // Inclui (vincula) um treinamento do catálogo ao colaborador
   const incluirMutation = useMutation({
@@ -155,19 +159,6 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
       ...prev,
       [id]: { ...prev[id], [field]: value },
     }));
-  };
-
-  const handleSalvar = (item: ColaboradorTreinamento) => {
-    const edicao = editando[item.id!];
-    if (!edicao) return;
-    const body: { data_realizacao?: string | null; data_validade?: string | null } = {};
-    if (edicao.data_realizacao !== undefined) {
-      body.data_realizacao = edicao.data_realizacao || null;
-    }
-    if (edicao.data_validade !== undefined) {
-      body.data_validade = edicao.data_validade || null;
-    }
-    atualizarMutation.mutate({ treinamentoId: item.id!, body });
   };
 
   const handleAdicionarOutros = () => {
@@ -223,7 +214,6 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
               const status = item.status ?? "Pendente";
               const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG["Pendente"];
               const isObrigatorio = item.treinamento?.obrigatorio ?? true;
-              const edicao = editando[item.id!];
 
               return (
                 <TableRow
@@ -274,20 +264,6 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 w-8 p-0"
-                        title="Salvar datas"
-                        onClick={() => handleSalvar(item)}
-                        disabled={atualizarMutation.isPending || edicao === undefined}
-                      >
-                        {atualizarMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4" />
-                        )}
-                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -423,4 +399,4 @@ export function TreinamentosTable({ colaboradorId }: TreinamentosTableProps) {
       )}
     </div>
   );
-}
+});
