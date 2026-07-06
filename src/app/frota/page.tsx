@@ -66,7 +66,9 @@ export default function FrotaPage() {
 
           {/* ── Tabs ── */}
           <Card className="glass-card">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            {/* flex-col explícito: o variant data-horizontal do tabs.tsx não casa com o
+                data-orientation do Radix, então a direção padrão do root seria linha */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col">
               <CardHeader className="pb-0">
                 <TabsList className="w-full flex flex-wrap justify-start gap-2 bg-transparent border-b border-border/50 pb-2 rounded-none h-auto">
                   <TabsTrigger value="visao-geral" className={TAB_TRIGGER_CLASS}>
