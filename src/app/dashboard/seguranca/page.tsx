@@ -89,9 +89,9 @@ const RPV_COLORS: Record<string, string> = {
 };
 
 const PORTAL_COLORS: Record<string, string> = {
-  "Aprovado":           "#337246",
-  "Pendente":           "#E5CF61",
-  "Aprovado - DEMITIDO":"#e2e2e2",
+  "Liberado":  "#337246",
+  "Pendente":  "#E5CF61",
+  "Bloqueado": "#e2e2e2",
 };
 
 const FALLBACK_COLORS = ["#ff460a", "#19365b", "#416e7d", "#9c3022", "#ffa78b", "#9e708b"];
@@ -389,7 +389,7 @@ export default function DashboardSegurancaPage() {
     const cat       = data.kpiTreinamentoCatalogo;
     const concl     = cat?.ok ?? 0;
     const totalCat  = cat?.totalVinculos ?? 0;
-    const aprovados = data.distribuicaoStatusPortal.find((r) => r.label === "Aprovado")?.value ?? 0;
+    const aprovados = data.distribuicaoStatusPortal.find((r) => r.label === "Liberado")?.value ?? 0;
     return { total: data.total, concl, totalCat, aprovados };
   }, [data]);
 
@@ -558,9 +558,9 @@ export default function DashboardSegurancaPage() {
                   <>
                     <ChartContainer
                       config={{
-                        Aprovado: { label: "Aprovado", color: "#337246" },
+                        Liberado: { label: "Liberado", color: "#337246" },
                         Pendente: { label: "Pendente", color: "#E5CF61" },
-                        "Aprovado - DEMITIDO": { label: "Aprovado - DEMITIDO", color: "#e2e2e2" },
+                        Bloqueado: { label: "Bloqueado", color: "#e2e2e2" },
                       }}
                       className="h-[300px] 2xl:h-[360px] w-full"
                     >
