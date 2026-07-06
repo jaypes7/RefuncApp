@@ -382,7 +382,7 @@ export function CartoesTagsTab() {
       {/* ── Cartões ── */}
       <div className="flex flex-col gap-3">
         <div className="glass-card rounded-md px-4 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
             <h3 className="text-sm font-semibold">Cartões combustível (Alelo)</h3>
             {pagCartoes && (
@@ -407,6 +407,7 @@ export function CartoesTagsTab() {
         </div>
 
         <div className="glass-card w-full overflow-hidden rounded-md">
+          <div className="overflow-x-auto">
           <Table className="w-full">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-transparent">
@@ -484,6 +485,7 @@ export function CartoesTagsTab() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
 
         {pagCartoes && pagCartoes.totalPages > 1 && (
@@ -500,7 +502,7 @@ export function CartoesTagsTab() {
       {/* ── Tags ── */}
       <div className="flex flex-col gap-3">
         <div className="glass-card rounded-md px-4 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <TagIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
             <h3 className="text-sm font-semibold">Tags de pedágio (Veloe)</h3>
             {pagTags && (
@@ -525,6 +527,7 @@ export function CartoesTagsTab() {
         </div>
 
         <div className="glass-card w-full overflow-hidden rounded-md">
+          <div className="overflow-x-auto">
           <Table className="w-full">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-transparent">
@@ -594,6 +597,7 @@ export function CartoesTagsTab() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
 
         {pagTags && pagTags.totalPages > 1 && (

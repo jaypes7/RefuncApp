@@ -68,7 +68,7 @@ export default function FrotaPage() {
           <Card className="glass-card">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <CardHeader className="pb-0">
-                <TabsList className="w-full flex justify-start gap-2 bg-transparent border-b border-border/50 pb-2 rounded-none h-auto">
+                <TabsList className="w-full flex flex-wrap justify-start gap-2 bg-transparent border-b border-border/50 pb-2 rounded-none h-auto">
                   <TabsTrigger value="visao-geral" className={TAB_TRIGGER_CLASS}>
                     <LayoutDashboard className="w-4 h-4 mr-2" />
                     Visão Geral
@@ -97,22 +97,22 @@ export default function FrotaPage() {
               </CardHeader>
 
               <CardContent className="p-6">
-                <TabsContent value="visao-geral" className="w-full">
+                <TabsContent value="visao-geral" className="w-full mt-6">
                   <FrotaDashboardTab />
                 </TabsContent>
-                <TabsContent value="veiculos" className="w-full">
+                <TabsContent value="veiculos" className="w-full mt-6">
                   <VeiculosTab />
                 </TabsContent>
-                <TabsContent value="manutencoes" className="w-full">
+                <TabsContent value="manutencoes" className="w-full mt-6">
                   <ManutencoesTab />
                 </TabsContent>
-                <TabsContent value="prestadores" className="w-full">
+                <TabsContent value="prestadores" className="w-full mt-6">
                   <PrestadoresTab />
                 </TabsContent>
-                <TabsContent value="fornecedores" className="w-full">
+                <TabsContent value="fornecedores" className="w-full mt-6">
                   <FornecedoresTab />
                 </TabsContent>
-                <TabsContent value="cartoes-tags" className="w-full">
+                <TabsContent value="cartoes-tags" className="w-full mt-6">
                   <CartoesTagsTab />
                 </TabsContent>
               </CardContent>

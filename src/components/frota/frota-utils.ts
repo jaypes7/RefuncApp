@@ -18,7 +18,7 @@ export const COMBUSTIVEIS = ["GASOLINA/ETANOL", "ETANOL", "DIESEL"];
 export const MODALIDADES = ["ALUGADO", "PRÓPRIO"];
 export const TIPOS_CONTRATO = ["FLEET", "RAC"];
 export const MANUTENCAO_TIPOS = ["PREVENTIVA", "CORRETIVA", "SINISTRO"] as const;
-export const CLASSIFICACOES = ["EXCELENTE", "BOM", "REGULAR", "RUIM"];
+export const CLASSIFICACOES = ["EXCELENTE", "BOM", "REGULAR", "RUIM", "PÉSSIMO"];
 
 /** "YYYY-MM-DD" → "DD/MM/YYYY" (sem criar Date, evitando problemas de fuso) */
 export function formatDate(value?: string | null): string {
@@ -55,6 +55,7 @@ export function classificacaoBadgeClass(classificacao?: string | null): string {
     case "REGULAR":
       return "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400";
     case "RUIM":
+    case "PÉSSIMO":
       return "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400";
     default:
       return "bg-muted text-muted-foreground";
