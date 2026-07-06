@@ -22,6 +22,7 @@ import {
   Building2,
   Database,
   Camera,
+  Car,
   ShieldAlert,
   ListChecks,
   FileText,
@@ -341,6 +342,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               >
                 <Users className="h-4 w-4 shrink-0" />
                 {!collapsed && <span>Central de colaboradores</span>}
+              </span>
+            </Link>
+          </CanAccess>
+
+          {/* Controle de Frota — visível apenas para admins */}
+          <CanAccess role="admin">
+            <Link href="/frota">
+              <span
+                className={navItem(pathname === "/frota")}
+                title={collapsed ? "Controle de Frota" : undefined}
+              >
+                <Car className="h-4 w-4 shrink-0" />
+                {!collapsed && <span>Controle de Frota</span>}
               </span>
             </Link>
           </CanAccess>
