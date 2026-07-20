@@ -11,36 +11,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { KpiCard } from "@/components/ui/kpi-card";
+import { ContextLine } from "@/components/ui/updated-at";
 import { cn } from "@/lib/utils";
 import { frotaApi } from "@/lib/axios";
 import { formatDate } from "@/components/frota/frota-utils";
-
-function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  accent,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: number | string;
-  hint?: string;
-  accent?: string;
-}) {
-  return (
-    <div className="glass-card flex items-start gap-3 rounded-md px-4 py-3.5">
-      <div className={cn("mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", accent ?? "bg-primary/10 text-primary")}>
-        <Icon className="h-4.5 w-4.5" />
-      </div>
-      <div>
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <p className="text-2xl font-bold leading-tight text-foreground">{value}</p>
-        {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
-      </div>
-    </div>
-  );
-}
 
 function DistribuicaoCard({ title, items }: { title: string; items: Array<{ nome: string; total: number }> }) {
   const max = Math.max(1, ...items.map((i) => i.total));
@@ -57,7 +32,7 @@ function DistribuicaoCard({ title, items }: { title: string; items: Array<{ nome
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <div className="h-full rounded-full bg-primary" style={{ width: `${(item.total / max) * 100}%` }} />
               </div>
-              <span className="w-8 shrink-0 text-right text-xs font-semibold">{item.total}</span>
+              <span className="w-8 shrink-0 text-right font-mono text-xs font-semibold tabular-nums">{item.total}</span>
             </div>
           ))}
         </div>
@@ -67,7 +42,7 @@ function DistribuicaoCard({ title, items }: { title: string; items: Array<{ nome
 }
 
 export function FrotaDashboardTab() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, dataUpdatedAt } = useQuery({
     queryKey: ["frota-dashboard"],
     queryFn: async () => {
       const res = await frotaApi.dashboard();
@@ -86,40 +61,68 @@ export function FrotaDashboardTab() {
   }
 
   const status = Object.fromEntries(data.veiculos.porStatus.map((s) => [s.nome, s.total]));
+  const total = data.veiculos.total;
+  const vencidas = data.revisoesProximas.filter((r) => r.vencida).length;
 
   return (
     <div className="flex flex-col gap-4">
+      <ContextLine
+        items={[
+          { label: "Frota total", value: total },
+          { label: "Em manutenção", value: status["MANUTENÇÃO"] ?? 0 },
+          { label: "Revisões vencidas", value: vencidas, alert: vencidas > 0 },
+        ]}
+        updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt) : null}
+        source="consulta ao banco"
+      />
+
       {/* KPIs */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard icon={Car} label="Total de veículos" value={data.veiculos.total} />
+        <KpiCard icon={Car} label="Total de veículos" value={total} tone="neutral" />
         <KpiCard
           icon={CircleCheck}
           label="Ativos"
           value={status["ATIVO"] ?? 0}
-          accent="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+          total={total}
+          tone="success"
         />
         <KpiCard
           icon={Wrench}
           label="Em manutenção"
           value={status["MANUTENÇÃO"] ?? 0}
-          accent="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+          total={total}
+          tone="warning"
+          emphasis={(status["MANUTENÇÃO"] ?? 0) > 0}
         />
         <KpiCard
           icon={CircleOff}
           label="Inativos"
           value={status["INATIVO"] ?? 0}
-          accent="bg-muted text-muted-foreground"
+          total={total}
+          tone="neutral"
         />
-        <KpiCard icon={CreditCard} label="Cartões combustível" value={data.cartoes.total} hint={`${data.cartoes.estoque} em estoque • ${data.cartoes.ativos} ativos`} />
-        <KpiCard icon={TagIcon} label="Tags de pedágio" value={data.tags.total} hint={`${data.tags.vinculadas} vinculadas a veículos`} />
+        <KpiCard
+          icon={CreditCard}
+          label="Cartões combustível"
+          value={data.cartoes.total}
+          tone="neutral"
+          hint={`${data.cartoes.estoque} em estoque • ${data.cartoes.ativos} ativos`}
+        />
+        <KpiCard
+          icon={TagIcon}
+          label="Tags de pedágio"
+          value={data.tags.total}
+          tone="neutral"
+          hint={`${data.tags.vinculadas} vinculadas a veículos`}
+        />
         <KpiCard
           icon={CalendarClock}
           label="Revisões em 30 dias"
           value={data.revisoesProximas.length}
-          hint={`${data.revisoesProximas.filter((r) => r.vencida).length} vencidas`}
-          accent={data.revisoesProximas.some((r) => r.vencida)
-            ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400"
-            : undefined}
+          total={total}
+          tone={vencidas > 0 ? "danger" : "info"}
+          emphasis={vencidas > 0}
+          hint={`${vencidas} vencidas`}
         />
       </div>
 
@@ -136,9 +139,9 @@ export function FrotaDashboardTab() {
             Revisões previstas (veículos ativos, próximos 30 dias)
           </p>
         </div>
-        <Table className="w-full">
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-transparent">
+        <Table className="w-full" containerClassName="max-h-[24rem] overflow-y-auto">
+          <TableHeader sticky>
+            <TableRow className="hover:bg-transparent">
               <TableHead className="pl-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Placa</TableHead>
               <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Previsão</TableHead>
               <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">KM previsto</TableHead>
@@ -163,7 +166,7 @@ export function FrotaDashboardTab() {
                     <span className="text-sm">{formatDate(r.previsao)}</span>
                   </TableCell>
                   <TableCell className="py-2.5">
-                    <span className="text-sm text-muted-foreground">
+                    <span className="font-mono text-sm tabular-nums text-muted-foreground">
                       {r.km_proxima_revisao != null ? `${r.km_proxima_revisao.toLocaleString("pt-BR")} km` : "—"}
                     </span>
                   </TableCell>

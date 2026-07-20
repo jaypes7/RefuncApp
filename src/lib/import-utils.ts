@@ -123,13 +123,13 @@ export const SCHEMA_TO_API: Record<string, string | null> = {
   ponto_batida: "PONTO",
   cracha: "CRACHA",
   enviado_rh: "ENVIADO_RH",
-  
+
   // 👇 AS COLUNAS NOVAS AGORA TÊM DESTINO (Não são mais null) 👇
   hotel: "hotel",
   checkin_data: "check_in",
   check_in: "check_in",
   data_viagem: "data_viagem",
-  
+
   quarto: null,
   tipo_apto: null,
   turno_semana: null,
@@ -395,37 +395,37 @@ export function buildHeaderMap(headers: string[]): Map<string, string> {
 
 export function rowToColaborador(row: RawRow, headerMap: Map<string, string>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-  
+
   for (const [rawHeader, schemaId] of headerMap.entries()) {
     const rawValue = row[rawHeader];
     const apiKey = SCHEMA_TO_API[schemaId];
-    
+
     if (!apiKey) continue;
 
     if (schemaId === "cpf") {
       const cpf = sanitizeCPF(rawValue);
       if (cpf) result[apiKey] = cpf;
-      
+
     // 👇 ADICIONADO: check_in e data_viagem agora são formatados como Data (YYYY-MM-DD)
     } else if (["dt_nasc", "data_exame", "data_admissao", "checkin_data", "check_in", "data_viagem", "data_desligamento", "termino", "prorrogacao"].includes(schemaId)) {
       result[apiKey] = sanitizeDate(rawValue);
-      
+
     } else if (schemaId === "idade") {
       const n = Number(rawValue);
       if (!isNaN(n) && n >= 16 && n <= 99) result[apiKey] = Math.round(n);
-      
+
     // 👇 ADICIONADO: hotel agora é tratado como texto e convertido para maiúsculo
     } else if (["nome", "funcao", "hotel"].includes(schemaId)) {
       result[apiKey] = sanitizeText(rawValue, { upper: true });
 
     } else if (schemaId === "c_custo") {
       result[apiKey] = sanitizeText(rawValue, { upper: false });
-      
+
     } else {
       result[apiKey] = mapStrictEnums(schemaId, sanitizeText(rawValue));
     }
   }
-  
+
   return result;
 }
 

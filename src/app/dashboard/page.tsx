@@ -53,7 +53,7 @@ import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 import { ExportPdfButton } from "@/components/export-pdf-button";
 import { GanttCronograma } from "@/components/gantt-cronograma";
-import { MANSERV_CHART, MANSERV_STATUS, CHART_GRID_COLOR, CHART_AXIS_TICK } from "@/lib/chart-colors";
+import { MANSERV_CHART, MANSERV_STATUS, CHART_SERIES, CHART_THEME, CHART_GRID_DASH, CHART_AXIS_TICK_THEMED } from "@/lib/chart-colors";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -86,11 +86,11 @@ const chartConfigStatus = {
 const chartConfigCurvaS = {
   previsto: {
     label: "Planejado",
-    color: MANSERV_CHART.gray,
+    color: CHART_SERIES.planejado,
   },
   realizado: {
     label: "Realizado",
-    color: MANSERV_STATUS.danger,
+    color: CHART_SERIES.realizado,
   },
 };
 
@@ -206,27 +206,96 @@ const TONE_TEXT: Record<StatTone, string> = {
   muted: "text-muted-foreground",
 };
 
+// Cores de fundo/borda "tonais" para o card inteiro — segue o padrão PGV §3.2:
+// o card exige ação quando há danger/warn na categoria, e sinaliza pintando o
+// fundo em vez de só a barra. Escala de atenção em duas camadas.
+const TONE_SURFACE: Record<StatTone, string> = {
+  ok: "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-500/5",
+  warn: "border-amber-200 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5",
+  danger: "border-rose-200 bg-rose-50/60 dark:border-rose-500/20 dark:bg-rose-500/5",
+  info: "border-sky-200 bg-sky-50/60 dark:border-sky-500/20 dark:bg-sky-500/5",
+  muted: "border-border bg-card",
+};
+
+// Cor de barra hex por tom (dark-mode compatível via opacity Tailwind não cobre,
+// então fixamos hex — barras são elementos gráficos, não texto).
+const TONE_BAR: Record<StatTone, string> = {
+  ok: "#337246",
+  warn: "#f59e0b",
+  danger: "#ef4444",
+  info: "#3b82f6",
+  muted: "#e2e2e2",
+};
+
+/**
+ * Card de categoria de status — estilo PGV (§3.2 e §4.1).
+ *
+ * Anatomia:
+ *   [eyebrow: nome da categoria]
+ *   [número grande do "concluído principal"] [/ %]
+ *   [barra de proporção segmentada mostrando OK/Warn/Danger]
+ *   [linha compacta: · Apto 37 · Inapto 0 · Pendente 182]
+ *
+ * O card ganha fundo tonal quando há danger > 0 (rosa) ou warn > 0 (âmbar).
+ * Só fica branco quando tudo está OK.
+ */
 function StatCategory({
   label,
   items,
+  total,
 }: {
   label: string;
   items: Array<{ label: string; value: number; tone: StatTone }>;
+  /** Base para o percentual. Se ausente, soma os itens. */
+  total?: number;
 }) {
+  const soma = total ?? items.reduce((acc, it) => acc + it.value, 0);
+  const primary = items.find((it) => it.tone === "ok") ?? items[0];
+  const pct = soma > 0 ? Math.round((primary.value / soma) * 100) : 0;
+
+  // Surface: rosa se tem danger > 0, âmbar se tem warn > 0, verde-claro se
+  // 100% ok. Segue a "escala de atenção em duas camadas" do PGV.
+  const hasDanger = items.some((it) => it.tone === "danger" && it.value > 0);
+  const hasWarn = items.some((it) => it.tone === "warn" && it.value > 0);
+  const surfaceTone: StatTone = hasDanger ? "danger" : hasWarn ? "warn" : "ok";
+
   return (
-    <div className="rounded-md border border-border/60 bg-background/40 p-3">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2.5">
+    <div className={cn("rounded-md border p-3 flex flex-col gap-2", TONE_SURFACE[surfaceTone])}>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
         {label}
       </p>
-      <div className="space-y-2">
+
+      <p className="flex items-baseline gap-1.5">
+        <span className={cn("font-mono text-2xl font-bold leading-none tabular-nums", TONE_TEXT[primary.tone])}>
+          {primary.value.toLocaleString("pt-BR")}
+        </span>
+        <span className="font-mono text-[11px] font-semibold text-muted-foreground tabular-nums">
+          / {pct}%
+        </span>
+      </p>
+
+      {/* Barra de proporção segmentada — PGV §4.2, mais legível que gráfico. */}
+      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        {items.map((it) =>
+          it.value > 0 && soma > 0 ? (
+            <div
+              key={it.label}
+              style={{ width: `${(it.value / soma) * 100}%`, backgroundColor: TONE_BAR[it.tone] }}
+              title={`${it.label}: ${it.value}`}
+            />
+          ) : null,
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
         {items.map((it) => (
-          <div key={it.label} className="flex items-center gap-2">
-            <span className={cn("h-2 w-2 rounded-full shrink-0", TONE_DOT[it.tone])} />
-            <span className="text-sm text-foreground/80 truncate">{it.label}</span>
-            <span className={cn("ml-auto text-sm font-semibold tabular-nums", TONE_TEXT[it.tone])}>
+          <span key={it.label} className="inline-flex items-center gap-1 text-[11px]">
+            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", TONE_DOT[it.tone])} />
+            <span className="text-muted-foreground">{it.label}</span>
+            <span className={cn("font-mono font-semibold tabular-nums", TONE_TEXT[it.tone])}>
               {it.value}
             </span>
-          </div>
+          </span>
         ))}
       </div>
     </div>
@@ -1295,43 +1364,46 @@ export default function DashboardPage() {
                         </div>
                       ) : (
                         <ChartContainer config={chartConfigCurvaS} className="h-[350px] 2xl:h-[480px] w-full">
+                          {/* Estilo Curva S adotado do PGV — ver ANALISE_PGV.md §8.
+                              Ambas séries sólidas com gradient da própria cor; grid
+                              pontilhado fino; ticks mono; tooltip colorido por série. */}
                           <AreaChart
                             data={chartDisplayData}
                             margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
                           >
                             <defs>
                               <linearGradient
-                                id="gradientAdmitidos"
+                                id="gradientPlanejado"
                                 x1="0" y1="0" x2="0" y2="1"
                               >
-                                <stop offset="5%" stopColor="#DA291B" stopOpacity={0.35} />
-                                <stop offset="95%" stopColor="#DA291B" stopOpacity={0} />
+                                <stop offset="0%" stopColor={CHART_SERIES.planejado} stopOpacity={0.35} />
+                                <stop offset="100%" stopColor={CHART_SERIES.planejado} stopOpacity={0} />
                               </linearGradient>
                               <linearGradient
-                                id="gradientMeta"
+                                id="gradientRealizado"
                                 x1="0" y1="0" x2="0" y2="1"
                               >
-                                <stop offset="5%" stopColor="#e2e2e2" stopOpacity={0.12} />
-                                <stop offset="95%" stopColor="#e2e2e2" stopOpacity={0} />
+                                <stop offset="0%" stopColor={CHART_SERIES.realizado} stopOpacity={0.35} />
+                                <stop offset="100%" stopColor={CHART_SERIES.realizado} stopOpacity={0} />
                               </linearGradient>
                             </defs>
 
                             <CartesianGrid
-                              strokeDasharray="3 3"
-                              stroke={CHART_GRID_COLOR}
+                              strokeDasharray={CHART_GRID_DASH}
+                              stroke={CHART_THEME.grid}
                               vertical={false}
                             />
 
                             <XAxis
                               dataKey="mes"
-                              tick={CHART_AXIS_TICK}
+                              tick={CHART_AXIS_TICK_THEMED}
                               tickLine={false}
                               axisLine={false}
                               ticks={xAxisTicks}
                               interval={0}
                             />
                             <YAxis
-                              tick={CHART_AXIS_TICK}
+                              tick={CHART_AXIS_TICK_THEMED}
                               tickLine={false}
                               axisLine={false}
                               domain={[0, 100]}
@@ -1341,11 +1413,12 @@ export default function DashboardPage() {
                                 angle: -90,
                                 position: "insideLeft",
                                 offset: 10,
-                                style: { fill: CHART_AXIS_TICK.fill, fontSize: CHART_AXIS_TICK.fontSize },
+                                style: { fill: CHART_THEME.axis, fontSize: 11, fontFamily: "var(--font-mono, monospace)" },
                               }}
                             />
 
                             <ChartTooltip
+                              cursor={{ stroke: CHART_THEME.axis, strokeWidth: 1, strokeDasharray: "3 3" }}
                               content={({ active, payload, label }) => {
                                 if (!active || !payload || !payload.length) return null;
                                 const p = payload[0].payload as {
@@ -1353,17 +1426,20 @@ export default function DashboardPage() {
                                   realizado?: number;
                                 };
                                 return (
-                                  <div className="rounded-lg border bg-background p-2 shadow-sm">
-                                    <p className="text-xs text-muted-foreground">{label}</p>
-                                    <p className="text-xs">
-                                      Planejado:{" "}
-                                      <span className="font-semibold">
+                                  <div
+                                    className="rounded-md border bg-card p-2.5 shadow-sm"
+                                    style={{ borderColor: CHART_THEME.border }}
+                                  >
+                                    <p className="mb-1 font-mono text-xs font-semibold text-foreground">{label}</p>
+                                    <p className="font-mono text-xs" style={{ color: CHART_SERIES.planejado }}>
+                                      Planejado :{" "}
+                                      <span className="font-semibold tabular-nums">
                                         {p.previsto?.toFixed(1) ?? 0}%
                                       </span>
                                     </p>
-                                    <p className="text-xs">
-                                      Realizado:{" "}
-                                      <span className="font-semibold">
+                                    <p className="font-mono text-xs" style={{ color: CHART_SERIES.realizado }}>
+                                      Realizado :{" "}
+                                      <span className="font-semibold tabular-nums">
                                         {p.realizado?.toFixed(1) ?? 0}%
                                       </span>
                                     </p>
@@ -1376,23 +1452,22 @@ export default function DashboardPage() {
                             <Area
                               type="monotone"
                               dataKey="previsto"
-                              stroke={MANSERV_CHART.gray}
+                              stroke={CHART_SERIES.planejado}
                               strokeWidth={2}
-                              strokeDasharray="6 3"
-                              fill="url(#gradientMeta)"
+                              fill="url(#gradientPlanejado)"
                               dot={false}
-                              activeDot={{ r: 5, fill: "#e2e2e2" }}
+                              activeDot={{ r: 4, fill: CHART_SERIES.planejado }}
                             />
 
                             {temProgressoReal && (
                               <Area
                                 type="monotone"
                                 dataKey="realizado"
-                                stroke={MANSERV_STATUS.danger}
-                                strokeWidth={3}
-                                fill="url(#gradientAdmitidos)"
+                                stroke={CHART_SERIES.realizado}
+                                strokeWidth={2}
+                                fill="url(#gradientRealizado)"
                                 dot={false}
-                                activeDot={{ r: 7, fill: "#DA291B", stroke: "#fff", strokeWidth: 2 }}
+                                activeDot={{ r: 4, fill: CHART_SERIES.realizado }}
                               />
                             )}
 
@@ -1400,10 +1475,8 @@ export default function DashboardPage() {
                               <ReferenceDot
                                 x={pontoSelecionado.x}
                                 y={pontoSelecionado.y}
-                                r={6}
-                                fill="#DA291B"
-                                stroke="#fff"
-                                strokeWidth={2}
+                                r={5}
+                                fill={CHART_SERIES.realizado}
                               />
                             )}
 

@@ -4,11 +4,23 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: React.ComponentProps<"table"> & {
+  /**
+   * Classes do container que rola. Para cabeçalho sticky, defina aqui a altura
+   * máxima e o overflow vertical (ex.: "max-h-[70vh] overflow-y-auto") e passe
+   * `sticky` no <TableHeader> — position:sticky só ancora dentro do elemento
+   * que rola.
+   */
+  containerClassName?: string
+}) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
     >
       <table
         data-slot="table"
@@ -19,11 +31,24 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   )
 }
 
-function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
+function TableHeader({
+  className,
+  sticky = false,
+  ...props
+}: React.ComponentProps<"thead"> & {
+  /** Fixa o cabeçalho no topo do container que rola. */
+  sticky?: boolean
+}) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      className={cn(
+        "[&_tr]:border-b",
+        // bg opaco é obrigatório: sem ele as linhas aparecem por baixo ao rolar.
+        sticky &&
+          "sticky top-0 z-10 bg-card [&_tr]:bg-muted/60 [&_tr:hover]:bg-muted/60 shadow-[inset_0_-1px_0_0_hsl(var(--border))]",
+        className
+      )}
       {...props}
     />
   )

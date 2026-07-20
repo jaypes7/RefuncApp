@@ -22,6 +22,7 @@ import {
   Legend,
   ReferenceDot,
 } from "recharts";
+import { CHART_SERIES, CHART_THEME } from "@/lib/chart-colors";
 
 export type CurvaSData = {
   labels: string[];
@@ -87,7 +88,7 @@ export function RelatorioCurvaChart({ data, valoresHoje, className }: RelatorioC
 
   if (chartData.length === 0) {
     return (
-      <div className={`flex h-[300px] items-center justify-center text-sm text-gray-500 ${className ?? ""}`}>
+      <div className={`flex h-[300px] items-center justify-center text-sm text-muted-foreground ${className ?? ""}`}>
         Dados da curva de avanço não disponíveis.
       </div>
     );
@@ -99,27 +100,27 @@ export function RelatorioCurvaChart({ data, valoresHoje, className }: RelatorioC
         <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
           <defs>
             <linearGradient id="gradPlanejado" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#9ca3af" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#9ca3af" stopOpacity={0} />
+              <stop offset="5%" stopColor={CHART_SERIES.planejado} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={CHART_SERIES.planejado} stopOpacity={0} />
             </linearGradient>
             <linearGradient id="gradRealizado" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#DA291B" stopOpacity={0.35} />
-              <stop offset="95%" stopColor="#DA291B" stopOpacity={0} />
+              <stop offset="5%" stopColor={CHART_SERIES.realizado} stopOpacity={0.35} />
+              <stop offset="95%" stopColor={CHART_SERIES.realizado} stopOpacity={0} />
             </linearGradient>
           </defs>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false} />
 
           <XAxis
             dataKey="mes"
-            tick={{ fill: "#374151", fontSize: 11 }}
+            tick={{ fill: CHART_THEME.axis, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             ticks={xAxisTicks}
             interval={0}
           />
           <YAxis
-            tick={{ fill: "#374151", fontSize: 11 }}
+            tick={{ fill: CHART_THEME.axis, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             domain={[0, 100]}
@@ -129,14 +130,14 @@ export function RelatorioCurvaChart({ data, valoresHoje, className }: RelatorioC
               angle: -90,
               position: "insideLeft",
               offset: 10,
-              style: { fill: "#374151", fontSize: 11 },
+              style: { fill: CHART_THEME.axis, fontSize: 11 },
             }}
           />
 
           <Tooltip
             contentStyle={{
-              backgroundColor: "#ffffff",
-              border: "1px solid #e5e7eb",
+              backgroundColor: CHART_THEME.surface,
+              border: `1px solid ${CHART_THEME.border}`,
               borderRadius: "6px",
               fontSize: "12px",
             }}
@@ -156,23 +157,23 @@ export function RelatorioCurvaChart({ data, valoresHoje, className }: RelatorioC
           <Area
             type="monotone"
             dataKey="previsto"
-            stroke="#9ca3af"
+            stroke={CHART_SERIES.planejado}
             strokeWidth={2}
             strokeDasharray="6 3"
             fill="url(#gradPlanejado)"
             dot={false}
-            activeDot={{ r: 4, fill: "#9ca3af" }}
+            activeDot={{ r: 4, fill: CHART_SERIES.planejado }}
           />
 
           {hasRealizado && (
             <Area
               type="monotone"
               dataKey="realizado"
-              stroke="#DA291B"
+              stroke={CHART_SERIES.realizado}
               strokeWidth={2.5}
               fill="url(#gradRealizado)"
               dot={false}
-              activeDot={{ r: 5, fill: "#DA291B", stroke: "#fff", strokeWidth: 2 }}
+              activeDot={{ r: 5, fill: CHART_SERIES.realizado, stroke: CHART_THEME.surface, strokeWidth: 2 }}
             />
           )}
 
@@ -182,13 +183,13 @@ export function RelatorioCurvaChart({ data, valoresHoje, className }: RelatorioC
               x={ultimoPontoReal.x}
               y={ultimoPontoReal.y}
               r={6}
-              fill="#DA291B"
-              stroke="#fff"
+              fill={CHART_SERIES.realizado}
+              stroke={CHART_THEME.surface}
               strokeWidth={2}
               label={{
                 value: `${ultimoPontoReal.y.toFixed(1)}%`,
                 position: "top",
-                fill: "#1f2937",
+                fill: CHART_THEME.label,
                 fontSize: 11,
                 fontWeight: 600,
               }}
