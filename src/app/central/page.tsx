@@ -42,12 +42,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { cn, maskCPF, formatTelefone } from "@/lib/utils";
 import { colaboradoresApi, exportApi, type Colaborador } from "@/lib/axios";
-import { ImportModal } from "@/components/ImportModal";
+import dynamic from "next/dynamic";
+
+// Modal de import carregado sob demanda (fora do bundle inicial da página)
+const ImportModal = dynamic(
+  () => import("@/components/ImportModal").then((m) => m.ImportModal),
+  { ssr: false },
+);
 import { ColaboradorDetailsModal } from "@/components/ColaboradorDetailsModal";
 import { EditColaboradorModal } from "@/components/EditColaboradorModal";
 import { RealocarColaboradorModal } from "@/components/RealocarColaboradorModal";
 import { CanAccess } from "@/components/CanAccess";
-import * as XLSX from "xlsx";
 import { useDebounce } from "@/hooks/use-debounce";
 // import { CARGOS, CARGOS_AGRUPADOS } from "@/constants/cargos";
 
@@ -378,6 +383,9 @@ export default function CentralPage() {
         c.CENTRO_CUSTO || "",
         c.CREATED_AT || "",
       ]);
+
+      // Carrega o SheetJS sob demanda (fora do bundle inicial da página)
+      const XLSX = await import("xlsx");
 
       // Criar worksheet
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);

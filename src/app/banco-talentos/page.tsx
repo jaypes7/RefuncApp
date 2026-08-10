@@ -15,7 +15,6 @@ import {
   Database,
   Loader2,
 } from "lucide-react";
-import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -38,7 +37,16 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { CanAccess } from "@/components/CanAccess";
 import { useDebounce } from "@/hooks/use-debounce";
 import { bancoTalentosApi, type BancoTalento } from "@/lib/axios";
-import { BancoTalentosImportModal } from "@/components/BancoTalentosImportModal";
+import dynamic from "next/dynamic";
+
+// Modal de import carregado sob demanda (fora do bundle inicial da página)
+const BancoTalentosImportModal = dynamic(
+  () =>
+    import("@/components/BancoTalentosImportModal").then(
+      (m) => m.BancoTalentosImportModal,
+    ),
+  { ssr: false },
+);
 import { BancoTalentosAddEditModal } from "@/components/BancoTalentosAddEditModal";
 import { BancoTalentosRealocarModal } from "@/components/BancoTalentosRealocarModal";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
@@ -232,6 +240,9 @@ export default function BancoTalentosPage() {
         t.uf || "",
         formatTelefone(t.telefone) || "",
       ]);
+
+      // Carrega o SheetJS sob demanda (fora do bundle inicial da página)
+      const XLSX = await import("xlsx");
 
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
       ws["!cols"] = headers.map(() => ({ wch: 18 }));

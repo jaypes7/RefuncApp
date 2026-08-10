@@ -612,6 +612,30 @@ function agruparPorMob(cols: ColabRow[]) {
     .sort((a, b) => a.mob.localeCompare(b.mob));
 }
 
+/**
+ * Busca todas as linhas paginando em blocos de 1000 (limite padrão do PostgREST).
+ * Evita que o dashboard subconte silenciosamente quando o volume cresce.
+ */
+async function fetchAllRows(
+  makeQuery: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<unknown[]> {
+  const pageSize = 1000;
+  const all: unknown[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await makeQuery(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = data ?? [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 // ============================================================================
 // GET /api/dashboard/principal
 // ============================================================================
@@ -631,10 +655,17 @@ export async function GET(request: NextRequest) {
 
     const db = createServerClient();
 
-    let colabQuery = db
-      .from("colaboradores")
-      .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao,termino,prorrogacao,uf");
-    if (centroCusto?.length) colabQuery = colabQuery.in("centro_custo", centroCusto);
+    // Paginado em blocos de 1000 — o PostgREST corta em 1000 linhas por padrão
+    const colabPromise = fetchAllRows((from, to) => {
+      let q = db
+        .from("colaboradores")
+        .select("cpf,nome,status,mob,aso,portal,data_admissao,funcao_clt,treinamento,pre_admissao,termino,prorrogacao,uf")
+        .range(from, to);
+      if (centroCusto?.length) q = q.in("centro_custo", centroCusto);
+      return q;
+    }).catch((e: Error) => {
+      throw new Error(`Falha ao buscar colaboradores: ${e.message}`);
+    });
 
     let configQuery = db.from("configuracoes").select("*");
     if (centroCusto?.length) configQuery = configQuery.in("centro_custo", centroCusto) as typeof configQuery;
@@ -652,14 +683,14 @@ export async function GET(request: NextRequest) {
     if (centroCusto?.length) adiantamentosQuery = adiantamentosQuery.in("centro_custo", centroCusto) as typeof adiantamentosQuery;
 
     const [
-      { data: colabData, error: colabErr },
+      colabData,
       configResult,
       { data: etapasRows, error: etapasErr },
       { data: progressoRows },
       { data: atrasosRows },
       { data: adiantamentosRows },
     ] = await Promise.all([
-      colabQuery,
+      colabPromise,
       configQuery,
       etapasQuery,
       progressoQuery,
@@ -667,7 +698,6 @@ export async function GET(request: NextRequest) {
       adiantamentosQuery,
     ]);
 
-    if (colabErr) throw new Error(`Falha ao buscar colaboradores: ${colabErr.message}`);
     if (etapasErr) console.error("[Dashboard/Principal] etapas:", etapasErr.message);
 
     // ── Configs e Etapas ─────────────────────────────────────────────────────

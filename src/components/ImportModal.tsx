@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -99,6 +98,9 @@ export function ImportModal({
       setValidationErrors([]);
       setPreviewData(null);
       setImportResult(null); // Limpa resultados anteriores
+
+      // Carrega o SheetJS sob demanda (fora do bundle inicial da página)
+      const XLSX = await import("xlsx");
 
       const reader = new FileReader();
 

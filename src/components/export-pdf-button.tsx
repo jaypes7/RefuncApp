@@ -13,8 +13,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { toPng } from "html-to-image";
-import { jsPDF } from "jspdf";
 
 interface ExportPdfButtonProps {
   targetRef: React.RefObject<HTMLElement | null>;
@@ -44,6 +42,12 @@ export function ExportPdfButton({
 
     setIsExporting(true);
     try {
+      // Carrega as libs de captura/PDF sob demanda (fora do bundle inicial)
+      const [{ toPng }, { jsPDF }] = await Promise.all([
+        import("html-to-image"),
+        import("jspdf"),
+      ]);
+
       const computedBg = window.getComputedStyle(element).backgroundColor || "transparent";
 
       const imgData = await toPng(element, {

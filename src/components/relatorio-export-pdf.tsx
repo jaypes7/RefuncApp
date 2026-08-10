@@ -14,8 +14,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { toPng } from "html-to-image";
-import { jsPDF } from "jspdf";
 
 interface RelatorioExportPdfProps {
   targetRef: React.RefObject<HTMLElement | null>;
@@ -78,6 +76,12 @@ export function RelatorioExportPdf({
     document.body.appendChild(tempContainer);
 
     try {
+      // Carrega as libs de captura/PDF sob demanda (fora do bundle inicial)
+      const [{ toPng }, { jsPDF }] = await Promise.all([
+        import("html-to-image"),
+        import("jspdf"),
+      ]);
+
       // Clona o elemento com estilos inline (evita CORS de stylesheets)
       const clone = cloneWithInlineStyles(element);
       // Garante fundo branco para o PDF

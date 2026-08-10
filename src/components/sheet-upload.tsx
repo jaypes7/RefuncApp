@@ -16,7 +16,6 @@
  */
 
 import { useRef, useState } from "react";
-import * as XLSX from "xlsx";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -72,6 +71,8 @@ async function parseSpreadsheet(
   file: File,
   headerDetectionKeys?: string[],
 ): Promise<Record<string, unknown>[]> {
+  // Carrega o SheetJS sob demanda (fora do bundle inicial da página)
+  const XLSX = await import("xlsx");
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {

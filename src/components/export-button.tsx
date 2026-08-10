@@ -21,7 +21,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import type { ColInfo } from "xlsx";
 import { maskCPF, formatTelefone } from "@/lib/utils";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ function toSheetRow(c: ColaboradorRow): Record<string, string | number | null> {
 }
 
 /** Define largura automática das colunas (mínimo 10 chars, máximo 40). */
-function autoColWidths(rows: Record<string, string | number | null>[]): XLSX.ColInfo[] {
+function autoColWidths(rows: Record<string, string | number | null>[]): ColInfo[] {
   if (rows.length === 0) return [];
   return Object.keys(rows[0]).map((key) => {
     const maxLen = Math.max(
@@ -175,6 +175,9 @@ export function ExportButton({
 
       // Converte para linhas da planilha
       const sheetRows = data.map(toSheetRow);
+
+      // Carrega o SheetJS sob demanda (fora do bundle inicial da página)
+      const XLSX = await import("xlsx");
 
       // Cria workbook e worksheet
       const worksheet = XLSX.utils.json_to_sheet(sheetRows);

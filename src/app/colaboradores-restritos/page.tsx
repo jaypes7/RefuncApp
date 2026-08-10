@@ -44,7 +44,16 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useAcessoRestrito } from "@/hooks/use-acesso-restrito";
 import { colaboradoresRestritosApi, type ColaboradorRestrito } from "@/lib/axios";
-import { ColaboradoresRestritosImportModal } from "@/components/ColaboradoresRestritosImportModal";
+import dynamic from "next/dynamic";
+
+// Modal de import carregado sob demanda (fora do bundle inicial da página)
+const ColaboradoresRestritosImportModal = dynamic(
+  () =>
+    import("@/components/ColaboradoresRestritosImportModal").then(
+      (m) => m.ColaboradoresRestritosImportModal,
+    ),
+  { ssr: false },
+);
 import { maskCPF } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
