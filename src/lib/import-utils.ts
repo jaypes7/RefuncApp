@@ -288,8 +288,9 @@ export function mapStrictEnums(schemaId: string, rawValue: string | null): strin
       if (v.includes("INCOMPLETO") || v.includes("FALTA")) return "Incompleto";
       return "Pendente";
     case "aso_status":
-      if (v === "OK" || v.includes("APTO") || v === "SIM") return "Apto";
+      // "INAPTO" contém "APTO" — precisa ser checado primeiro
       if (v.includes("INAPTO") || v.includes("RESTRI")) return "Inapto";
+      if (v === "OK" || v.includes("APTO") || v === "SIM") return "Apto";
       return "Pendente";
     case "mob":
       // Preserva valores dinâmicos como "MOB 01", "MOB 02.2", etc.
