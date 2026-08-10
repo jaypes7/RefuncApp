@@ -54,7 +54,6 @@ import { EditColaboradorModal } from "@/components/EditColaboradorModal";
 import { RealocarColaboradorModal } from "@/components/RealocarColaboradorModal";
 import { CanAccess } from "@/components/CanAccess";
 import { useDebounce } from "@/hooks/use-debounce";
-// import { CARGOS, CARGOS_AGRUPADOS } from "@/constants/cargos";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

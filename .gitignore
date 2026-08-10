@@ -55,3 +55,6 @@ relatorios\ bugs.md
 relatorios\ relatorioDashboards.md
 relatorios\ vulnerabilidades.md
 scriptsSupabase.md
+
+# permitir o exemplo de env versionado
+!.env.local.example

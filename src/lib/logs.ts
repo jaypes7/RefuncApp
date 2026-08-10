@@ -11,10 +11,11 @@
  *   usuario        text NOT NULL          -- RE do usuário
  *   acao           text NOT NULL          -- tipo da ação (LOGIN, EDITAR, …)
  *   detalhes       text                   -- descrição livre
- *   cpf_colaborador text                  -- CPF afetado (opcional)
+ *   cpf_colaborador text                  -- CPF afetado, mascarado (LGPD — minimização)
  */
 
 import { createServerClient } from "@/lib/supabase";
+import { maskCPF } from "@/lib/utils";
 
 // ============================================================================
 // TIPOS
@@ -69,7 +70,8 @@ export async function registrarLog(
       usuario,
       acao,
       detalhes,
-      ...(cpfColaborador ? { cpf_colaborador: cpfColaborador } : {}),
+      // CPF nunca é persistido em texto puro na auditoria (LGPD)
+      ...(cpfColaborador ? { cpf_colaborador: maskCPF(cpfColaborador) } : {}),
     });
     if (error) {
       console.error("[logs] Falha ao persistir log:", error.message, { usuario, acao });

@@ -12,12 +12,12 @@ import { ZodError } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { createServerClient } from "@/lib/supabase";
 import { UsuariosPermitidosCreateSchema } from "@/lib/schemas";
-import { hashPassword, DEFAULT_PASSWORD } from "@/lib/password";
+import { hashPassword, generateTemporaryPassword } from "@/lib/password";
 
 // GET /api/config/acessos — lista todos os usuários autorizados
 export async function GET() {
   try {
-    await requireAuth();
+    await requireAuth("admin");
     const db = createServerClient();
     const { data, error } = await db
       .from("usuarios_permitidos")
@@ -45,14 +45,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const payload = UsuariosPermitidosCreateSchema.parse(body);
 
-    // 3. PERSISTÊNCIA: Banco de Dados (sempre com senha padrão e flag de redefinição)
+    // 3. PERSISTÊNCIA: senha temporária aleatória + flag de redefinição.
+    // A senha é retornada UMA única vez para o admin entregar fora de banda.
+    const senhaTemporaria = generateTemporaryPassword();
     const db = createServerClient();
     const { data, error } = await db
       .from("usuarios_permitidos")
       .upsert(
         {
           ...payload,
-          senha_hash: await hashPassword(DEFAULT_PASSWORD),
+          senha_hash: await hashPassword(senhaTemporaria),
           precisa_redefinir_senha: true,
         },
         { onConflict: "re" },
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
     // Suprime aviso de variável não utilizada (user é capturado para auditoria futura)
     void user;
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json({ ...data, senha_temporaria: senhaTemporaria }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -104,10 +106,11 @@ export async function PATCH(request: NextRequest) {
     const db = createServerClient();
 
     if (isResetPassword) {
+      const senhaTemporaria = generateTemporaryPassword();
       const { data, error } = await db
         .from("usuarios_permitidos")
         .update({
-          senha_hash: await hashPassword(DEFAULT_PASSWORD),
+          senha_hash: await hashPassword(senhaTemporaria),
           precisa_redefinir_senha: true,
         })
         .eq("id", id)
@@ -119,10 +122,10 @@ export async function PATCH(request: NextRequest) {
           "[/api/config/acessos PATCH] Supabase error:",
           error.message,
         );
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: "Erro interno" }, { status: 500 });
       }
 
-      return NextResponse.json(data);
+      return NextResponse.json({ ...data, senha_temporaria: senhaTemporaria });
     }
 
     const body = await request.json();
@@ -140,7 +143,7 @@ export async function PATCH(request: NextRequest) {
         "[/api/config/acessos PATCH] Supabase error:",
         error.message,
       );
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Erro interno" }, { status: 500 });
     }
 
     return NextResponse.json(data);
@@ -183,7 +186,7 @@ export async function DELETE(request: NextRequest) {
         "[/api/config/acessos DELETE] Supabase error:",
         error.message,
       );
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Erro interno" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

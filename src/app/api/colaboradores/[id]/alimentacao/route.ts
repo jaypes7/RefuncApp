@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
+import { findColaboradorAutorizado } from "@/lib/tenant";
 import { ColaboradorAlimentacaoUpdateSchema } from "@/lib/schemas";
 
 // ============================================================================
@@ -22,10 +23,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth("user");
+    const user = await requireAuth("user");
     const { id } = await params;
 
     const supabase = createServerClient();
+    const colab = await findColaboradorAutorizado(supabase, user, id);
+    if (!colab) {
+      return NextResponse.json({ error: "Colaborador não encontrado" }, { status: 404 });
+    }
+
     const { data, error } = await supabase
       .from("colaborador_alimentacao")
       .select("*")
@@ -60,10 +66,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth("user");
+    const user = await requireAuth("user");
     const { id } = await params;
 
     const supabase = createServerClient();
+    const colab = await findColaboradorAutorizado(supabase, user, id);
+    if (!colab) {
+      return NextResponse.json({ error: "Colaborador não encontrado" }, { status: 404 });
+    }
+
     const body = await request.json();
     const validated = ColaboradorAlimentacaoUpdateSchema.parse(body);
 

@@ -11,12 +11,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
+import { findColaboradorAutorizado } from "@/lib/tenant";
 import { ColaboradorPassagemCreateSchema } from "@/lib/schemas";
-
-async function findColaborador(supabase: ReturnType<typeof createServerClient>, id: string) {
-  const { data, error } = await supabase.from("colaboradores").select("id, cpf, nome").eq("id", id).single();
-  return { data, error };
-}
 
 // ============================================================================
 // GET /api/colaboradores/[id]/passagens
@@ -27,12 +23,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth("user");
+    const user = await requireAuth("user");
     const { id } = await params;
 
     const supabase = createServerClient();
-    const { data: colab, error: colabErr } = await findColaborador(supabase, id);
-    if (colabErr || !colab) {
+    const colab = await findColaboradorAutorizado(supabase, user, id);
+    if (!colab) {
       return NextResponse.json({ error: "Colaborador não encontrado" }, { status: 404 });
     }
 
@@ -70,8 +66,8 @@ export async function POST(
     const { id } = await params;
 
     const supabase = createServerClient();
-    const { data: colab, error: colabErr } = await findColaborador(supabase, id);
-    if (colabErr || !colab) {
+    const colab = await findColaboradorAutorizado(supabase, user, id);
+    if (!colab) {
       return NextResponse.json({ error: "Colaborador não encontrado" }, { status: 404 });
     }
 

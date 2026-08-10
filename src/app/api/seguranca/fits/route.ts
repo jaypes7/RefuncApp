@@ -166,6 +166,9 @@ export async function GET(request: NextRequest) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
+    }
     console.error("[GET /api/seguranca/fits]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
@@ -182,7 +185,7 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    await requireAuth();
+    await requireAuth("user");
 
     const { rows } = (await request.json()) as { rows: Record<string, unknown>[] };
     if (!Array.isArray(rows) || rows.length === 0) return NextResponse.json(report);
@@ -264,6 +267,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
     }
     console.error("[POST /api/seguranca/fits]", error);
     return NextResponse.json(

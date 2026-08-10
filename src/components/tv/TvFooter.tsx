@@ -10,13 +10,11 @@ export function TvFooter({ intervalSec }: TvFooterProps) {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    setProgress(0);
+    const start = Date.now();
     const stepMs = 100;
     const id = setInterval(() => {
-      setProgress((p) => {
-        const next = p + (stepMs / (intervalSec * 1000)) * 100;
-        return next >= 100 ? 100 : next;
-      });
+      const next = ((Date.now() - start) / (intervalSec * 1000)) * 100;
+      setProgress(next >= 100 ? 100 : next);
     }, stepMs);
     return () => clearInterval(id);
   }, [intervalSec]);

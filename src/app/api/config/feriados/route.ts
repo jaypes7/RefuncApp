@@ -34,6 +34,9 @@ export async function GET(request: NextRequest) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
+    }
     console.error("[GET /api/config/feriados]", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
@@ -44,7 +47,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const currentUser = await requireAuth();
+    const currentUser = await requireAuth("admin");
 
     const body = await request.json();
     const { feriados, centro_custo } = body;
@@ -82,6 +85,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
     }
     console.error("[POST /api/config/feriados]", error);
     return NextResponse.json(

@@ -16,6 +16,9 @@ export async function GET() {
     if (error) throw error;
     return NextResponse.json(data ?? []);
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
     console.error("[/api/config/clinicas GET]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
@@ -23,7 +26,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("admin");
     const body = await request.json();
     const payload = ClinicaSchema.parse(body);
     const db = createServerClient();
@@ -38,13 +41,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
+    }
+    console.error("[/api/config/clinicas POST]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAuth();
+    await requireAuth("admin");
     const id = request.nextUrl.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
     const db = createServerClient();
@@ -52,6 +62,13 @@ export async function DELETE(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return NextResponse.json({ error: "Acesso negado: privilégios insuficientes" }, { status: 403 });
+    }
+    console.error("[/api/config/clinicas DELETE]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

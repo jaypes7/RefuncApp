@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
+import { findColaboradorAutorizado } from "@/lib/tenant";
 
 // ============================================================================
 // POST — vincula um treinamento do catálogo ao colaborador
@@ -19,9 +20,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth("user");
+    const user = await requireAuth("user");
     const { id } = await params;
     const supabase = createServerClient();
+
+    const colab = await findColaboradorAutorizado(supabase, user, id);
+    if (!colab) {
+      return NextResponse.json({ error: "Colaborador não encontrado" }, { status: 404 });
+    }
+
     const body = await request.json();
 
     if (!body.treinamento_id) {
@@ -68,10 +75,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth("user");
+    const user = await requireAuth("user");
     const { id } = await params;
 
     const supabase = createServerClient();
+
+    const colab = await findColaboradorAutorizado(supabase, user, id);
+    if (!colab) {
+      return NextResponse.json({ error: "Colaborador não encontrado" }, { status: 404 });
+    }
 
     const { data, error } = await supabase
       .from("colaborador_treinamentos")

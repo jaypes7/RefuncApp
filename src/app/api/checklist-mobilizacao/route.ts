@@ -36,7 +36,9 @@ export async function GET(request: NextRequest) {
       .order("ordem", { ascending: true });
     if (centroCusto?.length) etapasQuery = etapasQuery.in("centro_custo", centroCusto) as typeof etapasQuery;
 
-    let { data: etapasChecklist, error: etapasError } = await etapasQuery;
+    const etapasRes = await etapasQuery;
+    let etapasChecklist = etapasRes.data;
+    const etapasError = etapasRes.error;
 
     if (etapasError) throw new Error(etapasError.message);
 

@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
+import { findColaboradorAutorizado } from "@/lib/tenant";
 import { ColaboradorHospedagemUpdateSchema } from "@/lib/schemas";
 
 // ============================================================================
@@ -22,10 +23,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string; hospedagemId: string }> },
 ) {
   try {
-    await requireAuth("user");
+    const user = await requireAuth("user");
     const { id, hospedagemId } = await params;
 
     const supabase = createServerClient();
+    const colab = await findColaboradorAutorizado(supabase, user, id);
+    if (!colab) {
+      return NextResponse.json({ error: "Colaborador não encontrado" }, { status: 404 });
+    }
+
     const { data: existing } = await supabase
       .from("colaborador_hospedagens")
       .select("id")
@@ -70,10 +76,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; hospedagemId: string }> },
 ) {
   try {
-    await requireAuth("user");
+    const user = await requireAuth("user");
     const { id, hospedagemId } = await params;
 
     const supabase = createServerClient();
+    const colab = await findColaboradorAutorizado(supabase, user, id);
+    if (!colab) {
+      return NextResponse.json({ error: "Colaborador não encontrado" }, { status: 404 });
+    }
+
     const { error } = await supabase
       .from("colaborador_hospedagens")
       .delete()

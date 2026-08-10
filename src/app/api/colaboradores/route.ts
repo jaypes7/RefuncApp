@@ -26,8 +26,18 @@ import {
   type Colaborador,
 } from "@/lib/schemas";
 import { expandirCargos } from "@/lib/cargos";
-import { requireAuth, resolveCentroCusto } from "@/lib/auth";
+import { requireAuth, resolveCentroCusto, isCentroCustoAutorizado } from "@/lib/auth";
 import { logAdicionar } from "@/lib/logs";
+
+// Colunas efetivamente consumidas por mapRow — evita trafegar colunas extras
+const COLABORADOR_COLUNAS: string =
+  "id, ind, status, enviado_rh, pessoa, sexo, req, vinculado, carta_oferta, " +
+  "colab_pend, exame, clinica, docs, aso, rpv, pre_admissao, mob, op, " +
+  "data_admissao, tipo_contrato, contrato, portal, cracha, ponto, treinamento, " +
+  "realizar_treinamento, local_treinamento, re, nome, funcao_clt, histograma, " +
+  "idade, dt_nascimento, cpf, vr, fretado, termino, prorrogacao, demissao, " +
+  "municipio, uf, telefone, numero_oracle, turno_trabalho, centro_custo, " +
+  "escolaridade, experiencia_funcao";
 
 // ============================================================================
 // MAPEAMENTO Supabase → Colaborador (lowercase → UPPERCASE)
@@ -218,7 +228,7 @@ export async function GET(request: NextRequest) {
     // ── Monta a query base com contagem exata ─────────────────────────────
     let query = supabase
       .from("colaboradores")
-      .select("*", { count: "exact" });
+      .select(COLABORADOR_COLUNAS, { count: "exact" });
 
     // ── Filtro de busca (nome ou cpf, case-insensitive) ───────────────────
     if (search) {
@@ -302,6 +312,22 @@ export async function POST(request: NextRequest) {
 
     // Valida o body usando o schema de criação
     const validated = ColaboradorCreateSchema.parse(body);
+
+    // Não permite criar colaborador em centro de custo não autorizado.
+    // Para não-admin sem CENTRO_CUSTO no body, força o centro único do JWT.
+    if (validated.CENTRO_CUSTO) {
+      if (!isCentroCustoAutorizado(user, validated.CENTRO_CUSTO)) {
+        return NextResponse.json(
+          { error: "Centro de custo não autorizado" },
+          { status: 403 },
+        );
+      }
+    } else if (user.perfil !== "admin") {
+      const autorizados = resolveCentroCusto(user);
+      if (autorizados?.length === 1) {
+        validated.CENTRO_CUSTO = autorizados[0];
+      }
+    }
 
     const supabase = createServerClient();
 

@@ -52,7 +52,7 @@ export function TvCarousel({
   );
 
   const [index, setIndex] = useState(0);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(() => new Date());
   const [direction, setDirection] = useState(1);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
   const [footerKey, setFooterKey] = useState(0);
@@ -69,10 +69,6 @@ export function TvCarousel({
     timerRef.current = setInterval(advance, intervalSec * 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [advance, intervalSec, playlist.length]);
-
-  useEffect(() => {
-    setLastUpdate(new Date());
-  }, []);
 
   if (playlist.length === 0) {
     return (

@@ -78,13 +78,20 @@ export function AcessosTab() {
       if (!res.ok) throw new Error("Falha ao salvar acesso");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { senha_temporaria?: string }) => {
       queryClient.invalidateQueries({ queryKey: ["config", "acessos"], type: "all" });
       setAcessoRE("");
       setAcessoNome("");
       setAcessoRole("");
       setAcessoCentroCusto([]);
-      toast.success("Acesso configurado com sucesso!");
+      if (data?.senha_temporaria) {
+        toast.success(
+          `Acesso configurado! Senha temporária: ${data.senha_temporaria}`,
+          { duration: 30000, description: "Anote e entregue ao usuário — ela não será exibida novamente." },
+        );
+      } else {
+        toast.success("Acesso configurado com sucesso!");
+      }
     },
     onError: () => toast.error("Erro ao configurar acesso"),
   });
@@ -144,9 +151,16 @@ export function AcessosTab() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { senha_temporaria?: string }) => {
       queryClient.invalidateQueries({ queryKey: ["config", "acessos"], type: "all" });
-      toast.success("Senha redefinida para o padrão. O usuário deverá alterá-la no próximo login.");
+      if (data?.senha_temporaria) {
+        toast.success(
+          `Senha temporária: ${data.senha_temporaria}`,
+          { duration: 30000, description: "Anote e entregue ao usuário — ele deverá alterá-la no próximo login." },
+        );
+      } else {
+        toast.success("Senha redefinida. O usuário deverá alterá-la no próximo login.");
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -478,7 +492,7 @@ export function AcessosTab() {
                             }
                             disabled={resetSenhaMutation.isPending}
                             className="text-amber-500 hover:text-amber-500 hover:bg-amber-500/10"
-                            title="Redefinir senha para o padrão"
+                            title="Gerar nova senha temporária"
                           >
                             <Key className="w-4 h-4" />
                           </Button>

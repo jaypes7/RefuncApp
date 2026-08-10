@@ -116,7 +116,7 @@ export function RelatorioExportPdf({
       const contentHeightMm = (imgHeight / imgWidth) * pdfWidth;
       const totalPages = Math.ceil(contentHeightMm / (pdfHeight - 20));
 
-      let position = 10; // margem superior inicial
+      const position = 10; // margem superior inicial
       const margin = 10;
       const availableHeight = pdfHeight - margin * 2;
 

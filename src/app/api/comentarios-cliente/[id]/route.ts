@@ -8,14 +8,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, isCentroCustoAutorizado } from "@/lib/auth";
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
 
     const { id } = await params;
     const numId = parseInt(id, 10);
@@ -34,6 +34,16 @@ export async function PUT(
     }
 
     const db = createServerClient();
+
+    const { data: existing } = await db
+      .from("comentarios_cliente")
+      .select("id, centro_custo")
+      .eq("id", numId)
+      .single();
+    if (!existing || !isCentroCustoAutorizado(user, existing.centro_custo)) {
+      return NextResponse.json({ error: "Comentário não encontrado" }, { status: 404 });
+    }
+
     const { data: updated, error } = await db
       .from("comentarios_cliente")
       .update({ texto: texto.trim(), data })
@@ -58,7 +68,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
 
     const { id } = await params;
     const numId = parseInt(id, 10);
@@ -67,6 +77,16 @@ export async function DELETE(
     }
 
     const db = createServerClient();
+
+    const { data: existing } = await db
+      .from("comentarios_cliente")
+      .select("id, centro_custo")
+      .eq("id", numId)
+      .single();
+    if (!existing || !isCentroCustoAutorizado(user, existing.centro_custo)) {
+      return NextResponse.json({ error: "Comentário não encontrado" }, { status: 404 });
+    }
+
     const { error } = await db.from("comentarios_cliente").delete().eq("id", numId);
 
     if (error) throw error;

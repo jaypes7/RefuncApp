@@ -12,7 +12,7 @@ import { ZodError } from "zod";
 import { LoginSchema } from "@/lib/schemas";
 import { createServerClient } from "@/lib/supabase";
 import { generateToken, setAuthCookie, normalizeCentroCusto } from "@/lib/auth";
-import { comparePassword } from "@/lib/password";
+import { comparePassword, dummyCompare } from "@/lib/password";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
@@ -42,6 +42,9 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !usuario) {
+      // Comparação dummy para uniformizar o tempo de resposta
+      // (evita enumeração de REs válidos por timing)
+      await dummyCompare(senha);
       return NextResponse.json(
         { error: "RE ou senha incorretos" },
         { status: 401 },

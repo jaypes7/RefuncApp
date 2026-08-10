@@ -80,10 +80,8 @@ export function BrazilMap({ data }: BrazilMapProps) {
   });
 
   useEffect(() => {
-    if (cachedGeographies) {
-      setGeographies(cachedGeographies);
-      return;
-    }
+    // Se o cache já existia, o estado inicial do useState já o utilizou
+    if (cachedGeographies) return;
     loadGeographies().then((features) => setGeographies(features));
   }, []);
 

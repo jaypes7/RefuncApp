@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, UtensilsCrossed } from "lucide-react";
@@ -19,10 +19,9 @@ interface AlimentacaoFormProps {
 
 export function AlimentacaoForm({ colaboradorId }: AlimentacaoFormProps) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<ColaboradorAlimentacao>({
-    credito_vr_almoco: false,
-    credito_vr_janta: false,
-  });
+  // Alterações locais ainda não refletidas pelo servidor; o form efetivo é
+  // derivado de data + override (sem sincronização via useEffect)
+  const [override, setOverride] = useState<Partial<ColaboradorAlimentacao>>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ["alimentacao", colaboradorId],
@@ -32,11 +31,12 @@ export function AlimentacaoForm({ colaboradorId }: AlimentacaoFormProps) {
     },
   });
 
-  useEffect(() => {
-    if (data) {
-      setForm(data);
-    }
-  }, [data]);
+  const form: ColaboradorAlimentacao = {
+    credito_vr_almoco: false,
+    credito_vr_janta: false,
+    ...data,
+    ...override,
+  };
 
   const atualizarMutation = useMutation({
     mutationFn: async (body: Partial<ColaboradorAlimentacao>) => {
@@ -79,7 +79,7 @@ export function AlimentacaoForm({ colaboradorId }: AlimentacaoFormProps) {
             value={form.credito_vr_almoco === true ? "Sim" : form.credito_vr_almoco === false ? "Não" : undefined}
             onValueChange={(value) => {
               const checked = value === "Sim";
-              setForm((prev) => ({ ...prev, credito_vr_almoco: checked }));
+              setOverride((prev) => ({ ...prev, credito_vr_almoco: checked }));
               atualizarMutation.mutate({ credito_vr_almoco: checked });
             }}
           >
@@ -100,7 +100,7 @@ export function AlimentacaoForm({ colaboradorId }: AlimentacaoFormProps) {
             value={form.credito_vr_janta === true ? "Sim" : form.credito_vr_janta === false ? "Não" : undefined}
             onValueChange={(value) => {
               const checked = value === "Sim";
-              setForm((prev) => ({ ...prev, credito_vr_janta: checked }));
+              setOverride((prev) => ({ ...prev, credito_vr_janta: checked }));
               atualizarMutation.mutate({ credito_vr_janta: checked });
             }}
           >

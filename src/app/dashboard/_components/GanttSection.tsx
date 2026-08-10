@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ListChecks } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,19 +17,15 @@ export function GanttSection({
   etapasPorGrupo: EtapasPorGrupo;
   configData: ConfigData | undefined;
 }) {
-  // Inicia com todos os grupos colapsados (preenchido uma única vez)
-  const [collapsedGrupos, setCollapsedGrupos] = useState<Set<number>>(new Set());
-  const initialized = useRef(false);
-  useEffect(() => {
-    if (!initialized.current && etapasPorGrupo?.grupos.length) {
-      setCollapsedGrupos(new Set(etapasPorGrupo.grupos.map((g) => g.id)));
-      initialized.current = true;
-    }
-  }, [etapasPorGrupo]);
+  // Inicia com todos os grupos colapsados: enquanto o usuário não interage
+  // (override === null), deriva o estado "todos colapsados" no render
+  const [collapsedOverride, setCollapsedOverride] = useState<Set<number> | null>(null);
+  const collapsedGrupos =
+    collapsedOverride ?? new Set((etapasPorGrupo?.grupos ?? []).map((g) => g.id));
 
   const toggleGrupo = (id: number) =>
-    setCollapsedGrupos((prev) => {
-      const next = new Set(prev);
+    setCollapsedOverride(() => {
+      const next = new Set(collapsedGrupos);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });

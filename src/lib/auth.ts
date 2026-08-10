@@ -23,6 +23,10 @@ if (!JWT_SECRET) {
   throw new Error("Variável de ambiente JWT_SECRET é obrigatória");
 }
 
+if (JWT_SECRET.length < 32) {
+  throw new Error("JWT_SECRET deve ter no mínimo 32 caracteres");
+}
+
 // Converte a secret para Uint8Array (requerido pelo jose)
 const secretKey = new TextEncoder().encode(JWT_SECRET);
 
@@ -232,6 +236,21 @@ export function resolveCentroCusto(
   }
 
   return autorizados;
+}
+
+/**
+ * Verifica se um registro pertence aos centros de custo autorizados do usuário.
+ * Registros sem centro_custo (null) não pertencem a nenhum tenant e são
+ * acessíveis a qualquer usuário autenticado.
+ */
+export function isCentroCustoAutorizado(
+  currentUser: JWTPayload,
+  centroCusto: string | null | undefined,
+): boolean {
+  const autorizados = resolveCentroCusto(currentUser);
+  if (autorizados === undefined) return true; // admin irrestrito
+  if (!centroCusto) return true;
+  return autorizados.includes(centroCusto);
 }
 
 // ============================================================================

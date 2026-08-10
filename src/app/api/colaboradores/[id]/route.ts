@@ -16,8 +16,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createServerClient } from "@/lib/supabase";
 import { ColaboradorUpdateSchema, type Colaborador } from "@/lib/schemas";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, isCentroCustoAutorizado } from "@/lib/auth";
 import { logEditar, logRemover } from "@/lib/logs";
+
+// Colunas efetivamente consumidas por mapRow — evita trafegar colunas extras
+const COLABORADOR_COLUNAS: string =
+  "id, ind, status, enviado_rh, pessoa, sexo, req, vinculado, carta_oferta, " +
+  "colab_pend, exame, clinica, docs, aso, rpv, pre_admissao, mob, op, " +
+  "data_admissao, tipo_contrato, contrato, portal, cracha, ponto, treinamento, " +
+  "realizar_treinamento, local_treinamento, re, nome, funcao_clt, histograma, " +
+  "idade, dt_nascimento, cpf, vr, fretado, termino, prorrogacao, demissao, " +
+  "municipio, uf, telefone, numero_oracle, turno_trabalho, centro_custo, " +
+  "escolaridade, experiencia_funcao";
 
 // ============================================================================
 // MAPEAMENTO Supabase → Colaborador (lowercase → UPPERCASE)
@@ -141,11 +151,12 @@ async function findById(id: string) {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("colaboradores")
-    .select("*")
+    .select(COLABORADOR_COLUNAS)
     .eq("id", id)
     .single();
 
-  return { data, error };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { data: data as Record<string, any> | null, error };
 }
 
 // ============================================================================
@@ -157,7 +168,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth("user");
+    const currentUser = await requireAuth("user");
 
     const { id } = await params;
     const { searchParams } = new URL(request.url);
@@ -166,13 +177,15 @@ export async function GET(
     const supabase = createServerClient();
 
     // Busca colaborador principal
-    const { data, error } = await supabase
+    const { data: rawData, error } = await supabase
       .from("colaboradores")
-      .select("*")
+      .select(COLABORADOR_COLUNAS)
       .eq("id", id)
       .single();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = rawData as Record<string, any> | null;
 
-    if (error || !data) {
+    if (error || !data || !isCentroCustoAutorizado(currentUser, data.centro_custo)) {
       return NextResponse.json(
         { error: "Colaborador não encontrado" },
         { status: 404 },
@@ -235,9 +248,9 @@ export async function PUT(
     const user = await requireAuth("user");
     const { id } = await params;
 
-    // 1. Verifica existência
+    // 1. Verifica existência e autorização de centro de custo
     const { data: existing, error: fetchError } = await findById(id);
-    if (fetchError || !existing) {
+    if (fetchError || !existing || !isCentroCustoAutorizado(user, existing.centro_custo)) {
       return NextResponse.json(
         { error: "Colaborador não encontrado" },
         { status: 404 },
@@ -251,6 +264,17 @@ export async function PUT(
     // id e CPF não podem ser alterados via PUT
     delete (validated as Record<string, unknown>).id;
     delete (validated as Record<string, unknown>).CPF;
+
+    // Não permite mover o registro para um centro de custo não autorizado
+    if (
+      validated.CENTRO_CUSTO !== undefined &&
+      !isCentroCustoAutorizado(user, validated.CENTRO_CUSTO)
+    ) {
+      return NextResponse.json(
+        { error: "Centro de custo não autorizado" },
+        { status: 403 },
+      );
+    }
 
     // 3. Determina campos alterados para auditoria
     const existingMapped = mapRow(existing);
@@ -313,9 +337,9 @@ export async function DELETE(
     const user = await requireAuth("user");
     const { id } = await params;
 
-    // 1. Verifica existência (precisa do nome para o log)
+    // 1. Verifica existência e autorização de centro de custo (nome vai pro log)
     const { data: existing, error: fetchError } = await findById(id);
-    if (fetchError || !existing) {
+    if (fetchError || !existing || !isCentroCustoAutorizado(user, existing.centro_custo)) {
       return NextResponse.json(
         { error: "Colaborador não encontrado" },
         { status: 404 },

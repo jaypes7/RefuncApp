@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CARGOS } from "@/constants/cargos";
+import { useCargos } from "@/hooks/use-cargos";
 import {
   ChartContainer,
   ChartTooltip,
@@ -271,6 +271,7 @@ export default function DashboardRhPage() {
   const [filterNome, setFilterNome] = useState("");
   const [filterDias, setFilterDias] = useState("all");
   const [filterCargo, setFilterCargo] = useState("all");
+  const { cargos } = useCargos();
   const [mostrarMapa, setMostrarMapa] = useState(true);
 
   // ── Relatório por Função ──────────────────────────────────────────────────
@@ -797,7 +798,7 @@ export default function DashboardRhPage() {
                         </SelectTrigger>
                         <SelectContent className="max-h-64">
                           <SelectItem value="all">Todos os cargos</SelectItem>
-                          {CARGOS.map((c) => (
+                          {cargos.map((c) => (
                             <SelectItem key={c} value={c}>{c}</SelectItem>
                           ))}
                         </SelectContent>

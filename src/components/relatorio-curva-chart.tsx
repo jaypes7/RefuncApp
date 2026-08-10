@@ -75,15 +75,16 @@ export function RelatorioCurvaChart({ data, valoresHoje, className }: RelatorioC
   );
 
   // Último ponto com dados reais para o ReferenceDot
-  const ultimoPontoReal = useMemo(() => {
-    if (!hasRealizado) return null;
+  // (cálculo direto — a memoização manual aqui impedia a otimização do React Compiler)
+  let ultimoPontoReal: { index: number; x: string; y: number } | null = null;
+  if (hasRealizado) {
     for (let i = chartData.length - 1; i >= 0; i--) {
       if (chartData[i].realizado != null) {
-        return { index: i, x: chartData[i].mes, y: chartData[i].realizado as number };
+        ultimoPontoReal = { index: i, x: chartData[i].mes, y: chartData[i].realizado as number };
+        break;
       }
     }
-    return null;
-  }, [chartData, hasRealizado]);
+  }
 
   if (chartData.length === 0) {
     return (
