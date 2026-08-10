@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -11,12 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { calculateWorkingDays, calculateWorkingDaysDetailed, addWorkingDays, formatDateISO } from "@/lib/date-utils";
+import { calculateWorkingDaysDetailed, addWorkingDays, formatDateISO } from "@/lib/date-utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Save,
   AlertCircle,
@@ -26,20 +24,11 @@ import {
   X,
   AlertTriangle,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   Pencil,
-  User,
-  ArrowUp,
-  ArrowDown,
   Plus,
   Trash2,
   FolderOpen,
   Copy,
-  Clock,
 } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
@@ -47,47 +36,24 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFilter } from "@/contexts/FilterContext";
 import { CanAccess } from "@/components/CanAccess";
 
-// --- Types ---
-type AtrasoEntry = {
-  etapa_id: number;
-  dias_extras: number;
-  motivo: string | null;
-  data_inicio_atraso: string | null;
-  datas_atraso: string[];
-};
-
-type AdiantamentoEntry = {
-  etapa_id: number;
-  dias_adiantados: number;
-  motivo: string | null;
-  data_inicio_adiantamento: string | null;
-  datas_adiantamento: string[];
-};
-
-type EtapaCronograma = {
-  id: number;
-  nome: string;
-  percentual_concluido: number;
-  dias: number;
-  concluida?: boolean;
-  data_inicio?: string;
-  data_fim?: string;
-  responsavel?: string | null;
-  grupo_id?: number | null;
-};
-
-type EtapaGrupo = { id: number; nome: string; ordem: number };
-
-type ConfigCronograma = {
-  etapas: EtapaCronograma[];
-  dias_totais: number;
-};
-
-type ProgressoDiarioEntry = {
-  etapa_id: number;
-  data: string; // YYYY-MM-DD
-  percentual: number;
-};
+import { DelayCalendarDialog } from "./_components/DelayCalendarDialog";
+import { EtapaCard } from "./_components/EtapaCard";
+import {
+  ETAPAS_DEFAULT,
+  addCalendarDays,
+  calcularDiasUteisEtapa,
+  getDaysInRange,
+  legacyAdiantamentoDates,
+  legacyAtrasoDates,
+  sortUniqueDates,
+  type AdiantamentoEntry,
+  type AtrasoEntry,
+  type ConfigCronograma,
+  type EtapaCronograma,
+  type EtapaDateError,
+  type EtapaGrupo,
+  type ProgressoDiarioEntry,
+} from "./_components/helpers";
 
 type ApiConfigResponse = {
   DIAS_TOTAIS_PROJETO: number;
@@ -104,78 +70,6 @@ type ApiConfigResponse = {
   COLABORADORES_PREVISTOS: number;
   ORCADO_SUPRIMENTOS: number;
 };
-
-const ETAPAS_DEFAULT: EtapaCronograma[] = [
-  { id: 1,  nome: "PGR E PCMSO",                dias: 3,  percentual_concluido: 0 },
-  { id: 2,  nome: "Seleção de Mão de Obra",     dias: 3,  percentual_concluido: 0 },
-  { id: 3,  nome: "Realização de Exames",       dias: 4,  percentual_concluido: 0 },
-  { id: 4,  nome: "Liberação de ASO",           dias: 2,  percentual_concluido: 0 },
-  { id: 5,  nome: "e-Social",                   dias: 4,  percentual_concluido: 0 },
-  { id: 6,  nome: "Assinatura de contrato",     dias: 3,  percentual_concluido: 0 },
-  { id: 7,  nome: "Treinamentos Normativos",    dias: 8,  percentual_concluido: 0 },
-  { id: 8,  nome: "Portal do Colaborador",      dias: 3,  percentual_concluido: 0 },
-  { id: 9,  nome: "Liberação de Credencial",    dias: 4,  percentual_concluido: 0 },
-  { id: 10, nome: "Liberação de EPIs",          dias: 3,  percentual_concluido: 0 },
-  { id: 11, nome: "Início de Campo",            dias: 3,  percentual_concluido: 0 },
-];
-
-const MESES = [
-  "Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-
-const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
-
-function addCalendarDays(date: string, days: number): string {
-  const next = new Date(date + "T00:00:00Z");
-  next.setUTCDate(next.getUTCDate() + days);
-  return next.toISOString().split("T")[0];
-}
-
-function sortUniqueDates(dates: string[]): string[] {
-  return [...new Set(dates)].sort();
-}
-
-function formatDatePtBr(date: string): string {
-  return new Date(date + "T00:00:00").toLocaleDateString("pt-BR", { timeZone: "UTC" });
-}
-
-function legacyAtrasoDates(dataInicio: string | null | undefined, diasExtras: number): string[] {
-  if (!dataInicio || diasExtras <= 0) return [];
-  return Array.from({ length: diasExtras }, (_, index) => addCalendarDays(dataInicio, index));
-}
-
-function legacyAdiantamentoDates(dataInicio: string | null | undefined, diasAdiantados: number): string[] {
-  if (!dataInicio || diasAdiantados <= 0) return [];
-  return Array.from({ length: diasAdiantados }, (_, index) => addCalendarDays(dataInicio, index));
-}
-
-// Retorna todos os dias corridos entre duas datas (inclusive), formato YYYY-MM-DD
-function getDaysInRange(startDate: string, endDate: string): string[] {
-  const days: string[] = [];
-  const cur = new Date(startDate + "T00:00:00");
-  const end = new Date(endDate + "T00:00:00");
-  while (cur <= end) {
-    days.push(formatDateISO(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
-  return days;
-}
-
-// Calcula dias úteis de uma etapa a partir das datas e do calendário
-function calcularDiasUteisEtapa(
-  dataInicio: string | undefined,
-  dataFim: string | undefined,
-  diasTrabalhadosData: string[] | undefined,
-): number {
-  if (!dataInicio || !dataFim) return 0;
-  if (diasTrabalhadosData && diasTrabalhadosData.length > 0) {
-    const diasTrabalhadosSet = new Set(diasTrabalhadosData);
-    return getDaysInRange(dataInicio, dataFim).filter((dia) => diasTrabalhadosSet.has(dia)).length;
-  }
-  // Fallback: usa cálculo de dias úteis padrão quando calendário ainda não carregou
-  return calculateWorkingDays(dataInicio, dataFim);
-}
 
 export default function CronogramaPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -303,7 +197,6 @@ export default function CronogramaPage() {
     enabled: filterReady && !!centroCusto,
   });
 
-  // Mapa: etapa_id → AtrasoEntry
   const { data: adiantamentosData } = useQuery<AdiantamentoEntry[]>({
     queryKey: ["etapas-adiantamento", centroCusto],
     queryFn: async () => {
@@ -547,7 +440,7 @@ export default function CronogramaPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // --- Mutations de atraso ---
+  // --- Mutations de atraso/adiantamento ---
   const salvarAtrasoMutation = useMutation({
     mutationFn: async (payload: {
       etapa_id: number;
@@ -736,80 +629,6 @@ export default function CronogramaPage() {
     [adiantamentoForm.datasAdiantamento],
   );
 
-  const atrasoCalendarDays = useMemo(() => {
-    const firstDayOfMonth = new Date(Date.UTC(atrasoCalendarYear, atrasoCalendarMonth, 1));
-    const lastDayOfMonth = new Date(Date.UTC(atrasoCalendarYear, atrasoCalendarMonth + 1, 0));
-    const startWeekday = firstDayOfMonth.getUTCDay();
-    const days: Array<{
-      date: string;
-      dayOfMonth: number;
-      isWeekend: boolean;
-      isOutsideMonth: boolean;
-      isDisabled: boolean;
-    }> = [];
-
-    for (let i = 0; i < startWeekday; i++) {
-      days.push({
-        date: "",
-        dayOfMonth: 0,
-        isWeekend: false,
-        isOutsideMonth: true,
-        isDisabled: true,
-      });
-    }
-
-    for (let day = 1; day <= lastDayOfMonth.getUTCDate(); day++) {
-      const date = `${atrasoCalendarYear}-${String(atrasoCalendarMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-      const dateObj = new Date(date + "T00:00:00Z");
-      days.push({
-        date,
-        dayOfMonth: day,
-        isWeekend: dateObj.getUTCDay() === 0 || dateObj.getUTCDay() === 6,
-        isOutsideMonth: false,
-        isDisabled: !!atrasoMinDate && date < atrasoMinDate,
-      });
-    }
-
-    return days;
-  }, [atrasoCalendarMonth, atrasoCalendarYear, atrasoMinDate]);
-
-  const adiantamentoCalendarDays = useMemo(() => {
-    const firstDayOfMonth = new Date(Date.UTC(adiantamentoCalendarYear, adiantamentoCalendarMonth, 1));
-    const lastDayOfMonth = new Date(Date.UTC(adiantamentoCalendarYear, adiantamentoCalendarMonth + 1, 0));
-    const startWeekday = firstDayOfMonth.getUTCDay();
-    const days: Array<{
-      date: string;
-      dayOfMonth: number;
-      isWeekend: boolean;
-      isOutsideMonth: boolean;
-      isDisabled: boolean;
-    }> = [];
-
-    for (let i = 0; i < startWeekday; i++) {
-      days.push({
-        date: "",
-        dayOfMonth: 0,
-        isWeekend: false,
-        isOutsideMonth: true,
-        isDisabled: true,
-      });
-    }
-
-    for (let day = 1; day <= lastDayOfMonth.getUTCDate(); day++) {
-      const date = `${adiantamentoCalendarYear}-${String(adiantamentoCalendarMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-      const dateObj = new Date(date + "T00:00:00Z");
-      days.push({
-        date,
-        dayOfMonth: day,
-        isWeekend: dateObj.getUTCDay() === 0 || dateObj.getUTCDay() === 6,
-        isOutsideMonth: false,
-        isDisabled: !!adiantamentoMaxDate && date > adiantamentoMaxDate,
-      });
-    }
-
-    return days;
-  }, [adiantamentoCalendarMonth, adiantamentoCalendarYear, adiantamentoMaxDate]);
-
   const toggleAtrasoDate = (date: string) => {
     if (atrasoMinDate && date < atrasoMinDate) return;
     setAtrasoForm((prev) => {
@@ -869,8 +688,6 @@ export default function CronogramaPage() {
       return next;
     });
   };
-
-
 
   const handleProgressoDiarioChange = (
     etapa: EtapaCronograma,
@@ -1246,13 +1063,6 @@ export default function CronogramaPage() {
     ).result;
   }, [cronograma.etapas, cronograma.dias_totais]);
 
-  type EtapaDateError = {
-    id: number;
-    dataInicio: boolean;
-    dataFim: boolean;
-    dataStartGreaterThanEnd: boolean;
-  };
-
   const etapasDateErrors = useMemo<EtapaDateError[]>(() => {
     if (!dataInicioProjeto || !dataFimProjeto) return [];
     return cronograma.etapas.map((etapa) => ({
@@ -1278,523 +1088,52 @@ export default function CronogramaPage() {
     [etapasDateErrors],
   );
 
-  // Função auxiliar para renderizar o card de uma etapa
+  // Renderiza o card de uma etapa conectando estado e handlers da página
   const renderEtapaCard = (
     etapa: EtapaCronograma,
     globalIndex: number,
     isFirst: boolean,
     isLast: boolean,
-    dateError: { id: number; dataInicio: boolean; dataFim: boolean; dataStartGreaterThanEnd: boolean } | undefined,
   ) => (
-    <div
+    <EtapaCard
       key={etapa.id}
-      className={`space-y-3 p-4 rounded-lg border transition-colors ${
-        etapa.concluida
-          ? "bg-[#337246]/10 border-[#337246]/30"
-          : "bg-card/50 border-border/50"
-      }`}
-    >
-      <div className="flex items-center gap-4">
-        <input
-          type="checkbox"
-          checked={selectedEtapas.has(etapa.id)}
-          onChange={() => toggleSelectEtapa(etapa.id)}
-          className="h-4 w-4 rounded border-border accent-primary shrink-0 cursor-pointer"
-        />
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
-            etapa.concluida
-              ? "bg-[#337246]/20 text-[#337246]"
-              : "bg-primary/10 text-primary"
-          }`}
-        >
-          {globalIndex + 1}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-medium truncate flex items-center gap-2">
-            {editingEtapaId === etapa.id ? (
-              <>
-                <Input
-                  value={editingEtapaNome}
-                  onChange={(e) => setEditingEtapaNome(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") salvarEdicaoNome();
-                    if (e.key === "Escape") cancelarEdicaoNome();
-                  }}
-                  onBlur={salvarEdicaoNome}
-                  autoFocus
-                  className="glass-input min-w-0 flex-1 h-8 text-sm"
-                  placeholder="Nome da etapa"
-                />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-muted-foreground hover:text-primary"
-                  onClick={salvarEdicaoNome}
-                  title="Salvar nome"
-                >
-                  <Check className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-muted-foreground hover:text-muted-foreground"
-                  onClick={cancelarEdicaoNome}
-                  title="Cancelar"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <span className="truncate">{etapa.nome}</span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-muted-foreground hover:text-primary"
-                  onClick={() => iniciarEdicaoNome(etapa)}
-                  title="Editar nome"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            )}
-            {etapa.concluida && (
-              <Badge
-                variant="outline"
-                className="shrink-0 h-4 px-1.5 text-[10px] border-[#337246]/40 text-[#337246] bg-[#337246]/10"
-              >
-                Concluído
-              </Badge>
-            )}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {(() => {
-              const p = etapasPesos.find((x) => x.id === etapa.id);
-              return p ? `${p.inicio}% – ${p.fim}% do cronograma` : "";
-            })()}
-          </div>
-          {etapasDatas && (() => {
-            const d = etapasDatas.find((x) => x.id === etapa.id);
-            return d ? (
-              <div className="text-xs text-muted-foreground/70 mt-0.5 tabular-nums">
-                Corridos: {d.calendarDays}&nbsp;|&nbsp;Úteis: {d.workingDays}
-              </div>
-            ) : null;
-          })()}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center gap-0.5">
-            <Switch
-              checked={etapa.concluida ?? false}
-              onCheckedChange={(checked: boolean) =>
-                updateEtapaConcluida(etapa.id, checked)
-              }
-              disabled={cronogramaMutation.isPending || etapa.id < 0}
-            />
-            <span className="text-[10px] text-muted-foreground">
-              Concluída
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6 text-muted-foreground hover:text-primary"
-              onClick={() => moverEtapa(etapa.id, "up")}
-              disabled={isFirst || cronogramaMutation.isPending}
-              title="Mover para cima"
-            >
-              <ArrowUp className="h-3 w-3" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6 text-muted-foreground hover:text-primary"
-              onClick={() => moverEtapa(etapa.id, "down")}
-              disabled={isLast || cronogramaMutation.isPending}
-              title="Mover para baixo"
-            >
-              <ArrowDown className="h-3 w-3" />
-            </Button>
-          </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-            onClick={() => confirmarRemoverEtapa(etapa.id)}
-            disabled={cronogramaMutation.isPending}
-            title="Remover etapa"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex items-end gap-4 ml-12 pt-2 border-t border-border/30">
-        <div className="flex-1 flex flex-wrap gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">
-              Data de Início
-            </label>
-            <Input
-              type="date"
-              value={etapa.data_inicio || ""}
-              onChange={(e) => updateEtapaDataInicio(etapa.id, e.target.value)}
-              disabled={etapa.id < 0 || !dataInicioProjeto || !dataFimProjeto}
-              title={etapa.id < 0 ? "Salve o cronograma para definir datas" : undefined}
-              className={`glass-input ${
-                dateError?.dataInicio || dateError?.dataStartGreaterThanEnd
-                  ? "border-red-500/50 bg-red-500/5"
-                  : ""
-              }`}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">
-              Data de Fim
-            </label>
-            <Input
-              type="date"
-              value={etapa.data_fim || ""}
-              onChange={(e) => updateEtapaDataFim(etapa.id, e.target.value)}
-              disabled={etapa.id < 0 || !dataInicioProjeto || !dataFimProjeto}
-              title={etapa.id < 0 ? "Salve o cronograma para definir datas" : undefined}
-              className={`glass-input ${
-                dateError?.dataFim || dateError?.dataStartGreaterThanEnd
-                  ? "border-red-500/50 bg-red-500/5"
-                  : ""
-              }`}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <User className="w-3 h-3" />
-              Responsável
-            </label>
-            <Input
-              type="text"
-              value={etapa.responsavel || ""}
-              onChange={(e) => updateEtapaResponsavel(etapa.id, e.target.value)}
-              placeholder="Nome do responsável"
-              className="glass-input"
-            />
-          </div>
-        </div>
-        {dateError && (dateError.dataInicio || dateError.dataFim || dateError.dataStartGreaterThanEnd) && (
-          <div className="flex items-center gap-1.5 text-xs text-red-400 pb-0.5">
-            <X className="w-3.5 h-3.5" />
-            <span>
-              {dateError.dataStartGreaterThanEnd
-                ? "Início > Fim"
-                : dateError.dataInicio
-                ? "Início fora do intervalo"
-                : "Fim fora do intervalo"}
-            </span>
-          </div>
-        )}
-        {dateError && !(dateError.dataInicio || dateError.dataFim || dateError.dataStartGreaterThanEnd) && etapa.data_inicio && etapa.data_fim && (
-          <div className="flex items-center gap-1.5 text-xs text-[#337246] pb-0.5">
-            <Check className="w-3.5 h-3.5" />
-          </div>
-        )}
-      </div>
-
-      {/* Bloco de adiantamento */}
-      {etapa.id > 0 && etapa.data_inicio && (
-        <div className="ml-12 pt-2 border-t border-border/30">
-          {adiantamentosMap[etapa.id] ? (() => {
-            const adiantamento = adiantamentosMap[etapa.id];
-            const datasAdiantamento = sortUniqueDates(
-              adiantamento.datas_adiantamento?.length
-                ? adiantamento.datas_adiantamento
-                : legacyAdiantamentoDates(adiantamento.data_inicio_adiantamento, adiantamento.dias_adiantados),
-            );
-            const totalAdiantamento = datasAdiantamento.length || adiantamento.dias_adiantados;
-            const datasResumo = datasAdiantamento.slice(0, 3).map(formatDatePtBr).join(", ");
-            const datasTooltip = datasAdiantamento.map(formatDatePtBr).join(", ");
-
-            return (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-[#337246]">
-                <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                +{totalAdiantamento} dias de adiantamento
-                {datasAdiantamento[0] && (
-                  <span className="text-muted-foreground font-normal" title={datasTooltip}>
-                    em {datasResumo}{datasAdiantamento.length > 3 ? ` +${datasAdiantamento.length - 3}` : ""}
-                  </span>
-                )}
-              </span>
-              {adiantamento.motivo && (
-                <span className="text-xs text-muted-foreground italic truncate max-w-[200px]">
-                  - {adiantamento.motivo}
-                </span>
-              )}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 text-muted-foreground hover:text-primary"
-                onClick={() => abrirAdiantamentoModal(etapa)}
-                title="Editar adiantamento"
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                onClick={() => excluirAdiantamentoMutation.mutate(etapa.id)}
-                disabled={excluirAdiantamentoMutation.isPending}
-                title="Remover adiantamento"
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-            );
-          })() : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-[#337246] text-xs h-7 px-2"
-              onClick={() => abrirAdiantamentoModal(etapa)}
-            >
-              <TrendingUp className="w-3 h-3" />
-              Registrar Adiantamento
-            </Button>
-          )}
-        </div>
-      )}
-
-      {/* Bloco de atraso */}
-      {etapa.id > 0 && etapa.data_fim && (
-        <div className="ml-12 pt-2 border-t border-border/30">
-          {atrasosMap[etapa.id] ? (() => {
-            const atraso = atrasosMap[etapa.id];
-            const datasAtraso = sortUniqueDates(
-              atraso.datas_atraso?.length
-                ? atraso.datas_atraso
-                : legacyAtrasoDates(atraso.data_inicio_atraso, atraso.dias_extras),
-            );
-            const totalAtraso = datasAtraso.length || atraso.dias_extras;
-            const datasResumo = datasAtraso.slice(0, 3).map(formatDatePtBr).join(", ");
-            const datasTooltip = datasAtraso.map(formatDatePtBr).join(", ");
-
-            return (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-amber-500">
-                <Clock className="w-3.5 h-3.5 shrink-0" />
-                +{totalAtraso} dias em atraso
-                {datasAtraso[0] && (
-                  <span className="text-muted-foreground font-normal" title={datasTooltip}>
-                    em {datasResumo}{datasAtraso.length > 3 ? ` +${datasAtraso.length - 3}` : ""}
-                  </span>
-                )}
-              </span>
-              {atraso.motivo && (
-                <span className="text-xs text-muted-foreground italic truncate max-w-[200px]">
-                  — {atraso.motivo}
-                </span>
-              )}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 text-muted-foreground hover:text-primary"
-                onClick={() => abrirAtrasoModal(etapa)}
-                title="Editar atraso"
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                onClick={() => excluirAtrasoMutation.mutate(etapa.id)}
-                disabled={excluirAtrasoMutation.isPending}
-                title="Remover atraso"
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-            );
-          })() : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-amber-500 text-xs h-7 px-2"
-              onClick={() => abrirAtrasoModal(etapa)}
-            >
-              <Clock className="w-3 h-3" />
-              Registrar Atraso
-            </Button>
-          )}
-        </div>
-      )}
-
-      {/* Botão Avanço por dia */}
-      {etapa.id > 0 && etapa.data_inicio && etapa.data_fim && (
-        <div className="ml-12 pt-1">
-          <button
-            type="button"
-            onClick={() => toggleExpanded(etapa.id)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                expandedStages.has(etapa.id) ? "rotate-180" : ""
-              }`}
-            />
-            Avanço por dia
-          </button>
-        </div>
-      )}
-      {etapa.id < 0 && (
-        <div className="ml-12 pt-1 text-xs text-yellow-400">
-          <span className="flex items-center gap-1.5">
-            <AlertCircle className="w-3 h-3" />
-            Salve o cronograma para habilitar o avanço por dia
-          </span>
-        </div>
-      )}
-
-      {/* Painel de avanço diário */}
-      {etapa.data_inicio && etapa.data_fim && expandedStages.has(etapa.id) && (() => {
-        const diasTrabalhadosSet = new Set(diasTrabalhadosData ?? []);
-        const diasPlanejados = getDaysInRange(etapa.data_inicio!, etapa.data_fim!).filter(
-          (dia) => diasTrabalhadosSet.has(dia),
-        );
-        const diasPlanejadosSet = new Set(diasPlanejados);
-        const diasAtraso = sortUniqueDates(atrasosMap[etapa.id]?.datas_atraso ?? []).filter(
-          (dia) => !diasPlanejadosSet.has(dia),
-        );
-        const diasAtrasoSet = new Set(diasAtraso);
-        const diasAdiantamento = sortUniqueDates(adiantamentosMap[etapa.id]?.datas_adiantamento ?? []).filter(
-          (dia) => !diasPlanejadosSet.has(dia) && !diasAtrasoSet.has(dia),
-        );
-        const dias = [
-          ...diasPlanejados.map((dia) => ({ data: dia, tipo: "planejado" as const })),
-          ...diasAdiantamento.map((dia) => ({ data: dia, tipo: "adiantamento" as const })),
-          ...diasAtraso.map((dia) => ({ data: dia, tipo: "atraso" as const })),
-        ].sort((a, b) => a.data.localeCompare(b.data));
-        const totalDiasPlanejados = diasPlanejados.length || 1;
-        const etapaProgresso = progressoDiario[etapa.id] ?? {};
-        let acumulado = 0;
-        return (
-          <div className="ml-12 mt-2 border border-border/40 rounded-lg overflow-hidden">
-            <div className="grid grid-cols-5 text-[11px] font-medium text-muted-foreground bg-muted/30 px-3 py-2 border-b border-border/30">
-              <span>Data</span>
-              <span className="text-center">Planejado</span>
-              <span className="text-center">% do dia</span>
-              <span className="text-center">Acumulado</span>
-              <span className="text-center">Delta</span>
-            </div>
-            {dias.map(({ data: dia, tipo }) => {
-              const isAtraso = tipo === "atraso";
-              const isAdiantamento = tipo === "adiantamento";
-              const plannedIndex = diasPlanejados.indexOf(dia);
-              const planejado = tipo !== "planejado" || plannedIndex === -1
-                ? null
-                : Math.round(((plannedIndex + 1) / totalDiasPlanejados) * 100);
-              const incremento = etapaProgresso[dia];
-              if (incremento != null) acumulado += incremento;
-              const realizadoCumulativo = incremento != null ? Math.min(100, acumulado) : undefined;
-              const delta = realizadoCumulativo != null && planejado != null
-                ? realizadoCumulativo - planejado
-                : undefined;
-              const diaSemana = new Date(dia + "T00:00:00").toLocaleDateString("pt-BR", {
-                weekday: "short",
-                timeZone: "UTC",
-              });
-              const diaMes = new Date(dia + "T00:00:00").toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "2-digit",
-                timeZone: "UTC",
-              });
-              return (
-                <div
-                  key={dia}
-                  className={`grid grid-cols-5 items-center px-3 py-1.5 text-xs border-b border-border/20 last:border-b-0 transition-colors ${
-                    isAdiantamento
-                      ? "bg-[#337246]/5 hover:bg-[#337246]/10"
-                      : isAtraso
-                      ? "bg-amber-500/5 hover:bg-amber-500/10"
-                      : "hover:bg-muted/20"
-                  }`}
-                >
-                  <span className="text-muted-foreground tabular-nums">
-                    {diaMes}{" "}
-                    <span className="text-muted-foreground/60 capitalize">{diaSemana}</span>
-                    {isAdiantamento && (
-                      <span className="ml-2 rounded border border-[#337246]/30 bg-[#337246]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#337246]">
-                        Adiantamento
-                      </span>
-                    )}
-                    {isAtraso && (
-                      <span className="ml-2 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                        Atraso
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-center tabular-nums text-muted-foreground">
-                    {planejado != null ? `${planejado}%` : <span className="text-muted-foreground/40">—</span>}
-                  </span>
-                  <div className="flex justify-center">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      placeholder="—"
-                      defaultValue={incremento !== undefined && incremento !== null ? incremento : ""}
-                      key={`${dia}-${incremento}`}
-                      onBlur={(e) => {
-                        const raw = e.target.value.trim();
-                        if (raw === "") {
-                          handleProgressoDiarioChange(etapa, dia, null);
-                        } else {
-                          const val = parseInt(raw);
-                          if (!isNaN(val)) {
-                            handleProgressoDiarioChange(etapa, dia, val);
-                          }
-                        }
-                      }}
-                      className="w-16 h-6 glass-input text-center text-xs px-1"
-                    />
-                  </div>
-                  <span className="text-center tabular-nums font-medium">
-                    {realizadoCumulativo !== undefined
-                      ? `${realizadoCumulativo}%`
-                      : <span className="text-muted-foreground/40">—</span>}
-                  </span>
-                  <div className="flex justify-center">
-                    {delta !== undefined ? (
-                      <span
-                        className={`flex items-center gap-0.5 font-medium tabular-nums ${
-                          delta > 0
-                            ? "text-[#337246]"
-                            : delta < 0
-                            ? "text-red-400"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {delta > 0 ? (
-                          <TrendingUp className="w-3 h-3" />
-                        ) : delta < 0 ? (
-                          <TrendingDown className="w-3 h-3" />
-                        ) : (
-                          <Minus className="w-3 h-3" />
-                        )}
-                        {delta > 0 ? "+" : ""}{delta}%
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground/40">—</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
-    </div>
+      etapa={etapa}
+      globalIndex={globalIndex}
+      isFirst={isFirst}
+      isLast={isLast}
+      dateError={etapasDateErrors.find((e) => e.id === etapa.id)}
+      peso={etapasPesos.find((x) => x.id === etapa.id)}
+      datas={etapasDatas?.find((x) => x.id === etapa.id)}
+      selected={selectedEtapas.has(etapa.id)}
+      isSaving={cronogramaMutation.isPending}
+      projetoDatasDefinidas={!!dataInicioProjeto && !!dataFimProjeto}
+      isEditingNome={editingEtapaId === etapa.id}
+      editingNome={editingEtapaNome}
+      atraso={atrasosMap[etapa.id]}
+      adiantamento={adiantamentosMap[etapa.id]}
+      expanded={expandedStages.has(etapa.id)}
+      diasTrabalhados={diasTrabalhadosData}
+      progresso={progressoDiario[etapa.id] ?? {}}
+      isExcluindoAtraso={excluirAtrasoMutation.isPending}
+      isExcluindoAdiantamento={excluirAdiantamentoMutation.isPending}
+      onToggleSelect={() => toggleSelectEtapa(etapa.id)}
+      onIniciarEdicaoNome={() => iniciarEdicaoNome(etapa)}
+      onEditingNomeChange={setEditingEtapaNome}
+      onSalvarNome={salvarEdicaoNome}
+      onCancelarNome={cancelarEdicaoNome}
+      onToggleConcluida={(checked) => updateEtapaConcluida(etapa.id, checked)}
+      onMove={(direction) => moverEtapa(etapa.id, direction)}
+      onRemove={() => confirmarRemoverEtapa(etapa.id)}
+      onChangeDataInicio={(v) => updateEtapaDataInicio(etapa.id, v)}
+      onChangeDataFim={(v) => updateEtapaDataFim(etapa.id, v)}
+      onChangeResponsavel={(v) => updateEtapaResponsavel(etapa.id, v)}
+      onAbrirAtraso={() => abrirAtrasoModal(etapa)}
+      onAbrirAdiantamento={() => abrirAdiantamentoModal(etapa)}
+      onExcluirAtraso={() => excluirAtrasoMutation.mutate(etapa.id)}
+      onExcluirAdiantamento={() => excluirAdiantamentoMutation.mutate(etapa.id)}
+      onToggleExpanded={() => toggleExpanded(etapa.id)}
+      onProgressoDiarioChange={(data, pct) => handleProgressoDiarioChange(etapa, data, pct)}
+    />
   );
 
   if (authLoading) return null;
@@ -1941,10 +1280,6 @@ export default function CronogramaPage() {
                 <div className="space-y-6">
                   {[...grupos].sort((a, b) => a.ordem - b.ordem).map((grupo) => {
                     const etapasDoGrupo = cronograma.etapas.filter((e) => e.grupo_id === grupo.id);
-                    const groupIndicesMap = cronograma.etapas.reduce<number[]>((acc, e, i) => {
-                      if (e.grupo_id === grupo.id) acc.push(i);
-                      return acc;
-                    }, []);
                     const isCollapsed = collapsedGrupos.has(grupo.id);
                     const toggleCollapse = () =>
                       setCollapsedGrupos((prev) => {
@@ -2016,12 +1351,14 @@ export default function CronogramaPage() {
                         {!isCollapsed && (
                           <>
                             <div className="space-y-4">
-                              {etapasDoGrupo.map((etapa, indexInGroup) => {
-                                const isFirst = indexInGroup === 0;
-                                const isLast = indexInGroup === etapasDoGrupo.length - 1;
-                                const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
-                                return renderEtapaCard(etapa, indexInGroup, isFirst, isLast, dateError);
-                              })}
+                              {etapasDoGrupo.map((etapa, indexInGroup) =>
+                                renderEtapaCard(
+                                  etapa,
+                                  indexInGroup,
+                                  indexInGroup === 0,
+                                  indexInGroup === etapasDoGrupo.length - 1,
+                                ),
+                              )}
                             </div>
 
                             {/* Botão adicionar etapa no grupo */}
@@ -2059,10 +1396,14 @@ export default function CronogramaPage() {
                       </div>
                       {(() => {
                         const ungrouped = cronograma.etapas.filter((e) => !e.grupo_id);
-                        return ungrouped.map((etapa, indexInGroup) => {
-                            const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
-                            return renderEtapaCard(etapa, indexInGroup, indexInGroup === 0, indexInGroup === ungrouped.length - 1, dateError);
-                          });
+                        return ungrouped.map((etapa, indexInGroup) =>
+                          renderEtapaCard(
+                            etapa,
+                            indexInGroup,
+                            indexInGroup === 0,
+                            indexInGroup === ungrouped.length - 1,
+                          ),
+                        );
                       })()}
                       <Button
                         variant="ghost"
@@ -2089,10 +1430,9 @@ export default function CronogramaPage() {
                     />
                     <span className="text-xs text-muted-foreground">Selecionar todas</span>
                   </div>
-                  {cronograma.etapas.map((etapa, index) => {
-                    const dateError = etapasDateErrors.find((e) => e.id === etapa.id);
-                    return renderEtapaCard(etapa, index, index === 0, index === cronograma.etapas.length - 1, dateError);
-                  })}
+                  {cronograma.etapas.map((etapa, index) =>
+                    renderEtapaCard(etapa, index, index === 0, index === cronograma.etapas.length - 1),
+                  )}
                 </div>
               )}
 
@@ -2141,296 +1481,40 @@ export default function CronogramaPage() {
           </Card>
 
           {/* Modal de registro de adiantamento */}
-          <Dialog open={showAdiantamentoModal} onOpenChange={setShowAdiantamentoModal}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-[#337246]" />
-                  Registrar Adiantamento
-                </DialogTitle>
-                <DialogDescription>
-                  {adiantamentoModalEtapa
-                    ? `Etapa: ${adiantamentoModalEtapa.nome}`
-                    : "Registre os dias de adiantamento desta etapa."}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="flex flex-col gap-3">
-                  <label className="text-sm font-medium">Motivo do Adiantamento</label>
-                  <Input
-                    type="text"
-                    placeholder="Ex: Execucao antecipada, equipe liberada antes..."
-                    value={adiantamentoForm.motivo}
-                    onChange={(e) =>
-                      setAdiantamentoForm((prev) => ({ ...prev, motivo: e.target.value }))
-                    }
-                    className="glass-input"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Dias de adiantamento</label>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        Selecione os dias especificos antes do inicio planejado da etapa.
-                      </p>
-                    </div>
-                    <div className="text-sm font-semibold text-[#337246] tabular-nums">
-                      {adiantamentoDatasOrdenadas.length} selecionado(s)
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-border/50 bg-card/50 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navegarMesAdiantamento(-1)}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <h3 className="min-w-[150px] text-center text-sm font-semibold">
-                        {MESES[adiantamentoCalendarMonth]} {adiantamentoCalendarYear}
-                      </h3>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navegarMesAdiantamento(1)}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="mb-2 grid grid-cols-7 gap-1">
-                      {DIAS_SEMANA.map((dia) => (
-                        <div
-                          key={dia}
-                          className="py-1 text-center text-[11px] font-medium text-muted-foreground"
-                        >
-                          {dia}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1">
-                      {adiantamentoCalendarDays.map((dayInfo, index) => {
-                        if (dayInfo.isOutsideMonth) {
-                          return <div key={`adiantamento-empty-${index}`} className="h-10" />;
-                        }
-
-                        const isSelected = adiantamentoDatasOrdenadas.includes(dayInfo.date);
-                        const isToday = dayInfo.date === new Date().toISOString().split("T")[0];
-
-                        return (
-                          <button
-                            key={dayInfo.date}
-                            type="button"
-                            disabled={dayInfo.isDisabled}
-                            onClick={() => toggleAdiantamentoDate(dayInfo.date)}
-                            className={`h-10 rounded-md text-sm font-medium transition-all ${
-                              dayInfo.isDisabled
-                                ? "cursor-not-allowed opacity-30"
-                                : "cursor-pointer hover:scale-105 hover:bg-[#337246]/10"
-                            } ${
-                              isSelected
-                                ? "bg-[#337246] text-white shadow-sm"
-                                : dayInfo.isWeekend
-                                ? "bg-accent/50 text-foreground"
-                                : "bg-transparent text-foreground"
-                            } ${isToday && !isSelected ? "border-2 border-primary/50" : ""}`}
-                            title={
-                              dayInfo.isDisabled
-                                ? "Disponivel apenas antes da data de inicio da etapa"
-                                : isSelected
-                                ? "Clique para remover"
-                                : "Clique para marcar adiantamento"
-                            }
-                          >
-                            {dayInfo.dayOfMonth}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-[#337246]/20 bg-[#337246]/10 px-3 py-2 text-xs text-[#337246]">
-                    {adiantamentoDatasOrdenadas.length > 0 ? (
-                      <span>
-                        Datas selecionadas: {adiantamentoDatasOrdenadas.map(formatDatePtBr).join(", ")}
-                      </span>
-                    ) : (
-                      <span>
-                        Nenhum dia selecionado. Marque pelo menos uma data para salvar o adiantamento.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowAdiantamentoModal(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={salvarAdiantamento}
-                  disabled={salvarAdiantamentoMutation.isPending || adiantamentoDatasOrdenadas.length === 0}
-                  className="gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  {salvarAdiantamentoMutation.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <DelayCalendarDialog
+            variant="adiantamento"
+            open={showAdiantamentoModal}
+            onOpenChange={setShowAdiantamentoModal}
+            etapaNome={adiantamentoModalEtapa?.nome ?? null}
+            motivo={adiantamentoForm.motivo}
+            onMotivoChange={(motivo) => setAdiantamentoForm((prev) => ({ ...prev, motivo }))}
+            datas={adiantamentoDatasOrdenadas}
+            onToggleDate={toggleAdiantamentoDate}
+            calendarYear={adiantamentoCalendarYear}
+            calendarMonth={adiantamentoCalendarMonth}
+            onNavigateMonth={navegarMesAdiantamento}
+            maxDate={adiantamentoMaxDate}
+            onSave={salvarAdiantamento}
+            isSaving={salvarAdiantamentoMutation.isPending}
+          />
 
           {/* Modal de registro de atraso */}
-          <Dialog open={showAtrasoModal} onOpenChange={setShowAtrasoModal}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-amber-500" />
-                  Registrar Atraso
-                </DialogTitle>
-                <DialogDescription>
-                  {atrasoModalEtapa
-                    ? `Etapa: ${atrasoModalEtapa.nome}`
-                    : "Registre os dias em atraso desta etapa."}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="flex flex-col gap-3">
-                  <label className="text-sm font-medium">Motivo do Atraso</label>
-                  <Input
-                    type="text"
-                    placeholder="Ex: Pendência de ASO, atraso no fornecedor..."
-                    value={atrasoForm.motivo}
-                    onChange={(e) =>
-                      setAtrasoForm((prev) => ({ ...prev, motivo: e.target.value }))
-                    }
-                    className="glass-input"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Dias extras em atraso</label>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        Selecione os dias especificos em que a etapa ficou parada.
-                      </p>
-                    </div>
-                    <div className="text-sm font-semibold text-amber-500 tabular-nums">
-                      {atrasoDatasOrdenadas.length} selecionado(s)
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-border/50 bg-card/50 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navegarMesAtraso(-1)}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <h3 className="min-w-[150px] text-center text-sm font-semibold">
-                        {MESES[atrasoCalendarMonth]} {atrasoCalendarYear}
-                      </h3>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navegarMesAtraso(1)}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="mb-2 grid grid-cols-7 gap-1">
-                      {DIAS_SEMANA.map((dia) => (
-                        <div
-                          key={dia}
-                          className="py-1 text-center text-[11px] font-medium text-muted-foreground"
-                        >
-                          {dia}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1">
-                      {atrasoCalendarDays.map((dayInfo, index) => {
-                        if (dayInfo.isOutsideMonth) {
-                          return <div key={`empty-${index}`} className="h-10" />;
-                        }
-
-                        const isSelected = atrasoDatasOrdenadas.includes(dayInfo.date);
-                        const isToday = dayInfo.date === new Date().toISOString().split("T")[0];
-
-                        return (
-                          <button
-                            key={dayInfo.date}
-                            type="button"
-                            disabled={dayInfo.isDisabled}
-                            onClick={() => toggleAtrasoDate(dayInfo.date)}
-                            className={`h-10 rounded-md text-sm font-medium transition-all ${
-                              dayInfo.isDisabled
-                                ? "cursor-not-allowed opacity-30"
-                                : "cursor-pointer hover:scale-105 hover:bg-amber-500/10"
-                            } ${
-                              isSelected
-                                ? "bg-amber-500 text-white shadow-sm"
-                                : dayInfo.isWeekend
-                                ? "bg-accent/50 text-foreground"
-                                : "bg-transparent text-foreground"
-                            } ${isToday && !isSelected ? "border-2 border-primary/50" : ""}`}
-                            title={
-                              dayInfo.isDisabled
-                                ? "Disponivel apenas apos a data de fim da etapa"
-                                : isSelected
-                                ? "Clique para remover"
-                                : "Clique para marcar atraso"
-                            }
-                          >
-                            {dayInfo.dayOfMonth}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-                    {atrasoDatasOrdenadas.length > 0 ? (
-                      <span>
-                        Datas selecionadas: {atrasoDatasOrdenadas.map(formatDatePtBr).join(", ")}
-                      </span>
-                    ) : (
-                      <span>
-                        Nenhum dia selecionado. Marque pelo menos uma data para salvar o atraso.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowAtrasoModal(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={salvarAtraso}
-                  disabled={salvarAtrasoMutation.isPending || atrasoDatasOrdenadas.length === 0}
-                  className="gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  {salvarAtrasoMutation.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <DelayCalendarDialog
+            variant="atraso"
+            open={showAtrasoModal}
+            onOpenChange={setShowAtrasoModal}
+            etapaNome={atrasoModalEtapa?.nome ?? null}
+            motivo={atrasoForm.motivo}
+            onMotivoChange={(motivo) => setAtrasoForm((prev) => ({ ...prev, motivo }))}
+            datas={atrasoDatasOrdenadas}
+            onToggleDate={toggleAtrasoDate}
+            calendarYear={atrasoCalendarYear}
+            calendarMonth={atrasoCalendarMonth}
+            onNavigateMonth={navegarMesAtraso}
+            minDate={atrasoMinDate}
+            onSave={salvarAtraso}
+            isSaving={salvarAtrasoMutation.isPending}
+          />
 
           {/* Modal de confirmação ao remover etapa */}
           <Dialog open={showRemoveModal} onOpenChange={setShowRemoveModal}>
