@@ -65,7 +65,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (data.success && data.user) {
           setUser(data.user);
-          router.push(data.user.perfil === "admin" ? "/configuracoes" : "/central");
+          // Honra ?redirect= (sessão expirada no meio de uma página); aceita apenas rotas internas
+          const redirect = new URLSearchParams(window.location.search).get("redirect");
+          const destino =
+            redirect && redirect.startsWith("/") && !redirect.startsWith("//")
+              ? redirect
+              : data.user.perfil === "admin"
+                ? "/dashboard"
+                : "/central";
+          router.push(destino);
         } else {
           throw new Error("Resposta inválida do servidor");
         }

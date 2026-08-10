@@ -130,6 +130,16 @@ function getInitialCentralPage(): number {
   ) ?? 1;
 }
 
+// Filtros persistidos na URL: voltar/compartilhar restaura busca, status e cargo
+function getInitialParam(key: string): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get(key) ?? "";
+}
+
+function getInitialListParam(key: string): string[] {
+  return getInitialParam(key).split(",").filter(Boolean);
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: Status }) {
@@ -208,10 +218,10 @@ export default function CentralPage() {
       router.replace("/dashboard");
     }
   }, [authLoading, user, router]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => getInitialParam("q"));
   const debouncedSearch = useDebounce(search, 500);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [cargoFilter, setCargoFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>(() => getInitialListParam("status"));
+  const [cargoFilter, setCargoFilter] = useState<string[]>(() => getInitialListParam("cargo"));
   const [page, setPage] = useState(getInitialCentralPage);
 
   // Estado do modal de upload
@@ -233,18 +243,21 @@ export default function CentralPage() {
     window.sessionStorage.setItem(CENTRAL_PAGE_STORAGE_KEY, String(page));
 
     const url = new URL(window.location.href);
-    if (page > 1) {
-      url.searchParams.set("page", String(page));
-    } else {
-      url.searchParams.delete("page");
-    }
+    const setOrDelete = (key: string, value: string) => {
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    };
+    setOrDelete("page", page > 1 ? String(page) : "");
+    setOrDelete("q", debouncedSearch);
+    setOrDelete("status", statusFilter.join(","));
+    setOrDelete("cargo", cargoFilter.join(","));
 
     const nextPath = `${url.pathname}${url.search}${url.hash}`;
     const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (nextPath !== currentPath) {
       router.replace(nextPath, { scroll: false });
     }
-  }, [page, router]);
+  }, [page, debouncedSearch, statusFilter, cargoFilter, router]);
 
   // Busca os centros de custo disponíveis para o dropdown
   const { data: centrosDisponiveisData } = useQuery({
