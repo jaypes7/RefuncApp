@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useMemo, useRef, useEffect, useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -9,6 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   ChartContainer,
@@ -26,12 +34,17 @@ import {
   AlertCircle,
   RefreshCw,
   ArrowLeft,
-  ChevronDown,
-  ChevronUp,
+  ChevronRight,
   Search,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  MinusCircle,
+  Users,
 } from "lucide-react";
 import { SheetUpload } from "@/components/sheet-upload";
 import { ExportPdfButton } from "@/components/export-pdf-button";
+import { KpiCard } from "@/components/ui/kpi-card";
 import { useFilter } from "@/contexts/FilterContext";
 
 // ============================================================================
@@ -101,23 +114,8 @@ function colorFor(label: string, map: Record<string, string>, idx: number): stri
 }
 
 // ============================================================================
-// STATUS DE TREINAMENTOS — metadados de status + helpers
+// STATUS DE TREINAMENTOS — helpers
 // ============================================================================
-
-type TreinoStatusKey = "ok" | "aVencer" | "vencido" | "pendente";
-
-const TREINO_STATUS_META: Array<{
-  key:   TreinoStatusKey;
-  label: string;
-  dot:   string;
-  text:  string;
-  bar:   string;
-}> = [
-  { key: "ok",       label: "OK",       dot: "bg-[#337246]", text: "text-[#337246]",                     bar: "#337246" },
-  { key: "aVencer",  label: "A Vencer", dot: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", bar: "#E5CF61" },
-  { key: "vencido",  label: "Vencido",  dot: "bg-red-500",   text: "text-red-600 dark:text-red-400",     bar: "#DA291B" },
-  { key: "pendente", label: "Pendente", dot: "bg-slate-400", text: "text-muted-foreground",              bar: "#cbd5e1" },
-];
 
 const STATUS_PILL: Record<string, string> = {
   "OK":       "bg-[#337246]/10 text-[#337246]",
@@ -148,16 +146,35 @@ function TreinamentosStatusCard({ treinamentos }: { treinamentos: TreinamentoSta
     return treinamentos.filter((t) => t.nome.toLowerCase().includes(q));
   }, [treinamentos, filtro]);
 
+  // Ordenação fixa: piores no topo. Menor %OK primeiro; empate desempata
+  // por mais Vencidos. Cursos sem vínculos vão pro fim (não carregam sinal).
+  const listaOrdenada = useMemo(() => {
+    const arr = [...lista];
+    arr.sort((a, b) => {
+      const aTotal = a.total === 0 ? Infinity : a.ok / a.total;
+      const bTotal = b.total === 0 ? Infinity : b.ok / b.total;
+      if (aTotal !== bTotal) return aTotal - bTotal;
+      return b.vencido - a.vencido;
+    });
+    return arr;
+  }, [lista]);
+
+  // Totais agregados para a faixa de KPIs no topo — PGV §3.2/4.1:
+  // cada card tem absoluto + %, cor semântica, e fundo tonal quando exige ação.
   const totais = useMemo(
     () =>
       treinamentos.reduce(
         (acc, t) => {
           acc.total += t.total;
+          acc.ok += t.ok;
+          acc.aVencer += t.aVencer;
+          acc.vencido += t.vencido;
+          acc.pendente += t.pendente;
           acc.realizados += t.realizados;
-          acc.pendente += t.naoRealizados;
+          acc.naoRealizados += t.naoRealizados;
           return acc;
         },
-        { total: 0, realizados: 0, pendente: 0 },
+        { total: 0, ok: 0, aVencer: 0, vencido: 0, pendente: 0, realizados: 0, naoRealizados: 0 },
       ),
     [treinamentos],
   );
@@ -176,13 +193,6 @@ function TreinamentosStatusCard({ treinamentos }: { treinamentos: TreinamentoSta
       <CardHeader className="flex flex-row items-center gap-2 pb-2 flex-wrap">
         <GraduationCap className="h-4 w-4 text-primary" />
         <CardTitle>Status de Treinamentos</CardTitle>
-        {treinamentos.length > 0 && (
-          <span className="text-sm font-normal text-muted-foreground">
-            ({treinamentos.length} {treinamentos.length === 1 ? "treinamento" : "treinamentos"} ·{" "}
-            <span className="text-[#337246] font-medium">{totais.realizados} realizados</span> ·{" "}
-            <span className="font-medium">{totais.pendente} pendentes</span>)
-          </span>
-        )}
       </CardHeader>
       <CardContent>
         {treinamentos.length === 0 ? (
@@ -191,120 +201,214 @@ function TreinamentosStatusCard({ treinamentos }: { treinamentos: TreinamentoSta
           </div>
         ) : (
           <>
-            <div className="relative mb-4 max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Filtrar por treinamento..."
-                value={filtro}
-                onChange={(e) => setFiltro(e.target.value)}
-                className="pl-9"
+            {/* Faixa de KPIs agregados — padrão PGV §3.2/4.1:
+                absoluto + %, cor semântica, fundo tonal quando exige ação. */}
+            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <KpiCard
+                icon={Users}
+                label="Vínculos"
+                value={totais.total}
+                hint={`${treinamentos.length} treinamentos no catálogo`}
+                tone="neutral"
+              />
+              <KpiCard
+                icon={CheckCircle2}
+                label="OK"
+                value={totais.ok}
+                total={totais.total}
+                tone="success"
+                emphasis={totais.ok > 0 && totais.ok === totais.total}
+              />
+              <KpiCard
+                icon={Clock}
+                label="A vencer"
+                value={totais.aVencer}
+                total={totais.total}
+                tone="warning"
+                emphasis={totais.aVencer > 0}
+              />
+              <KpiCard
+                icon={XCircle}
+                label="Vencido"
+                value={totais.vencido}
+                total={totais.total}
+                tone="danger"
+                emphasis={totais.vencido > 0}
+              />
+              <KpiCard
+                icon={MinusCircle}
+                label="Pendente"
+                value={totais.pendente}
+                total={totais.total}
+                tone="neutral"
+                hint={totais.pendente > 0 ? "sem data agendada" : undefined}
               />
             </div>
 
-            <div className="space-y-3 max-h-[640px] overflow-y-auto pr-1">
-              {lista.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhum treinamento encontrado para o filtro.
-                </p>
-              ) : (
-                lista.map((t) => {
-                  const aberto = expandidos.has(t.nome);
-                  const realizados = t.realizados;
-                  return (
-                    <div
-                      key={t.nome}
-                      className="rounded-lg border border-border bg-card/40 overflow-hidden"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggle(t.nome)}
-                        className="w-full px-4 py-3 text-left transition-colors hover:bg-muted/40"
-                      >
-                        <div className="flex items-center gap-2">
-                          {aberto ? (
-                            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          )}
-                          <span className="font-semibold text-foreground truncate">{t.nome}</span>
-                          <span className="shrink-0 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                            {t.total} {t.total === 1 ? "colaborador" : "colaboradores"}
-                          </span>
-                          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                            <span className="text-[#337246] font-medium">{realizados}</span> realizados ·{" "}
-                            <span className="font-medium">{t.naoRealizados}</span> pendentes
-                          </span>
-                        </div>
-
-                        {/* Barra empilhada por status */}
-                        <div className="mt-2.5 flex h-2 w-full overflow-hidden rounded-full bg-muted">
-                          {TREINO_STATUS_META.map((m) =>
-                            t[m.key] > 0 && t.total > 0 ? (
-                              <div
-                                key={m.key}
-                                style={{ width: `${(t[m.key] / t.total) * 100}%`, backgroundColor: m.bar }}
-                              />
-                            ) : null,
-                          )}
-                        </div>
-
-                        {/* Contagem por status */}
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                          {TREINO_STATUS_META.map((m) => (
-                            <span key={m.key} className="flex items-center gap-1.5 text-xs">
-                              <span className={cn("h-2 w-2 rounded-full", m.dot)} />
-                              <span className="text-muted-foreground">{m.label}</span>
-                              <span className={cn("font-semibold tabular-nums", m.text)}>{t[m.key]}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </button>
-
-                      {aberto && (
-                        <div className="border-t border-border bg-background/40 p-3 space-y-1">
-                          {t.membros.length === 0 ? (
-                            <p className="py-2 text-center text-xs text-muted-foreground">
-                              Nenhum colaborador vinculado.
-                            </p>
-                          ) : (
-                            t.membros.map((mb, i) => (
-                              <div
-                                key={`${t.nome}-${mb.nome}-${i}`}
-                                className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-card/60 px-3 py-2"
-                              >
-                                <span className="text-sm text-foreground/90 truncate" title={mb.nome}>
-                                  {mb.nome}
-                                </span>
-                                <div className="flex shrink-0 items-center gap-3">
-                                  {mb.data_realizacao && (
-                                    <span className="hidden sm:inline text-xs text-muted-foreground tabular-nums">
-                                      Realizado: {formatarDataTreino(mb.data_realizacao)}
-                                    </span>
-                                  )}
-                                  {mb.data_validade && (
-                                    <span className="hidden sm:inline text-xs text-muted-foreground tabular-nums">
-                                      Validade: {formatarDataTreino(mb.data_validade)}
-                                    </span>
-                                  )}
-                                  <span
-                                    className={cn(
-                                      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                      STATUS_PILL[mb.status] ?? STATUS_PILL["Pendente"],
-                                    )}
-                                  >
-                                    {mb.status}
-                                  </span>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+            {/* Filtro + contador — o contador é dinâmico com a busca. */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="relative max-w-md flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Filtrar por treinamento..."
+                  value={filtro}
+                  onChange={(e) => setFiltro(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                <span className="font-mono font-semibold">{lista.length}</span> de{" "}
+                <span className="font-mono font-semibold">{treinamentos.length}</span> treinamentos
+              </span>
             </div>
+
+            {/* Tabela densa — piores no topo, células zeradas em cinza-fantasma,
+                Vencido > 0 pinta a célula em rosa. Ver plano correspondente. */}
+            <Table containerClassName="max-h-[640px] overflow-y-auto rounded-lg border border-border">
+              <TableHeader sticky>
+                <TableRow>
+                  <TableHead className="w-8 pl-3" />
+                  <TableHead className="min-w-0">Treinamento</TableHead>
+                  <TableHead className="w-16 text-right font-mono text-[10px] uppercase tracking-wider">Vínc.</TableHead>
+                  <TableHead className="w-16 text-right font-mono text-[10px] uppercase tracking-wider">% OK</TableHead>
+                  <TableHead className="w-14 text-right font-mono text-[10px] uppercase tracking-wider">OK</TableHead>
+                  <TableHead className="w-16 text-right font-mono text-[10px] uppercase tracking-wider">A vencer</TableHead>
+                  <TableHead className="w-16 text-right font-mono text-[10px] uppercase tracking-wider">Vencido</TableHead>
+                  <TableHead className="w-16 text-right font-mono text-[10px] uppercase tracking-wider pr-3">Pendente</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {listaOrdenada.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                      Nenhum treinamento encontrado para o filtro.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  listaOrdenada.map((t) => {
+                    const aberto = expandidos.has(t.nome);
+                    const pct = t.total > 0 ? Math.round((t.ok / t.total) * 100) : null;
+                    const pctClass =
+                      pct === null
+                        ? "text-muted-foreground"
+                        : pct >= 90
+                          ? "text-[#337246]"
+                          : pct >= 60
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-red-600 dark:text-red-400 font-semibold";
+                    const ghost = "text-muted-foreground/40 font-normal";
+                    return (
+                      <Fragment key={t.nome}>
+                        <TableRow
+                          className="cursor-pointer"
+                          aria-expanded={aberto}
+                          onClick={() => toggle(t.nome)}
+                        >
+                          <TableCell className="pl-3">
+                            <ChevronRight
+                              className={cn(
+                                "h-4 w-4 text-muted-foreground transition-transform",
+                                aberto && "rotate-90",
+                              )}
+                            />
+                          </TableCell>
+                          <TableCell className="min-w-0">
+                            <span className="block truncate font-semibold text-foreground" title={t.nome}>
+                              {t.nome}
+                            </span>
+                          </TableCell>
+                          <TableCell className="w-16 text-right font-mono tabular-nums text-muted-foreground">
+                            {t.total}
+                          </TableCell>
+                          <TableCell className={cn("w-16 text-right font-mono tabular-nums", pctClass)}>
+                            {pct === null ? "—" : `${pct}%`}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "w-14 text-right font-mono tabular-nums",
+                              t.ok > 0 ? "text-[#337246]" : ghost,
+                            )}
+                          >
+                            {t.ok}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "w-16 text-right font-mono tabular-nums",
+                              t.aVencer > 0 ? "text-amber-600 dark:text-amber-400" : ghost,
+                            )}
+                          >
+                            {t.aVencer}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "w-16 text-right font-mono tabular-nums",
+                              t.vencido > 0
+                                ? "bg-red-500/10 text-red-600 dark:text-red-400 font-semibold"
+                                : ghost,
+                            )}
+                          >
+                            {t.vencido}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "w-16 pr-3 text-right font-mono tabular-nums",
+                              t.pendente > 0 ? "text-muted-foreground" : ghost,
+                            )}
+                          >
+                            {t.pendente}
+                          </TableCell>
+                        </TableRow>
+
+                        {aberto && (
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell colSpan={8} className="p-0">
+                              <div className="border-t border-border bg-background/40 p-3 space-y-1">
+                                {t.membros.length === 0 ? (
+                                  <p className="py-2 text-center text-xs text-muted-foreground">
+                                    Nenhum colaborador vinculado.
+                                  </p>
+                                ) : (
+                                  t.membros.map((mb, i) => (
+                                    <div
+                                      key={`${t.nome}-${mb.nome}-${i}`}
+                                      className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-card/60 px-3 py-2"
+                                    >
+                                      <span className="text-sm text-foreground/90 truncate" title={mb.nome}>
+                                        {mb.nome}
+                                      </span>
+                                      <div className="flex shrink-0 items-center gap-3">
+                                        {mb.data_realizacao && (
+                                          <span className="hidden sm:inline text-xs text-muted-foreground tabular-nums">
+                                            Realizado: {formatarDataTreino(mb.data_realizacao)}
+                                          </span>
+                                        )}
+                                        {mb.data_validade && (
+                                          <span className="hidden sm:inline text-xs text-muted-foreground tabular-nums">
+                                            Validade: {formatarDataTreino(mb.data_validade)}
+                                          </span>
+                                        )}
+                                        <span
+                                          className={cn(
+                                            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                            STATUS_PILL[mb.status] ?? STATUS_PILL["Pendente"],
+                                          )}
+                                        >
+                                          {mb.status}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
           </>
         )}
       </CardContent>

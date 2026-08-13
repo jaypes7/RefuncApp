@@ -33,6 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { DataQualityBlock } from "@/components/ui/data-quality";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFilter } from "@/contexts/FilterContext";
 import { useRouter } from "next/navigation";
@@ -635,11 +636,15 @@ export default function ChecklistMobilizacaoPage() {
     <ProtectedRoute>
       <div className="min-h-screen w-full p-4 md:p-8">
         <div className="mx-auto max-w-7xl space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="page-title">Checklist Mobilização</h1>
-              <p className="page-subtitle">Controle de etapas e subetapas do projeto</p>
-            </div>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-widest text-primary">
+                  Checklist de mobilização
+                </p>
+                <h1 className="page-title">Checklist Mobilização</h1>
+                <p className="page-subtitle">Controle de etapas e subetapas do projeto</p>
+              </div>
             <div className="flex items-center gap-2 flex-wrap">
               {selectedEtapas.size > 0 && (
                 <>
@@ -745,7 +750,43 @@ export default function ChecklistMobilizacaoPage() {
                 </div>
               )}
             </div>
+            </div>
+            <div className="border-b border-border/60" />
           </div>
+
+          {/* Bloco Qualidade dos Dados — deriva do estado das subetapas.
+              Ver ANALISE_PGV.md §4.2. */}
+          {subetapas.length > 0 && (
+            <DataQualityBlock
+              indicators={[
+                {
+                  label: "Subetapas sem responsável",
+                  count: subetapas.filter((s) => !s.responsavel).length,
+                },
+                {
+                  label: "Subetapas sem setor",
+                  count: subetapas.filter((s) => !s.setor).length,
+                },
+                {
+                  label: "Subetapas sem valor previsto",
+                  count: subetapas.filter((s) => s.previsto == null).length,
+                },
+                {
+                  label: "Subetapas sem avanço registrado",
+                  count: subetapas.filter((s) => s.avanco == null || s.avanco === 0).length,
+                },
+                {
+                  label: "Subetapas sem início planejado",
+                  count: subetapas.filter((s) => !s.data_inicio).length,
+                },
+                {
+                  label: "Subetapas sem término planejado",
+                  count: subetapas.filter((s) => !s.data_termino).length,
+                },
+              ]}
+              footnote="Uma mesma subetapa pode aparecer em mais de uma linha. Cada indicador conta subetapas distintas afetadas pelo critério."
+            />
+          )}
 
           {!filterReady ? (
             <Card className="glass-card">

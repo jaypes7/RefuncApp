@@ -19,17 +19,22 @@ import {
   ChartTooltip,
 } from "@/components/ui/chart";
 import type { ConfigData, DashboardPrincipalData } from "@/lib/axios";
-import { CHART_AXIS_TICK, CHART_GRID_COLOR, MANSERV_CHART, MANSERV_STATUS } from "@/lib/chart-colors";
+import {
+  CHART_AXIS_TICK_THEMED,
+  CHART_GRID_DASH,
+  CHART_SERIES,
+  CHART_THEME,
+} from "@/lib/chart-colors";
 import type { EtapasPorGrupo } from "./helpers";
 
 const chartConfigCurvaS = {
   previsto: {
     label: "Planejado",
-    color: MANSERV_CHART.gray,
+    color: CHART_SERIES.planejado,
   },
   realizado: {
     label: "Realizado",
-    color: MANSERV_STATUS.danger,
+    color: CHART_SERIES.realizado,
   },
 };
 
@@ -346,43 +351,46 @@ export function EvolucaoProjetoCard({
           </div>
         ) : (
           <ChartContainer config={chartConfigCurvaS} className="h-[350px] 2xl:h-[480px] w-full">
+            {/* Estilo Curva S adotado do PGV — ver ANALISE_PGV.md §8.
+                Ambas séries sólidas com gradient da própria cor; grid
+                pontilhado fino; ticks mono; tooltip colorido por série. */}
             <AreaChart
               data={chartDisplayData}
               margin={{ top: 20, right: 60, left: 20, bottom: 20 }}
             >
               <defs>
                 <linearGradient
-                  id="gradientAdmitidos"
+                  id="gradientPlanejado"
                   x1="0" y1="0" x2="0" y2="1"
                 >
-                  <stop offset="5%" stopColor="#DA291B" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#DA291B" stopOpacity={0} />
+                  <stop offset="0%" stopColor={CHART_SERIES.planejado} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={CHART_SERIES.planejado} stopOpacity={0} />
                 </linearGradient>
                 <linearGradient
-                  id="gradientMeta"
+                  id="gradientRealizado"
                   x1="0" y1="0" x2="0" y2="1"
                 >
-                  <stop offset="5%" stopColor="#e2e2e2" stopOpacity={0.12} />
-                  <stop offset="95%" stopColor="#e2e2e2" stopOpacity={0} />
+                  <stop offset="0%" stopColor={CHART_SERIES.realizado} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={CHART_SERIES.realizado} stopOpacity={0} />
                 </linearGradient>
               </defs>
 
               <CartesianGrid
-                strokeDasharray="3 3"
-                stroke={CHART_GRID_COLOR}
+                strokeDasharray={CHART_GRID_DASH}
+                stroke={CHART_THEME.grid}
                 vertical={false}
               />
 
               <XAxis
                 dataKey="mes"
-                tick={CHART_AXIS_TICK}
+                tick={CHART_AXIS_TICK_THEMED}
                 tickLine={false}
                 axisLine={false}
                 ticks={xAxisTicks}
                 interval={0}
               />
               <YAxis
-                tick={CHART_AXIS_TICK}
+                tick={CHART_AXIS_TICK_THEMED}
                 tickLine={false}
                 axisLine={false}
                 domain={[0, 100]}
@@ -392,11 +400,12 @@ export function EvolucaoProjetoCard({
                   angle: -90,
                   position: "insideLeft",
                   offset: 10,
-                  style: { fill: CHART_AXIS_TICK.fill, fontSize: CHART_AXIS_TICK.fontSize },
+                  style: { fill: CHART_THEME.axis, fontSize: 11, fontFamily: "var(--font-mono, monospace)" },
                 }}
               />
 
               <ChartTooltip
+                cursor={{ stroke: CHART_THEME.axis, strokeWidth: 1, strokeDasharray: "3 3" }}
                 content={({ active, payload, label }) => {
                   if (!active || !payload || !payload.length) return null;
                   const p = payload[0].payload as {
@@ -404,17 +413,20 @@ export function EvolucaoProjetoCard({
                     realizado?: number;
                   };
                   return (
-                    <div className="rounded-lg border bg-background p-2 shadow-sm">
-                      <p className="text-xs text-muted-foreground">{label}</p>
-                      <p className="text-xs">
-                        Planejado:{" "}
-                        <span className="font-semibold">
+                    <div
+                      className="rounded-md border bg-card p-2.5 shadow-sm"
+                      style={{ borderColor: CHART_THEME.border }}
+                    >
+                      <p className="mb-1 font-mono text-xs font-semibold text-foreground">{label}</p>
+                      <p className="font-mono text-xs" style={{ color: CHART_SERIES.planejado }}>
+                        Planejado :{" "}
+                        <span className="font-semibold tabular-nums">
                           {p.previsto?.toFixed(1) ?? 0}%
                         </span>
                       </p>
-                      <p className="text-xs">
-                        Realizado:{" "}
-                        <span className="font-semibold">
+                      <p className="font-mono text-xs" style={{ color: CHART_SERIES.realizado }}>
+                        Realizado :{" "}
+                        <span className="font-semibold tabular-nums">
                           {p.realizado?.toFixed(1) ?? 0}%
                         </span>
                       </p>
@@ -427,23 +439,22 @@ export function EvolucaoProjetoCard({
               <Area
                 type="monotone"
                 dataKey="previsto"
-                stroke={MANSERV_CHART.gray}
+                stroke={CHART_SERIES.planejado}
                 strokeWidth={2}
-                strokeDasharray="6 3"
-                fill="url(#gradientMeta)"
+                fill="url(#gradientPlanejado)"
                 dot={false}
-                activeDot={{ r: 5, fill: "#e2e2e2" }}
+                activeDot={{ r: 4, fill: CHART_SERIES.planejado }}
               />
 
               {temProgressoReal && (
                 <Area
                   type="monotone"
                   dataKey="realizado"
-                  stroke={MANSERV_STATUS.danger}
-                  strokeWidth={3}
-                  fill="url(#gradientAdmitidos)"
+                  stroke={CHART_SERIES.realizado}
+                  strokeWidth={2}
+                  fill="url(#gradientRealizado)"
                   dot={false}
-                  activeDot={{ r: 7, fill: "#DA291B", stroke: "#fff", strokeWidth: 2 }}
+                  activeDot={{ r: 4, fill: CHART_SERIES.realizado }}
                 />
               )}
 
@@ -451,10 +462,8 @@ export function EvolucaoProjetoCard({
                 <ReferenceDot
                   x={pontoSelecionado.x}
                   y={pontoSelecionado.y}
-                  r={6}
-                  fill="#DA291B"
-                  stroke="#fff"
-                  strokeWidth={2}
+                  r={5}
+                  fill={CHART_SERIES.realizado}
                 />
               )}
 

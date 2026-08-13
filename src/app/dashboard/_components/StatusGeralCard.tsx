@@ -25,27 +25,96 @@ const TONE_TEXT: Record<StatTone, string> = {
   muted: "text-muted-foreground",
 };
 
+// Cores de fundo/borda "tonais" para o card inteiro — segue o padrão PGV §3.2:
+// o card exige ação quando há danger/warn na categoria, e sinaliza pintando o
+// fundo em vez de só a barra. Escala de atenção em duas camadas.
+const TONE_SURFACE: Record<StatTone, string> = {
+  ok: "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-500/5",
+  warn: "border-amber-200 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5",
+  danger: "border-rose-200 bg-rose-50/60 dark:border-rose-500/20 dark:bg-rose-500/5",
+  info: "border-sky-200 bg-sky-50/60 dark:border-sky-500/20 dark:bg-sky-500/5",
+  muted: "border-border bg-card",
+};
+
+// Cor de barra hex por tom (dark-mode compatível via opacity Tailwind não cobre,
+// então fixamos hex — barras são elementos gráficos, não texto).
+const TONE_BAR: Record<StatTone, string> = {
+  ok: "#337246",
+  warn: "#f59e0b",
+  danger: "#ef4444",
+  info: "#3b82f6",
+  muted: "#e2e2e2",
+};
+
+/**
+ * Card de categoria de status — estilo PGV (§3.2 e §4.1).
+ *
+ * Anatomia:
+ *   [eyebrow: nome da categoria]
+ *   [número grande do "concluído principal"] [/ %]
+ *   [barra de proporção segmentada mostrando OK/Warn/Danger]
+ *   [linha compacta: · Apto 37 · Inapto 0 · Pendente 182]
+ *
+ * O card ganha fundo tonal quando há danger > 0 (rosa) ou warn > 0 (âmbar).
+ * Só fica branco quando tudo está OK.
+ */
 function StatCategory({
   label,
   items,
+  total,
 }: {
   label: string;
   items: Array<{ label: string; value: number; tone: StatTone }>;
+  /** Base para o percentual. Se ausente, soma os itens. */
+  total?: number;
 }) {
+  const soma = total ?? items.reduce((acc, it) => acc + it.value, 0);
+  const primary = items.find((it) => it.tone === "ok") ?? items[0];
+  const pct = soma > 0 ? Math.round((primary.value / soma) * 100) : 0;
+
+  // Surface: rosa se tem danger > 0, âmbar se tem warn > 0, verde-claro se
+  // 100% ok. Segue a "escala de atenção em duas camadas" do PGV.
+  const hasDanger = items.some((it) => it.tone === "danger" && it.value > 0);
+  const hasWarn = items.some((it) => it.tone === "warn" && it.value > 0);
+  const surfaceTone: StatTone = hasDanger ? "danger" : hasWarn ? "warn" : "ok";
+
   return (
-    <div className="rounded-md border border-border/60 bg-background/40 p-3">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2.5">
+    <div className={cn("rounded-md border p-3 flex flex-col gap-2", TONE_SURFACE[surfaceTone])}>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
         {label}
       </p>
-      <div className="space-y-2">
+
+      <p className="flex items-baseline gap-1.5">
+        <span className={cn("font-mono text-2xl font-bold leading-none tabular-nums", TONE_TEXT[primary.tone])}>
+          {primary.value.toLocaleString("pt-BR")}
+        </span>
+        <span className="font-mono text-[11px] font-semibold text-muted-foreground tabular-nums">
+          / {pct}%
+        </span>
+      </p>
+
+      {/* Barra de proporção segmentada — PGV §4.2, mais legível que gráfico. */}
+      <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        {items.map((it) =>
+          it.value > 0 && soma > 0 ? (
+            <div
+              key={it.label}
+              style={{ width: `${(it.value / soma) * 100}%`, backgroundColor: TONE_BAR[it.tone] }}
+              title={`${it.label}: ${it.value}`}
+            />
+          ) : null,
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
         {items.map((it) => (
-          <div key={it.label} className="flex items-center gap-2">
-            <span className={cn("h-2 w-2 rounded-full shrink-0", TONE_DOT[it.tone])} />
-            <span className="text-sm text-foreground/80 truncate">{it.label}</span>
-            <span className={cn("ml-auto text-sm font-semibold tabular-nums", TONE_TEXT[it.tone])}>
+          <span key={it.label} className="inline-flex items-center gap-1 text-[11px]">
+            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", TONE_DOT[it.tone])} />
+            <span className="text-muted-foreground">{it.label}</span>
+            <span className={cn("font-mono font-semibold tabular-nums", TONE_TEXT[it.tone])}>
               {it.value}
             </span>
-          </div>
+          </span>
         ))}
       </div>
     </div>
