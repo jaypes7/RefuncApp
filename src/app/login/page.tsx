@@ -53,24 +53,22 @@ export default function LoginPage() {
               Controle, agilidade e segurança nas operações da sua unidade de trabalho
             </p>
           </div>
-          <div className="space-y-8">
-            <p className="text-xl font-semibold text-primary-foreground md:text-2xl lg:text-3xl">
-              Fazer. Inovar. Solucionar.
-            </p>
-            <Image
-              src="/assets/manserv-logo.png"
-              alt="Manserv"
-              width={1088}
-              height={161}
-              priority
-              className="mx-auto h-auto w-40 md:w-52"
-            />
-          </div>
+          <p className="text-xl font-semibold text-primary-foreground md:text-2xl lg:text-3xl">
+            Fazer. Inovar. Solucionar.
+          </p>
         </div>
       </div>
 
       {/* ── Coluna Direita (Autenticação) ── */}
       <div className="flex w-full flex-col items-center justify-center bg-background px-6 py-10 md:w-1/2 md:min-h-screen">
+        <Image
+          src="/assets/manserv-logo.png"
+          alt="Manserv"
+          width={851}
+          height={125}
+          priority
+          className="mb-8 h-auto w-44 md:w-52"
+        />
         <div className="glass-card w-full max-w-sm p-8">
           {/* Header do Formulário */}
           <div className="mb-6 text-center">
