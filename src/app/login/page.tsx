@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Lock, ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -52,9 +53,19 @@ export default function LoginPage() {
               Controle, agilidade e segurança nas operações da sua unidade de trabalho
             </p>
           </div>
-          <p className="text-xl font-semibold text-primary-foreground md:text-2xl lg:text-3xl">
-            Fazer. Inovar. Solucionar.
-          </p>
+          <div className="space-y-8">
+            <p className="text-xl font-semibold text-primary-foreground md:text-2xl lg:text-3xl">
+              Fazer. Inovar. Solucionar.
+            </p>
+            <Image
+              src="/manserv-logo.png"
+              alt="Manserv"
+              width={1088}
+              height={161}
+              priority
+              className="mx-auto h-auto w-40 md:w-52"
+            />
+          </div>
         </div>
       </div>
 
