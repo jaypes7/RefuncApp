@@ -58,7 +58,7 @@ export default function LoginPage() {
               Fazer. Inovar. Solucionar.
             </p>
             <Image
-              src="assets/manserv-logo.png"
+              src="/assets/manserv-logo.png"
               alt="Manserv"
               width={1088}
               height={161}
