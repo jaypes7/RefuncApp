@@ -67,7 +67,7 @@ export default function LoginPage() {
           width={900}
           height={150}
           priority
-          className="mb-8 h-auto w-200 md:w-60"
+          className="mb-8 h-auto w-50 md:w-60"
         />
         <div className="glass-card w-full max-w-sm p-8">
           {/* Header do Formulário */}
