@@ -64,10 +64,10 @@ export default function LoginPage() {
         <Image
           src="/assets/manserv-logo.png"
           alt="Manserv"
-          width={851}
-          height={125}
+          width={900}
+          height={150}
           priority
-          className="mb-8 h-auto w-44 md:w-52"
+          className="mb-8 h-auto w-200 md:w-60"
         />
         <div className="glass-card w-full max-w-sm p-8">
           {/* Header do Formulário */}
