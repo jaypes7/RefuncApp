@@ -12,6 +12,7 @@ import {
   colaboradoresApi,
   configApi,
   dashboardPrincipalApi,
+  treinamentosApi,
   type DashboardPrincipalData,
 } from "@/lib/axios";
 
@@ -90,6 +91,17 @@ export default function DashboardClient() {
     staleTime: 0,
   });
   const colaboradores = colaboradoresData?.data ?? [];
+
+  // Agregado real de treinamentos (colaborador_treinamentos) para o Status Geral
+  const { data: resumosTreinamentos } = useQuery({
+    queryKey: ["treinamentos-resumo", centroCusto],
+    queryFn: async () => {
+      const response = await treinamentosApi.resumoPorColaborador(centroCusto || undefined);
+      return response.data.data ?? [];
+    },
+    enabled: filterReady,
+    staleTime: 0,
+  });
 
   const etapasPorGrupo = useMemo<EtapasPorGrupo>(() => {
     if (!dashboardData?.etapas || !configData?.GRUPOS_ETAPAS?.length) return null;
@@ -233,7 +245,10 @@ export default function DashboardClient() {
             </div>
 
             {/* ── Status Geral ── */}
-            <StatusGeralCard colaboradores={colaboradores} />
+            <StatusGeralCard
+              colaboradores={colaboradores}
+              resumosTreinamentos={resumosTreinamentos}
+            />
 
           </div>
         </div>

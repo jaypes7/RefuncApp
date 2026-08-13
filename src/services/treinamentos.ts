@@ -1,4 +1,5 @@
 import { api } from "@/lib/http";
+import type { ResumoTreinamentos } from "@/lib/treinamentos";
 
 // Treinamentos (Segurança)
 
@@ -33,6 +34,12 @@ export const treinamentosApi = {
 
   listarDoColaborador: (colaboradorId: string) =>
     api.get<{ data: ColaboradorTreinamento[] }>(`/colaboradores/${colaboradorId}/treinamentos`),
+
+  // Agregado por colaborador — usado pelos cards "Status Geral"
+  resumoPorColaborador: (centroCusto?: string) =>
+    api.get<{ data: ResumoTreinamentos[] }>("/treinamentos/resumo", {
+      params: { centro_custo: centroCusto || undefined },
+    }),
 
   adicionarAoColaborador: (
     colaboradorId: string,

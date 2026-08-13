@@ -18,7 +18,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase";
+import { createServerClient, fetchAllRows } from "@/lib/supabase";
 import { requireAuth, resolveCentroCusto } from "@/lib/auth";
 
 // ── Tipos de resposta ─────────────────────────────────────────────────────────
@@ -64,30 +64,6 @@ interface SegurancaDashboard {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Busca todas as linhas paginando em blocos de 1000 (limite padrão do PostgREST).
- * Evita que o dashboard subconte silenciosamente quando o volume cresce.
- */
-async function fetchAllRows(
-  makeQuery: (
-    from: number,
-    to: number,
-  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
-): Promise<unknown[]> {
-  const pageSize = 1000;
-  const all: unknown[] = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await makeQuery(from, from + pageSize - 1);
-    if (error) throw new Error(error.message);
-    const batch = data ?? [];
-    all.push(...batch);
-    if (batch.length < pageSize) break;
-    from += pageSize;
-  }
-  return all;
-}
 
 function contagem(
   rows: Record<string, unknown>[],

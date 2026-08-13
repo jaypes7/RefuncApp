@@ -36,7 +36,9 @@ export interface TreinamentosTableHandle {
   flushPendingDates: () => Promise<void>;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
+/** Cores/ícones por status de `colaborador_treinamentos`. Compartilhado com o
+ *  modal de detalhes da Central para que as duas telas falem a mesma língua. */
+export const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
   OK: {
     label: "OK",
     icon: <CheckCircle2 className="h-4 w-4" />,

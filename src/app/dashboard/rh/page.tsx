@@ -48,7 +48,14 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { dashboardRhApi, colaboradoresApi, type Colaborador } from "@/lib/axios";
+import { dashboardRhApi, colaboradoresApi, treinamentosApi, type Colaborador } from "@/lib/axios";
+import {
+  contarStatusTreinamentos,
+  derivarStatusTreinamento,
+  indexarResumos,
+  STATUS_TREINAMENTO_LABEL,
+  STATUS_TREINAMENTO_TONE,
+} from "@/lib/treinamentos";
 import { cn } from "@/lib/utils";
 import { useFilter } from "@/contexts/FilterContext";
 import { SheetUpload } from "@/components/sheet-upload";
@@ -180,15 +187,20 @@ function DetailField({
   value,
   okIf,
   dangerIf,
+  toneOverride,
 }: {
   label: string;
   value: string | null | undefined;
   okIf?: string[] | null;
   dangerIf?: string[];
+  /** Ignora a inferência por valor — para campos com status já derivado. */
+  toneOverride?: StatTone;
 }) {
   const v = value?.toString().trim();
   let tone: StatTone = "warn";
-  if (!v) {
+  if (toneOverride) {
+    tone = toneOverride;
+  } else if (!v) {
     tone = "warn";
   } else if (dangerIf?.includes(v)) {
     tone = "danger";
@@ -322,6 +334,23 @@ export default function DashboardRhPage() {
     enabled: filterReady,
     staleTime: 0,
   });
+
+  // Agregado real de treinamentos (colaborador_treinamentos). A coluna legada
+  // `colaboradores.treinamento` fica vazia na prática e não reflete os cursos.
+  const { data: resumosTreinamentos } = useQuery({
+    queryKey: ["treinamentos-resumo", centroCusto],
+    queryFn: async () => {
+      const res = await treinamentosApi.resumoPorColaborador(centroCusto || undefined);
+      return res.data.data ?? [];
+    },
+    enabled: filterReady,
+    staleTime: 0,
+  });
+
+  const mapaTreinamentos = useMemo(
+    () => indexarResumos(resumosTreinamentos),
+    [resumosTreinamentos],
+  );
 
   // ── KPIs RH ───────────────────────────────────────────────────────────────
 
@@ -502,10 +531,10 @@ export default function DashboardRhPage() {
           docs: { completo: 0, incompleto: 0, pendente: 0 },
           exame: { realizado: 0, agendado: 0, pendente: 0 },
           portal: { liberado: 0, bloqueado: 0, pendente: 0 },
-          treinamento: { concluido: 0, andamento: 0, pendente: 0 },
           cracha: { emitido: 0, pendente: 0 },
           ponto: { cadastrado: 0, pendente: 0 },
         };
+        const treinamento = contarStatusTreinamentos(membros, mapaTreinamentos);
         for (const c of membros) {
           if (c.ASO === "Apto") stats.aso.apto++;
           else if (c.ASO === "Inapto") stats.aso.inapto++;
@@ -526,20 +555,16 @@ export default function DashboardRhPage() {
           else if (c.PORTAL === "Bloqueado") stats.portal.bloqueado++;
           else stats.portal.pendente++;
 
-          if (c.TREINAMENTO === "Concluído") stats.treinamento.concluido++;
-          else if (c.TREINAMENTO === "Em Andamento") stats.treinamento.andamento++;
-          else stats.treinamento.pendente++;
-
           if (c.CRACHA === "Emitido") stats.cracha.emitido++;
           else stats.cracha.pendente++;
 
           if (c.PONTO === "Cadastrado") stats.ponto.cadastrado++;
           else stats.ponto.pendente++;
         }
-        return { funcao, membros, stats };
+        return { funcao, membros, stats, treinamento };
       })
       .sort((a, b) => b.membros.length - a.membros.length);
-  }, [colaboradoresData, filterRelatorio]);
+  }, [colaboradoresData, filterRelatorio, mapaTreinamentos]);
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -1131,7 +1156,7 @@ export default function DashboardRhPage() {
                       className="mb-4 max-w-md"
                     />
                     <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
-                      {relatorioPorFuncao.map(({ funcao, membros, stats }) => {
+                      {relatorioPorFuncao.map(({ funcao, membros, stats, treinamento }) => {
                         const grupoAberto = expandedFuncoes.has(funcao);
                         const expanded = expandedRelatorio.has(funcao);
                         return (
@@ -1202,9 +1227,11 @@ export default function DashboardRhPage() {
                                   <StatCategory
                                     label="Treinamento"
                                     items={[
-                                      { label: "Concluído", value: stats.treinamento.concluido, tone: "ok" },
-                                      { label: "Em Andamento", value: stats.treinamento.andamento, tone: "info" },
-                                      { label: "Pendente", value: stats.treinamento.pendente, tone: "warn" },
+                                      { label: "Concluído", value: treinamento.concluido, tone: "ok" },
+                                      { label: "A Vencer", value: treinamento.aVencer, tone: "warn" },
+                                      { label: "Vencido", value: treinamento.vencido, tone: "danger" },
+                                      { label: "Pendente", value: treinamento.pendente, tone: "warn" },
+                                      { label: "Sem cadastro", value: treinamento.semCadastro, tone: "muted" },
                                     ]}
                                   />
                                   <StatCategory
@@ -1272,7 +1299,18 @@ export default function DashboardRhPage() {
                                           <DetailField label="Docs" value={c.DOCS} okIf={["Completo"]} dangerIf={["Incompleto"]} />
                                           <DetailField label="Exame" value={c.EXAME} okIf={["Realizado"]} />
                                           <DetailField label="Portal" value={c.PORTAL} okIf={["Liberado"]} dangerIf={["Bloqueado"]} />
-                                          <DetailField label="Treinamento" value={c.TREINAMENTO} okIf={["Concluído"]} />
+                                          {(() => {
+                                            const st = derivarStatusTreinamento(
+                                              c.id ? mapaTreinamentos.get(c.id) : undefined,
+                                            );
+                                            return (
+                                              <DetailField
+                                                label="Treinamento"
+                                                value={STATUS_TREINAMENTO_LABEL[st]}
+                                                toneOverride={STATUS_TREINAMENTO_TONE[st]}
+                                              />
+                                            );
+                                          })()}
                                           <DetailField label="Crachá" value={c.CRACHA} okIf={["Emitido"]} />
                                           <DetailField label="Ponto" value={c.PONTO} okIf={["Cadastrado"]} />
                                         </div>

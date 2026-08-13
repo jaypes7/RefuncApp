@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+
 import {
   Dialog,
   DialogContent,
@@ -8,7 +11,21 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { type Colaborador } from "@/lib/axios";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { STATUS_CONFIG } from "@/components/TreinamentosTable";
+import {
+  treinamentosApi,
+  type Colaborador,
+  type ColaboradorTreinamento,
+} from "@/lib/axios";
 import { maskCPF, formatTelefone } from "@/lib/utils";
 import {
   User,
@@ -28,6 +45,15 @@ interface ColaboradorDetailsModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Datas de treinamento já vêm como "YYYY-MM-DD" do banco (coluna date)
+function formatarDataBR(value: string | null | undefined): string {
+  if (!value) return "—";
+  const iso = value.split("T")[0];
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+}
+
 // Helper para normalizar datas seriais do Sheets para "YYYY-MM-DD"
 function parseDisplayDate(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "-";
@@ -44,8 +70,39 @@ function parseDisplayDate(value: string | number | null | undefined): string {
   return str.split("T")[0];
 }
 
+// Condensa a lista de treinamentos aplicáveis do colaborador em um rótulo único.
+// Retorna null enquanto a query não resolveu — aí o Status Geral cai de volta
+// para o campo legado `TREINAMENTO`.
+function resumirTreinamentos(
+  itens: ColaboradorTreinamento[] | undefined,
+): { label: string; grupo: "ok" | "alerta" | "pendencia" } | null {
+  if (!itens) return null;
+  if (itens.length === 0) {
+    return { label: "Treinamentos não cadastrados", grupo: "pendencia" };
+  }
+  const vencidos = itens.filter((t) => t.status === "Vencido").length;
+  if (vencidos > 0) {
+    return { label: `${vencidos} treinamento(s) vencido(s)`, grupo: "alerta" };
+  }
+  const aVencer = itens.filter((t) => t.status === "A Vencer").length;
+  if (aVencer > 0) {
+    return { label: `${aVencer} treinamento(s) a vencer`, grupo: "alerta" };
+  }
+  const ok = itens.filter((t) => t.status === "OK").length;
+  if (ok === itens.length) {
+    return { label: `Treinamentos em dia (${ok})`, grupo: "ok" };
+  }
+  return {
+    label: `Treinamentos pendentes (${itens.length - ok} de ${itens.length})`,
+    grupo: "pendencia",
+  };
+}
+
 // Helper para determinar status geral
-function calcularStatusGeral(colab: Colaborador) {
+function calcularStatusGeral(
+  colab: Colaborador,
+  treinamentos: ReturnType<typeof resumirTreinamentos>,
+) {
   const pendencias: string[] = [];
   const alertas: string[] = [];
   const ok: string[] = [];
@@ -93,8 +150,12 @@ function calcularStatusGeral(colab: Colaborador) {
     pendencias.push("Portal Pendente");
   }
 
-  // Verificar Treinamento
-  if (colab.TREINAMENTO === "Concluído") {
+  // Verificar Treinamento — modelo relacional; cai no campo legado enquanto carrega
+  if (treinamentos) {
+    if (treinamentos.grupo === "ok") ok.push(treinamentos.label);
+    else if (treinamentos.grupo === "alerta") alertas.push(treinamentos.label);
+    else pendencias.push(treinamentos.label);
+  } else if (colab.TREINAMENTO === "Concluído") {
     ok.push("Treinamento Concluído");
   } else if (colab.TREINAMENTO === "Em Andamento") {
     alertas.push("Treinamento em Andamento");
@@ -150,7 +211,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 bg-slate-800/50 p-4 rounded-lg">
+    <div className="glass-card flex flex-col gap-3 rounded-lg p-4">
       <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
         <Icon className="h-4 w-4 text-primary" />
         {title}
@@ -165,13 +226,47 @@ export function ColaboradorDetailsModal({
   open,
   onOpenChange,
 }: ColaboradorDetailsModalProps) {
+  // O conteúdo vive em um filho para que os hooks (useQuery) nunca fiquem
+  // atrás deste early return.
   if (!colaborador) return null;
-
-  const statusGeral = calcularStatusGeral(colaborador);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-225 w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
+        <ColaboradorDetailsContent colaborador={colaborador} open={open} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ColaboradorDetailsContent({
+  colaborador,
+  open,
+}: {
+  colaborador: Colaborador;
+  open: boolean;
+}) {
+  // Mesma queryKey da TreinamentosTable (tela de edição) — cache compartilhado
+  const { data: treinamentos, isLoading: carregandoTreinamentos } = useQuery({
+    queryKey: ["treinamentos", colaborador.id],
+    queryFn: async () => {
+      const response = await treinamentosApi.listarDoColaborador(colaborador.id!);
+      return response.data.data ?? [];
+    },
+    enabled: open && !!colaborador.id,
+  });
+
+  // Só os treinamentos marcados como aplicáveis a este colaborador
+  const aplicaveis = treinamentos
+    ? [...treinamentos]
+        .filter((t) => t.aplicavel)
+        .sort((a, b) => (a.treinamento?.nome ?? "").localeCompare(b.treinamento?.nome ?? ""))
+    : undefined;
+
+  const statusGeral = calcularStatusGeral(colaborador, resumirTreinamentos(aplicaveis));
+
+  return (
+    <>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 shrink-0">
@@ -188,7 +283,7 @@ export function ColaboradorDetailsModal({
         </DialogHeader>
 
         {/* STATUS GERAL */}
-        <div className="mt-4 rounded-lg border border-white/10 bg-linear-to-r from-primary/5 to-transparent p-4">
+        <div className="mt-4 rounded-lg border border-border bg-linear-to-r from-primary/5 to-transparent p-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-primary">
             <ShieldCheck className="h-4 w-4" />
             Status Geral
@@ -316,7 +411,7 @@ export function ColaboradorDetailsModal({
           {/* Sistemas */}
           <Section title="Sistemas" icon={Monitor}>
             <div className="flex flex-wrap gap-2">
-              <div className="flex flex-col items-center gap-1 rounded-lg border border-white/5 bg-white/5 p-3 min-w-20 flex-1">
+              <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-muted/50 p-3 min-w-20 flex-1">
                 <span className="text-xs text-muted-foreground">Portal</span>
                 <Badge
                   variant="outline"
@@ -331,7 +426,7 @@ export function ColaboradorDetailsModal({
                   {colaborador.PORTAL || "Pendente"}
                 </Badge>
               </div>
-              <div className="flex flex-col items-center gap-1 rounded-lg border border-white/5 bg-white/5 p-3 min-w-20 flex-1">
+              <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-muted/50 p-3 min-w-20 flex-1">
                 <span className="text-xs text-muted-foreground">Crachá</span>
                 <Badge
                   variant="outline"
@@ -344,7 +439,7 @@ export function ColaboradorDetailsModal({
                   {colaborador.CRACHA || "Pendente"}
                 </Badge>
               </div>
-              <div className="flex flex-col items-center gap-1 rounded-lg border border-white/5 bg-white/5 p-3 min-w-20 flex-1">
+              <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-muted/50 p-3 min-w-20 flex-1">
                 <span className="text-xs text-muted-foreground">Ponto</span>
                 <Badge
                   variant="outline"
@@ -390,7 +485,7 @@ export function ColaboradorDetailsModal({
           {/* Saúde Ocupacional */}
           <Section title="Saúde Ocupacional" icon={ShieldCheck}>
             <div className="flex flex-wrap gap-2">
-              <div className="flex flex-col items-center gap-1 rounded-lg border border-white/5 bg-white/5 p-3 min-w-20 flex-1">
+              <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-muted/50 p-3 min-w-20 flex-1">
                 <span className="text-xs text-muted-foreground">Exame</span>
                 <Badge
                   variant="outline"
@@ -405,7 +500,7 @@ export function ColaboradorDetailsModal({
                   {colaborador.EXAME || "Pendente"}
                 </Badge>
               </div>
-              <div className="flex flex-col items-center gap-1 rounded-lg border border-white/5 bg-white/5 p-3 min-w-20 flex-1">
+              <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-muted/50 p-3 min-w-20 flex-1">
                 <span className="text-xs text-muted-foreground">ASO</span>
                 <Badge
                   variant="outline"
@@ -420,13 +515,13 @@ export function ColaboradorDetailsModal({
                   {colaborador.ASO || "Pendente"}
                 </Badge>
               </div>
-              <div className="flex flex-col items-center gap-1 rounded-lg border border-white/5 bg-white/5 p-3 min-w-20 flex-1">
+              <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-muted/50 p-3 min-w-20 flex-1">
                 <span className="text-xs text-muted-foreground">Clínica</span>
                 <span className="text-sm font-medium truncate max-w-25">
                   {colaborador.CLINICA || "-"}
                 </span>
               </div>
-              <div className="flex flex-col items-center gap-1 rounded-lg border border-white/5 bg-white/5 p-3 min-w-20 flex-1">
+              <div className="flex flex-col items-center gap-1 rounded-lg border border-border bg-muted/50 p-3 min-w-20 flex-1">
                 <span className="text-xs text-muted-foreground">RPV</span>
                 <span className="text-sm font-medium truncate max-w-25">
                   {colaborador.RPV || "-"}
@@ -435,26 +530,9 @@ export function ColaboradorDetailsModal({
             </div>
           </Section>
 
-          {/* Treinamentos */}
-          <Section title="Treinamentos" icon={Calendar}>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <span className="text-xs text-muted-foreground">Status</span>
-                <div className="mt-1">
-                  <Badge
-                    variant="outline"
-                    className={`${
-                      colaborador.TREINAMENTO === "Concluído"
-                        ? "border-[#337246]/30 bg-[#337246]/10 text-[#337246]"
-                        : colaborador.TREINAMENTO === "Em Andamento"
-                          ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
-                          : "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                    }`}
-                  >
-                    {colaborador.TREINAMENTO || "Pendente"}
-                  </Badge>
-                </div>
-              </div>
+          {/* Logística de treinamento (campos da planilha) */}
+          <Section title="Treinamento — Logística" icon={Truck}>
+            <div className="grid grid-cols-2 gap-3">
               <InfoField
                 label="Realizar"
                 value={colaborador.REALIZAR_TREINAMENTO || "-"}
@@ -466,7 +544,71 @@ export function ColaboradorDetailsModal({
             </div>
           </Section>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Treinamentos normativos — vem de colaborador_treinamentos */}
+        <div className="mt-6">
+          <Section title="Treinamentos" icon={Calendar}>
+            {carregandoTreinamentos || !aplicaveis ? (
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ) : aplicaveis.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                Nenhum treinamento aplicável cadastrado para este colaborador.{" "}
+                {colaborador.id && (
+                  <Link
+                    href={`/central/editar/${colaborador.id}`}
+                    className="text-primary underline underline-offset-2"
+                  >
+                    Cadastrar na tela de edição
+                  </Link>
+                )}
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-[45%]">Curso / Treinamento</TableHead>
+                      <TableHead>Realização</TableHead>
+                      <TableHead>Validade</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {aplicaveis.map((item) => {
+                      const status = item.status ?? "Pendente";
+                      const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG["Pendente"];
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="text-sm font-medium">
+                            {item.treinamento?.nome ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {formatarDataBR(item.data_realizacao)}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {formatarDataBR(item.data_validade)}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.color}`}
+                            >
+                              {cfg.icon}
+                              {cfg.label}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </Section>
+        </div>
+    </>
   );
 }

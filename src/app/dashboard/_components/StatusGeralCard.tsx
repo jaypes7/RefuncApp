@@ -5,6 +5,11 @@ import { Briefcase } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Colaborador } from "@/lib/axios";
+import {
+  contarStatusTreinamentos,
+  indexarResumos,
+  type ResumoTreinamentos,
+} from "@/lib/treinamentos";
 import { cn } from "@/lib/utils";
 
 type StatTone = "ok" | "warn" | "danger" | "info" | "muted";
@@ -123,8 +128,11 @@ function StatCategory({
 
 export const StatusGeralCard = memo(function StatusGeralCard({
   colaboradores,
+  resumosTreinamentos,
 }: {
   colaboradores: Colaborador[];
+  /** Agregado de `colaborador_treinamentos` vindo de /api/treinamentos/resumo. */
+  resumosTreinamentos?: ResumoTreinamentos[];
 }) {
   // Agregação global de todos os colaboradores
   const statusGeral = useMemo(() => {
@@ -134,10 +142,15 @@ export const StatusGeralCard = memo(function StatusGeralCard({
       docs: { completo: 0, incompleto: 0, pendente: 0 },
       exame: { realizado: 0, agendado: 0, pendente: 0 },
       portal: { liberado: 0, bloqueado: 0, pendente: 0 },
-      treinamento: { concluido: 0, andamento: 0, pendente: 0 },
       cracha: { emitido: 0, pendente: 0 },
       ponto: { cadastrado: 0, pendente: 0 },
     };
+    // Treinamento vem do modelo relacional, não da coluna legada
+    // `colaboradores.treinamento` — que fica vazia na prática.
+    const treinamento = contarStatusTreinamentos(
+      colaboradores,
+      indexarResumos(resumosTreinamentos),
+    );
     for (const c of colaboradores) {
       if (c.ASO === "Apto") stats.aso.apto++;
       else if (c.ASO === "Inapto") stats.aso.inapto++;
@@ -158,18 +171,14 @@ export const StatusGeralCard = memo(function StatusGeralCard({
       else if (c.PORTAL === "Bloqueado") stats.portal.bloqueado++;
       else stats.portal.pendente++;
 
-      if (c.TREINAMENTO === "Concluído") stats.treinamento.concluido++;
-      else if (c.TREINAMENTO === "Em Andamento") stats.treinamento.andamento++;
-      else stats.treinamento.pendente++;
-
       if (c.CRACHA === "Emitido") stats.cracha.emitido++;
       else stats.cracha.pendente++;
 
       if (c.PONTO === "Cadastrado") stats.ponto.cadastrado++;
       else stats.ponto.pendente++;
     }
-    return { total: colaboradores.length, stats };
-  }, [colaboradores]);
+    return { total: colaboradores.length, stats, treinamento };
+  }, [colaboradores, resumosTreinamentos]);
 
   if (statusGeral.total === 0) return null;
 
@@ -227,9 +236,11 @@ export const StatusGeralCard = memo(function StatusGeralCard({
             <StatCategory
               label="Treinamento"
               items={[
-                { label: "Concluído", value: statusGeral.stats.treinamento.concluido, tone: "ok" },
-                { label: "Em Andamento", value: statusGeral.stats.treinamento.andamento, tone: "info" },
-                { label: "Pendente", value: statusGeral.stats.treinamento.pendente, tone: "warn" },
+                { label: "Concluído", value: statusGeral.treinamento.concluido, tone: "ok" },
+                { label: "A Vencer", value: statusGeral.treinamento.aVencer, tone: "warn" },
+                { label: "Vencido", value: statusGeral.treinamento.vencido, tone: "danger" },
+                { label: "Pendente", value: statusGeral.treinamento.pendente, tone: "warn" },
+                { label: "Sem cadastro", value: statusGeral.treinamento.semCadastro, tone: "muted" },
               ]}
             />
             <StatCategory
