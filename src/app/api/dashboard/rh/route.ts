@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const db = createServerClient();
     let query = db
       .from("colaboradores")
-      .select("cpf,nome,funcao_clt,idade,status,data_admissao,termino,aso,exame,uf,sexo,escolaridade,experiencia_funcao");
+      .select("cpf,nome,funcao_clt,idade,status,data_admissao,termino,prorrogacao,aso,exame,uf,sexo,escolaridade,experiencia_funcao");
     if (centroCusto?.length) query = query.in("centro_custo", centroCusto);
     const { data, error } = await query;
 
